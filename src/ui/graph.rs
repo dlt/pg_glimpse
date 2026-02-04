@@ -6,6 +6,8 @@ use ratatui::widgets::canvas::{Canvas, Line as CanvasLine};
 use ratatui::widgets::{Block, BorderType, Borders};
 use ratatui::Frame;
 
+use super::theme::Theme;
+
 fn dim(color: Color) -> Color {
     match color {
         Color::Rgb(r, g, b) => Color::Rgb(r / 3, g / 3, b / 3),
@@ -18,7 +20,7 @@ fn make_block<'a>(title: &'a str, current_label: &'a str, color: Color, border_c
         Span::styled(
             format!(" {} ", title),
             Style::default()
-                .fg(Color::Rgb(192, 202, 245))
+                .fg(Theme::fg())
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
@@ -44,6 +46,7 @@ pub fn render_line_chart(
     data: &[u64],
     color: Color,
     border_color: Color,
+    marker: Marker,
 ) {
     let block = make_block(title, current_label, color, border_color);
 
@@ -62,18 +65,29 @@ pub fn render_line_chart(
 
     let canvas = Canvas::default()
         .block(block)
-        .marker(Marker::Braille)
+        .marker(marker)
         .x_bounds([0.0, x_max])
         .y_bounds([0.0, y_ceil])
         .paint(move |ctx| {
-            // Fill: vertical lines from baseline to value
-            for (i, &val) in data_owned.iter().enumerate() {
-                if val > 0 {
+            // Fill: interpolated vertical lines dense enough to avoid gaps
+            let fill_count = data_owned.len().max(300);
+            for s in 0..fill_count {
+                let x = if fill_count <= 1 {
+                    0.0
+                } else {
+                    s as f64 * x_max / (fill_count - 1) as f64
+                };
+                let lo = (x as usize).min(data_owned.len().saturating_sub(1));
+                let hi = (lo + 1).min(data_owned.len().saturating_sub(1));
+                let frac = if lo == hi { 0.0 } else { x - lo as f64 };
+                let y = data_owned[lo] as f64 * (1.0 - frac)
+                    + data_owned[hi] as f64 * frac;
+                if y > 0.0 {
                     ctx.draw(&CanvasLine {
-                        x1: i as f64,
+                        x1: x,
                         y1: 0.0,
-                        x2: i as f64,
-                        y2: val as f64,
+                        x2: x,
+                        y2: y,
                         color: fill_color,
                     });
                 }
@@ -101,6 +115,7 @@ pub fn render_ratio_chart(
     data: &[u64],
     color: Color,
     border_color: Color,
+    marker: Marker,
 ) {
     let block = make_block(title, current_label, color, border_color);
 
@@ -117,17 +132,28 @@ pub fn render_ratio_chart(
 
     let canvas = Canvas::default()
         .block(block)
-        .marker(Marker::Braille)
+        .marker(marker)
         .x_bounds([0.0, x_max])
         .y_bounds([0.0, 1000.0])
         .paint(move |ctx| {
-            for (i, &val) in data_owned.iter().enumerate() {
-                if val > 0 {
+            let fill_count = data_owned.len().max(300);
+            for s in 0..fill_count {
+                let x = if fill_count <= 1 {
+                    0.0
+                } else {
+                    s as f64 * x_max / (fill_count - 1) as f64
+                };
+                let lo = (x as usize).min(data_owned.len().saturating_sub(1));
+                let hi = (lo + 1).min(data_owned.len().saturating_sub(1));
+                let frac = if lo == hi { 0.0 } else { x - lo as f64 };
+                let y = data_owned[lo] as f64 * (1.0 - frac)
+                    + data_owned[hi] as f64 * frac;
+                if y > 0.0 {
                     ctx.draw(&CanvasLine {
-                        x1: i as f64,
+                        x1: x,
                         y1: 0.0,
-                        x2: i as f64,
-                        y2: val as f64,
+                        x2: x,
+                        y2: y,
                         color: fill_color,
                     });
                 }

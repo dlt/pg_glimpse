@@ -19,28 +19,28 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         Span::styled(
             " pg_glimpse ",
             Style::default()
-                .fg(Theme::BORDER_ACTIVE)
+                .fg(Theme::border_active())
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("│ ", Style::default().fg(Theme::BORDER_DIM)),
+        Span::styled("│ ", Style::default().fg(Theme::border_dim())),
         Span::styled(
             format!("{}:{}/{}", app.host, app.port, app.dbname),
-            Style::default().fg(Theme::FG),
+            Style::default().fg(Theme::fg()),
         ),
-        Span::styled(" │ ", Style::default().fg(Theme::BORDER_DIM)),
+        Span::styled(" │ ", Style::default().fg(Theme::border_dim())),
         Span::styled(
             &app.user,
-            Style::default().fg(Theme::FG),
+            Style::default().fg(Theme::fg()),
         ),
-        Span::styled(" │ ", Style::default().fg(Theme::BORDER_DIM)),
+        Span::styled(" │ ", Style::default().fg(Theme::border_dim())),
         Span::styled(
             format!("conns: {}", conns),
-            Style::default().fg(Theme::FG),
+            Style::default().fg(Theme::fg()),
         ),
-        Span::styled(" │ ", Style::default().fg(Theme::BORDER_DIM)),
+        Span::styled(" │ ", Style::default().fg(Theme::border_dim())),
         Span::styled(
             format!("{}s", app.refresh_interval_secs),
-            Style::default().fg(Theme::FG),
+            Style::default().fg(Theme::fg()),
         ),
     ];
 
@@ -48,7 +48,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         spans.push(Span::styled(
             " │ PAUSED",
             Style::default()
-                .fg(Theme::BORDER_WARN)
+                .fg(Theme::border_warn())
                 .add_modifier(Modifier::BOLD),
         ));
     }
@@ -56,7 +56,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     if let Some(ref msg) = app.status_message {
         spans.push(Span::styled(
             format!(" │ {}", msg),
-            Style::default().fg(Theme::BORDER_ACTIVE),
+            Style::default().fg(Theme::border_active()),
         ));
     }
 
@@ -64,18 +64,18 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         spans.push(Span::styled(
             format!(" │ ERR: {}", truncate(err, 40)),
             Style::default()
-                .fg(Theme::BORDER_DANGER)
+                .fg(Theme::border_danger())
                 .add_modifier(Modifier::BOLD),
         ));
     }
 
     spans.push(Span::styled(
         format!(" │ {}", now),
-        Style::default().fg(Theme::BORDER_DIM),
+        Style::default().fg(Theme::border_dim()),
     ));
 
     let paragraph =
-        Paragraph::new(Line::from(spans)).style(Style::default().bg(Theme::HEADER_BG));
+        Paragraph::new(Line::from(spans)).style(Style::default().bg(Theme::header_bg()));
 
     frame.render_widget(paragraph, area);
 }

@@ -8,10 +8,10 @@ use super::theme::Theme;
 
 pub fn render(frame: &mut Frame, area: Rect) {
     let key_style = Style::default()
-        .fg(Theme::BORDER_ACTIVE)
+        .fg(Theme::border_active())
         .add_modifier(Modifier::BOLD);
-    let sep_style = Style::default().fg(Theme::BORDER_DIM);
-    let desc_style = Style::default().fg(Theme::FG);
+    let sep_style = Style::default().fg(Theme::border_dim());
+    let desc_style = Style::default().fg(Theme::fg());
 
     let spans = vec![
         Span::styled(" q", key_style),
@@ -55,10 +55,13 @@ pub fn render(frame: &mut Frame, area: Rect) {
         Span::styled(" │ ", sep_style),
         Span::styled("I", key_style),
         Span::styled(" idx", desc_style),
+        Span::styled(" │ ", sep_style),
+        Span::styled(",", key_style),
+        Span::styled(" config", desc_style),
     ];
 
     let paragraph =
-        Paragraph::new(Line::from(spans)).style(Style::default().bg(Theme::HEADER_BG));
+        Paragraph::new(Line::from(spans)).style(Style::default().bg(Theme::header_bg()));
 
     frame.render_widget(paragraph, area);
 }

@@ -12,6 +12,7 @@ use theme::Theme;
 
 pub fn render(frame: &mut Frame, app: &mut App) {
     let areas = layout::compute_layout(frame.area());
+    let marker = app.config.graph_marker.to_marker();
 
     header::render(frame, app, areas.header);
 
@@ -24,8 +25,9 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         "Connections",
         &conn_current.to_string(),
         &conn_data,
-        Theme::GRAPH_CONNECTIONS,
-        Theme::GRAPH_CONNECTIONS,
+        Theme::graph_connections(),
+        Theme::graph_connections(),
+        marker,
     );
 
     let avg_data = app.avg_query_time_history.as_vec();
@@ -37,8 +39,9 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         "Avg Query Time",
         &avg_label,
         &avg_data,
-        Theme::GRAPH_QUERIES,
-        Theme::GRAPH_QUERIES,
+        Theme::graph_queries(),
+        Theme::graph_queries(),
+        marker,
     );
 
     let cache_data = app.hit_ratio_history.as_vec();
@@ -52,15 +55,16 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         &format!("{:.1}%", cache_pct),
         &cache_data,
         cache_color,
-        Theme::GRAPH_CACHE,
+        Theme::graph_cache(),
+        marker,
     );
 
     let lock_data = app.lock_count_history.as_vec();
     let lock_current = app.lock_count_history.last().unwrap_or(0);
     let lock_color = if lock_current > 0 {
-        Theme::GRAPH_LOCKS
+        Theme::graph_locks()
     } else {
-        Theme::BORDER_OK
+        Theme::border_ok()
     };
     graph::render_line_chart(
         frame,
@@ -69,7 +73,8 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         &lock_current.to_string(),
         &lock_data,
         lock_color,
-        Theme::GRAPH_LOCKS,
+        Theme::graph_locks(),
+        marker,
     );
 
     // Bottom half: full-width query table
@@ -97,6 +102,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
             overlay::render_indexes(frame, app, area);
         }
         ViewMode::IndexInspect => overlay::render_index_inspect(frame, app, frame.area()),
+        ViewMode::Config => overlay::render_config(frame, app, frame.area()),
         ViewMode::Normal => {}
     }
 }

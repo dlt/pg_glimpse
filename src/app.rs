@@ -1,8 +1,10 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::widgets::TableState;
 
+use crate::config::{AppConfig, ConfigItem};
 use crate::db::models::PgSnapshot;
 use crate::history::RingBuffer;
+use crate::ui::theme;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ViewMode {
@@ -18,6 +20,7 @@ pub enum ViewMode {
     IndexInspect,
     ConfirmCancel(i32),
     ConfirmKill(i32),
+    Config,
 }
 
 #[derive(Debug, Clone)]
@@ -25,6 +28,8 @@ pub enum AppAction {
     CancelQuery(i32),
     TerminateBackend(i32),
     ForceRefresh,
+    SaveConfig,
+    RefreshIntervalChanged,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -103,6 +108,9 @@ pub struct App {
     pub last_error: Option<String>,
     pub status_message: Option<String>,
     pub pending_action: Option<AppAction>,
+
+    pub config: AppConfig,
+    pub config_selected: usize,
 }
 
 impl App {
@@ -113,6 +121,7 @@ impl App {
         user: String,
         refresh: u64,
         history_len: usize,
+        config: AppConfig,
     ) -> Self {
         Self {
             running: true,
@@ -137,6 +146,8 @@ impl App {
             last_error: None,
             status_message: None,
             pending_action: None,
+            config,
+            config_selected: 0,
         }
     }
 
@@ -333,6 +344,32 @@ impl App {
                 }
                 return;
             }
+            ViewMode::Config => {
+                match key.code {
+                    KeyCode::Esc => {
+                        self.pending_action = Some(AppAction::SaveConfig);
+                        self.view_mode = ViewMode::Normal;
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        if self.config_selected > 0 {
+                            self.config_selected -= 1;
+                        }
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        if self.config_selected < ConfigItem::ALL.len() - 1 {
+                            self.config_selected += 1;
+                        }
+                    }
+                    KeyCode::Left | KeyCode::Char('h') => {
+                        self.config_adjust(-1);
+                    }
+                    KeyCode::Right | KeyCode::Char('l') => {
+                        self.config_adjust(1);
+                    }
+                    _ => {}
+                }
+                return;
+            }
             ViewMode::Inspect
             | ViewMode::Blocking
             | ViewMode::WaitEvents
@@ -410,6 +447,9 @@ impl App {
             KeyCode::Char('I') => {
                 self.view_mode = ViewMode::Indexes;
             }
+            KeyCode::Char(',') => {
+                self.view_mode = ViewMode::Config;
+            }
             KeyCode::Char('s') => {
                 let next = self.sort_column.next();
                 if next == self.sort_column {
@@ -425,6 +465,49 @@ impl App {
                 ));
             }
             _ => {}
+        }
+    }
+
+    fn config_adjust(&mut self, direction: i8) {
+        let item = ConfigItem::ALL[self.config_selected];
+        match item {
+            ConfigItem::GraphMarker => {
+                self.config.graph_marker = if direction > 0 {
+                    self.config.graph_marker.next()
+                } else {
+                    self.config.graph_marker.prev()
+                };
+            }
+            ConfigItem::ColorTheme => {
+                self.config.color_theme = if direction > 0 {
+                    self.config.color_theme.next()
+                } else {
+                    self.config.color_theme.prev()
+                };
+                theme::set_theme(self.config.color_theme.colors());
+            }
+            ConfigItem::RefreshInterval => {
+                let val = self.config.refresh_interval_secs as i64 + direction as i64;
+                self.config.refresh_interval_secs = val.clamp(1, 60) as u64;
+                self.refresh_interval_secs = self.config.refresh_interval_secs;
+                self.pending_action = Some(AppAction::RefreshIntervalChanged);
+            }
+            ConfigItem::WarnDuration => {
+                let val = self.config.warn_duration_secs + direction as f64 * 0.5;
+                self.config.warn_duration_secs = val.clamp(0.1, self.config.danger_duration_secs);
+                theme::set_duration_thresholds(
+                    self.config.warn_duration_secs,
+                    self.config.danger_duration_secs,
+                );
+            }
+            ConfigItem::DangerDuration => {
+                let val = self.config.danger_duration_secs + direction as f64 * 1.0;
+                self.config.danger_duration_secs = val.clamp(self.config.warn_duration_secs, 300.0);
+                theme::set_duration_thresholds(
+                    self.config.warn_duration_secs,
+                    self.config.danger_duration_secs,
+                );
+            }
         }
     }
 }

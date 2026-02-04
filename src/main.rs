@@ -1,5 +1,6 @@
 mod app;
 mod cli;
+mod config;
 mod db;
 mod event;
 mod history;
@@ -9,7 +10,9 @@ use app::AppAction;
 use clap::Parser;
 use cli::Cli;
 use color_eyre::Result;
+use config::AppConfig;
 use std::time::Duration;
+use ui::theme;
 
 fn main() -> Result<()> {
     color_eyre::install()?;
@@ -32,18 +35,27 @@ async fn run(cli: Cli) -> Result<()> {
         }
     });
 
+    let config = AppConfig::load();
+
+    // Apply theme and thresholds from config
+    theme::set_theme(config.color_theme.colors());
+    theme::set_duration_thresholds(config.warn_duration_secs, config.danger_duration_secs);
+
+    let refresh = cli.refresh.unwrap_or(config.refresh_interval_secs);
+
     let mut app = app::App::new(
         cli.host.clone(),
         cli.port,
         cli.dbname.clone(),
         cli.user.clone(),
-        cli.refresh,
+        refresh,
         cli.history_length,
+        config,
     );
 
     let mut terminal = ratatui::init();
     let mut events = event::EventHandler::new(Duration::from_millis(50));
-    let mut tick_interval = tokio::time::interval(Duration::from_secs(cli.refresh));
+    let mut tick_interval = tokio::time::interval(Duration::from_secs(refresh));
 
     // Initial fetch
     match db::queries::fetch_snapshot(&client).await {
@@ -123,6 +135,14 @@ async fn run(cli: Cli) -> Result<()> {
                     if let Ok(snap) = db::queries::fetch_snapshot(&client).await {
                         app.update(snap);
                     }
+                }
+                AppAction::SaveConfig => {
+                    app.config.save();
+                }
+                AppAction::RefreshIntervalChanged => {
+                    tick_interval = tokio::time::interval(Duration::from_secs(
+                        app.config.refresh_interval_secs,
+                    ));
                 }
             }
         }

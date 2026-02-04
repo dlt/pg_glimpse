@@ -30,9 +30,9 @@ pub struct Cli {
     #[arg(short = 'W', long, env = "PGPASSWORD")]
     pub password: Option<String>,
 
-    /// Refresh interval in seconds
-    #[arg(short = 'r', long, default_value_t = 2)]
-    pub refresh: u64,
+    /// Refresh interval in seconds (overrides config file)
+    #[arg(short = 'r', long)]
+    pub refresh: Option<u64>,
 
     /// Number of data points to keep in sparkline history
     #[arg(long, default_value_t = 120)]

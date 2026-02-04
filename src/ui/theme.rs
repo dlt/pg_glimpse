@@ -1,31 +1,97 @@
 use ratatui::style::{Color, Modifier, Style};
+use std::sync::RwLock;
+
+use crate::config::ThemeColors;
+
+static ACTIVE_THEME: RwLock<ThemeColors> = RwLock::new(ThemeColors::TOKYO_NIGHT);
+static DURATION_THRESHOLDS: RwLock<(f64, f64)> = RwLock::new((1.0, 10.0));
+
+pub fn set_theme(colors: ThemeColors) {
+    *ACTIVE_THEME.write().unwrap() = colors;
+}
+
+pub fn set_duration_thresholds(warn: f64, danger: f64) {
+    *DURATION_THRESHOLDS.write().unwrap() = (warn, danger);
+}
 
 pub struct Theme;
 
 impl Theme {
-    pub const HEADER_BG: Color = Color::Rgb(36, 40, 59);
-    pub const FG: Color = Color::Rgb(192, 202, 245);
-    pub const BORDER_ACTIVE: Color = Color::Cyan;
-    pub const BORDER_WARN: Color = Color::Yellow;
-    pub const BORDER_DANGER: Color = Color::Red;
-    pub const BORDER_OK: Color = Color::Green;
-    pub const BORDER_DIM: Color = Color::Rgb(68, 71, 90);
+    pub fn header_bg() -> Color {
+        ACTIVE_THEME.read().unwrap().header_bg
+    }
 
-    pub const GRAPH_CONNECTIONS: Color = Color::Rgb(97, 175, 239);
-    pub const GRAPH_QUERIES: Color = Color::Rgb(152, 195, 121);
-    pub const GRAPH_CACHE: Color = Color::Rgb(86, 182, 194);
-    pub const GRAPH_LOCKS: Color = Color::Rgb(224, 108, 117);
+    pub fn fg() -> Color {
+        ACTIVE_THEME.read().unwrap().fg
+    }
 
-    pub const DURATION_OK: Color = Color::Green;
-    pub const DURATION_WARN: Color = Color::Yellow;
-    pub const DURATION_DANGER: Color = Color::Red;
+    pub fn border_active() -> Color {
+        ACTIVE_THEME.read().unwrap().border_active
+    }
 
-    pub const STATE_ACTIVE: Color = Color::Green;
-    pub const STATE_IDLE_TXN: Color = Color::Yellow;
+    pub fn border_warn() -> Color {
+        ACTIVE_THEME.read().unwrap().border_warn
+    }
+
+    pub fn border_danger() -> Color {
+        ACTIVE_THEME.read().unwrap().border_danger
+    }
+
+    pub fn border_ok() -> Color {
+        ACTIVE_THEME.read().unwrap().border_ok
+    }
+
+    pub fn border_dim() -> Color {
+        ACTIVE_THEME.read().unwrap().border_dim
+    }
+
+    pub fn graph_connections() -> Color {
+        ACTIVE_THEME.read().unwrap().graph_connections
+    }
+
+    pub fn graph_queries() -> Color {
+        ACTIVE_THEME.read().unwrap().graph_queries
+    }
+
+    pub fn graph_cache() -> Color {
+        ACTIVE_THEME.read().unwrap().graph_cache
+    }
+
+    pub fn graph_locks() -> Color {
+        ACTIVE_THEME.read().unwrap().graph_locks
+    }
+
+    pub fn duration_ok() -> Color {
+        ACTIVE_THEME.read().unwrap().duration_ok
+    }
+
+    pub fn duration_warn() -> Color {
+        ACTIVE_THEME.read().unwrap().duration_warn
+    }
+
+    pub fn duration_danger() -> Color {
+        ACTIVE_THEME.read().unwrap().duration_danger
+    }
+
+    pub fn state_active() -> Color {
+        ACTIVE_THEME.read().unwrap().state_active
+    }
+
+    pub fn state_idle_txn() -> Color {
+        ACTIVE_THEME.read().unwrap().state_idle_txn
+    }
+
+    pub fn overlay_bg() -> Color {
+        ACTIVE_THEME.read().unwrap().overlay_bg
+    }
+
+    pub fn highlight_bg() -> Color {
+        ACTIVE_THEME.read().unwrap().highlight_bg
+    }
 
     pub fn title_style() -> Style {
         Style::default()
-            .fg(Self::FG)
+            .fg(Self::fg())
             .add_modifier(Modifier::BOLD)
     }
 
@@ -34,22 +100,23 @@ impl Theme {
     }
 
     pub fn duration_color(secs: f64) -> Color {
-        if secs < 1.0 {
-            Self::DURATION_OK
-        } else if secs < 10.0 {
-            Self::DURATION_WARN
+        let (warn, danger) = *DURATION_THRESHOLDS.read().unwrap();
+        if secs < warn {
+            Self::duration_ok()
+        } else if secs < danger {
+            Self::duration_warn()
         } else {
-            Self::DURATION_DANGER
+            Self::duration_danger()
         }
     }
 
     pub fn state_color(state: Option<&str>) -> Color {
         match state {
-            Some("active") => Self::STATE_ACTIVE,
+            Some("active") => Self::state_active(),
             Some("idle in transaction") | Some("idle in transaction (aborted)") => {
-                Self::STATE_IDLE_TXN
+                Self::state_idle_txn()
             }
-            _ => Self::FG,
+            _ => Self::fg(),
         }
     }
 

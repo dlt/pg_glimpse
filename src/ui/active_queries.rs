@@ -30,7 +30,7 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
         .title_style(Theme::title_style())
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Theme::border_style(Theme::BORDER_ACTIVE));
+        .border_style(Theme::border_style(Theme::border_active()));
 
     let header = Row::new(vec![
         Cell::from(format!("PID{}", sort_indicator(SortColumn::Pid))),
@@ -43,7 +43,7 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
     ])
     .style(
         Style::default()
-            .fg(Theme::FG)
+            .fg(Theme::fg())
             .add_modifier(Modifier::BOLD),
     )
     .bottom_margin(0);
@@ -94,7 +94,7 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
         .block(block)
         .row_highlight_style(
             Style::default()
-                .bg(Color::Rgb(40, 42, 64))
+                .bg(Theme::highlight_bg())
                 .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol("► ");

@@ -7,6 +7,7 @@ use ratatui::widgets::{
 use ratatui::Frame;
 
 use crate::app::{App, IndexSortColumn};
+use crate::config::ConfigItem;
 use super::theme::Theme;
 
 fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
@@ -39,14 +40,14 @@ fn overlay_block(title: &str, color: Color) -> Block<'_> {
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(color))
-        .style(Style::default().bg(Color::Rgb(26, 27, 38)))
+        .style(Style::default().bg(Theme::overlay_bg()))
 }
 
 pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(70, 70, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Query Details  [Esc] close", Theme::BORDER_ACTIVE);
+    let block = overlay_block("Query Details  [Esc] close", Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(
@@ -73,20 +74,20 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let lines = vec![
         Line::from(vec![
             Span::styled("  PID:       ", Style::default().fg(Color::DarkGray)),
-            Span::styled(q.pid.to_string(), Style::default().fg(Theme::FG).add_modifier(Modifier::BOLD)),
+            Span::styled(q.pid.to_string(), Style::default().fg(Theme::fg()).add_modifier(Modifier::BOLD)),
         ]),
         Line::from(vec![
             Span::styled("  User:      ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 q.usename.clone().unwrap_or_else(|| "-".into()),
-                Style::default().fg(Theme::FG),
+                Style::default().fg(Theme::fg()),
             ),
         ]),
         Line::from(vec![
             Span::styled("  Database:  ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 q.datname.clone().unwrap_or_else(|| "-".into()),
-                Style::default().fg(Theme::FG),
+                Style::default().fg(Theme::fg()),
             ),
         ]),
         Line::from(vec![
@@ -114,7 +115,7 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
                 Style::default().fg(if q.wait_event_type.is_some() {
                     Color::Yellow
                 } else {
-                    Theme::FG
+                    Theme::fg()
                 }),
             ),
         ]),
@@ -122,7 +123,7 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled("  Backend:   ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 q.backend_type.clone().unwrap_or_else(|| "-".into()),
-                Style::default().fg(Theme::FG),
+                Style::default().fg(Theme::fg()),
             ),
         ]),
         Line::from(""),
@@ -134,7 +135,7 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
         )),
         Line::from(Span::styled(
             format!("  {}", q.query.clone().unwrap_or_else(|| "<no query>".into())),
-            Style::default().fg(Theme::FG),
+            Style::default().fg(Theme::fg()),
         )),
         Line::from(""),
         Line::from(Span::styled(
@@ -151,7 +152,7 @@ pub fn render_blocking(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(75, 60, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Blocking Chains  [Esc] close", Theme::BORDER_DANGER);
+    let block = overlay_block("Blocking Chains  [Esc] close", Theme::border_danger());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(
@@ -165,7 +166,7 @@ pub fn render_blocking(frame: &mut Frame, app: &App, area: Rect) {
         let msg = Paragraph::new("\n  No blocking detected")
             .style(
                 Style::default()
-                    .fg(Theme::BORDER_OK)
+                    .fg(Theme::border_ok())
                     .add_modifier(Modifier::ITALIC),
             )
             .block(block);
@@ -183,10 +184,10 @@ pub fn render_blocking(frame: &mut Frame, app: &App, area: Rect) {
         .map(|b| {
             Row::new(vec![
                 Cell::from(format!("{}", b.blocker_pid))
-                    .style(Style::default().fg(Theme::BORDER_DANGER)),
+                    .style(Style::default().fg(Theme::border_danger())),
                 Cell::from("→"),
                 Cell::from(format!("{}", b.blocked_pid))
-                    .style(Style::default().fg(Theme::BORDER_WARN)),
+                    .style(Style::default().fg(Theme::border_warn())),
                 Cell::from(format!("{:.1}s", b.blocked_duration_secs))
                     .style(Style::default().fg(Theme::duration_color(b.blocked_duration_secs))),
                 Cell::from(
@@ -212,7 +213,7 @@ pub fn render_wait_events(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(60, 55, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Wait Events  [Esc] close", Theme::BORDER_WARN);
+    let block = overlay_block("Wait Events  [Esc] close", Theme::border_warn());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(
@@ -226,7 +227,7 @@ pub fn render_wait_events(frame: &mut Frame, app: &App, area: Rect) {
         let msg = Paragraph::new("\n  No active wait events")
             .style(
                 Style::default()
-                    .fg(Theme::BORDER_OK)
+                    .fg(Theme::border_ok())
                     .add_modifier(Modifier::ITALIC),
             )
             .block(block);
@@ -271,14 +272,14 @@ pub fn render_confirm_cancel(frame: &mut Frame, pid: i32, area: Rect) {
     let popup = centered_rect(45, 20, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Confirm Cancel", Theme::BORDER_WARN);
+    let block = overlay_block("Confirm Cancel", Theme::border_warn());
 
     let lines = vec![
         Line::from(""),
         Line::from(Span::styled(
             format!("  Cancel query on PID {}?", pid),
             Style::default()
-                .fg(Theme::BORDER_WARN)
+                .fg(Theme::border_warn())
                 .add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
@@ -288,10 +289,10 @@ pub fn render_confirm_cancel(frame: &mut Frame, pid: i32, area: Rect) {
         )),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  y", Style::default().fg(Theme::BORDER_WARN).add_modifier(Modifier::BOLD)),
-            Span::styled(" confirm  ", Style::default().fg(Theme::FG)),
-            Span::styled("any key", Style::default().fg(Theme::BORDER_OK).add_modifier(Modifier::BOLD)),
-            Span::styled(" abort", Style::default().fg(Theme::FG)),
+            Span::styled("  y", Style::default().fg(Theme::border_warn()).add_modifier(Modifier::BOLD)),
+            Span::styled(" confirm  ", Style::default().fg(Theme::fg())),
+            Span::styled("any key", Style::default().fg(Theme::border_ok()).add_modifier(Modifier::BOLD)),
+            Span::styled(" abort", Style::default().fg(Theme::fg())),
         ]),
     ];
 
@@ -305,14 +306,14 @@ pub fn render_confirm_kill(frame: &mut Frame, pid: i32, area: Rect) {
     let popup = centered_rect(45, 20, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Confirm Kill", Theme::BORDER_DANGER);
+    let block = overlay_block("Confirm Kill", Theme::border_danger());
 
     let lines = vec![
         Line::from(""),
         Line::from(Span::styled(
             format!("  Terminate backend PID {}?", pid),
             Style::default()
-                .fg(Theme::BORDER_DANGER)
+                .fg(Theme::border_danger())
                 .add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
@@ -322,10 +323,10 @@ pub fn render_confirm_kill(frame: &mut Frame, pid: i32, area: Rect) {
         )),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  y", Style::default().fg(Theme::BORDER_DANGER).add_modifier(Modifier::BOLD)),
-            Span::styled(" confirm  ", Style::default().fg(Theme::FG)),
-            Span::styled("any key", Style::default().fg(Theme::BORDER_OK).add_modifier(Modifier::BOLD)),
-            Span::styled(" abort", Style::default().fg(Theme::FG)),
+            Span::styled("  y", Style::default().fg(Theme::border_danger()).add_modifier(Modifier::BOLD)),
+            Span::styled(" confirm  ", Style::default().fg(Theme::fg())),
+            Span::styled("any key", Style::default().fg(Theme::border_ok()).add_modifier(Modifier::BOLD)),
+            Span::styled(" abort", Style::default().fg(Theme::fg())),
         ]),
     ];
 
@@ -339,7 +340,7 @@ pub fn render_table_stats(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(80, 70, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Table Stats  [Esc] close", Theme::BORDER_ACTIVE);
+    let block = overlay_block("Table Stats  [Esc] close", Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -350,7 +351,7 @@ pub fn render_table_stats(frame: &mut Frame, app: &App, area: Rect) {
         let msg = Paragraph::new("\n  No user tables found")
             .style(
                 Style::default()
-                    .fg(Theme::BORDER_OK)
+                    .fg(Theme::border_ok())
                     .add_modifier(Modifier::ITALIC),
             )
             .block(block);
@@ -369,11 +370,11 @@ pub fn render_table_stats(frame: &mut Frame, app: &App, area: Rect) {
         .iter()
         .map(|t| {
             let dead_color = if t.dead_ratio > 20.0 {
-                Theme::BORDER_DANGER
+                Theme::border_danger()
             } else if t.dead_ratio > 5.0 {
-                Theme::BORDER_WARN
+                Theme::border_warn()
             } else {
-                Theme::FG
+                Theme::fg()
             };
             Row::new(vec![
                 Cell::from(format!("{}.{}", t.schemaname, truncate(&t.relname, 20))),
@@ -409,7 +410,7 @@ pub fn render_replication(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(75, 50, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Replication Lag  [Esc] close", Theme::BORDER_ACTIVE);
+    let block = overlay_block("Replication Lag  [Esc] close", Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -420,7 +421,7 @@ pub fn render_replication(frame: &mut Frame, app: &App, area: Rect) {
         let msg = Paragraph::new("\n  No replicas connected")
             .style(
                 Style::default()
-                    .fg(Theme::BORDER_OK)
+                    .fg(Theme::border_ok())
                     .add_modifier(Modifier::ITALIC),
             )
             .block(block);
@@ -472,7 +473,7 @@ pub fn render_vacuum_progress(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(75, 50, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Vacuum Progress  [Esc] close", Theme::BORDER_WARN);
+    let block = overlay_block("Vacuum Progress  [Esc] close", Theme::border_warn());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -483,7 +484,7 @@ pub fn render_vacuum_progress(frame: &mut Frame, app: &App, area: Rect) {
         let msg = Paragraph::new("\n  No vacuums running")
             .style(
                 Style::default()
-                    .fg(Theme::BORDER_OK)
+                    .fg(Theme::border_ok())
                     .add_modifier(Modifier::ITALIC),
             )
             .block(block);
@@ -525,7 +526,7 @@ pub fn render_wraparound(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(70, 50, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Transaction Wraparound  [Esc] close", Theme::BORDER_WARN);
+    let block = overlay_block("Transaction Wraparound  [Esc] close", Theme::border_warn());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -536,7 +537,7 @@ pub fn render_wraparound(frame: &mut Frame, app: &App, area: Rect) {
         let msg = Paragraph::new("\n  No databases found")
             .style(
                 Style::default()
-                    .fg(Theme::BORDER_OK)
+                    .fg(Theme::border_ok())
                     .add_modifier(Modifier::ITALIC),
             )
             .block(block);
@@ -553,11 +554,11 @@ pub fn render_wraparound(frame: &mut Frame, app: &App, area: Rect) {
         .iter()
         .map(|w| {
             let pct_color = if w.pct_towards_wraparound > 75.0 {
-                Theme::BORDER_DANGER
+                Theme::border_danger()
             } else if w.pct_towards_wraparound > 50.0 {
-                Theme::BORDER_WARN
+                Theme::border_warn()
             } else {
-                Theme::BORDER_OK
+                Theme::border_ok()
             };
             Row::new(vec![
                 Cell::from(w.datname.clone()),
@@ -586,7 +587,7 @@ pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {
 
     let block = overlay_block(
         "Indexes  [s] sort  [Enter] inspect  [Esc] close",
-        Theme::BORDER_ACTIVE,
+        Theme::border_active(),
     );
 
     let Some(snap) = &app.snapshot else {
@@ -598,7 +599,7 @@ pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {
         let msg = Paragraph::new("\n  No user indexes found")
             .style(
                 Style::default()
-                    .fg(Theme::BORDER_OK)
+                    .fg(Theme::border_ok())
                     .add_modifier(Modifier::ITALIC),
             )
             .block(block);
@@ -638,9 +639,9 @@ pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {
         .map(|&i| {
             let idx = &snap.indexes[i];
             let scan_color = if idx.idx_scan == 0 {
-                Theme::BORDER_DANGER
+                Theme::border_danger()
             } else {
-                Theme::FG
+                Theme::fg()
             };
             Row::new(vec![
                 Cell::from(format!("{}.{}", idx.schemaname, idx.table_name)),
@@ -668,7 +669,7 @@ pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {
         .block(block)
         .row_highlight_style(
             Style::default()
-                .bg(Color::Rgb(40, 42, 64))
+                .bg(Theme::highlight_bg())
                 .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol("► ");
@@ -680,7 +681,7 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(75, 55, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Index Details  [Esc] back", Theme::BORDER_ACTIVE);
+    let block = overlay_block("Index Details  [Esc] back", Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -699,26 +700,26 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let idx = &snap.indexes[real_idx];
 
     let scan_color = if idx.idx_scan == 0 {
-        Theme::BORDER_DANGER
+        Theme::border_danger()
     } else {
-        Theme::BORDER_OK
+        Theme::border_ok()
     };
 
     let lines = vec![
         Line::from(vec![
             Span::styled("  Schema:      ", Style::default().fg(Color::DarkGray)),
-            Span::styled(&idx.schemaname, Style::default().fg(Theme::FG)),
+            Span::styled(&idx.schemaname, Style::default().fg(Theme::fg())),
         ]),
         Line::from(vec![
             Span::styled("  Table:       ", Style::default().fg(Color::DarkGray)),
-            Span::styled(&idx.table_name, Style::default().fg(Theme::FG)),
+            Span::styled(&idx.table_name, Style::default().fg(Theme::fg())),
         ]),
         Line::from(vec![
             Span::styled("  Index:       ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 &idx.index_name,
                 Style::default()
-                    .fg(Theme::FG)
+                    .fg(Theme::fg())
                     .add_modifier(Modifier::BOLD),
             ),
         ]),
@@ -726,7 +727,7 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled("  Size:        ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 format_bytes(idx.index_size_bytes),
-                Style::default().fg(Theme::FG),
+                Style::default().fg(Theme::fg()),
             ),
         ]),
         Line::from(""),
@@ -743,14 +744,14 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled("  Tup Read:    ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 idx.idx_tup_read.to_string(),
-                Style::default().fg(Theme::FG),
+                Style::default().fg(Theme::fg()),
             ),
         ]),
         Line::from(vec![
             Span::styled("  Tup Fetch:   ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 idx.idx_tup_fetch.to_string(),
-                Style::default().fg(Theme::FG),
+                Style::default().fg(Theme::fg()),
             ),
         ]),
         Line::from(""),
@@ -762,13 +763,65 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
         )),
         Line::from(Span::styled(
             format!("  {}", idx.index_definition),
-            Style::default().fg(Theme::FG),
+            Style::default().fg(Theme::fg()),
         )),
     ];
 
     let paragraph = Paragraph::new(lines)
         .block(block)
         .wrap(Wrap { trim: false });
+    frame.render_widget(paragraph, popup);
+}
+
+pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
+    let popup = centered_rect(50, 45, area);
+    frame.render_widget(Clear, popup);
+
+    let block = overlay_block(
+        "Config  [←→] change  [Esc] save & close",
+        Theme::border_active(),
+    );
+
+    let mut lines = vec![Line::from("")];
+
+    for (i, item) in ConfigItem::ALL.iter().enumerate() {
+        let selected = i == app.config_selected;
+        let indicator = if selected { "► " } else { "  " };
+
+        let value_str = match item {
+            ConfigItem::GraphMarker => app.config.graph_marker.label().to_string(),
+            ConfigItem::ColorTheme => app.config.color_theme.label().to_string(),
+            ConfigItem::RefreshInterval => format!("{}s", app.config.refresh_interval_secs),
+            ConfigItem::WarnDuration => format!("{:.1}s", app.config.warn_duration_secs),
+            ConfigItem::DangerDuration => format!("{:.1}s", app.config.danger_duration_secs),
+        };
+
+        let label_style = if selected {
+            Style::default()
+                .fg(Theme::border_active())
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Theme::fg())
+        };
+
+        let value_style = if selected {
+            Style::default()
+                .fg(Theme::border_active())
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("  {}{:<20}", indicator, item.label()),
+                label_style,
+            ),
+            Span::styled(format!("◄ {} ►", value_str), value_style),
+        ]));
+    }
+
+    let paragraph = Paragraph::new(lines).block(block);
     frame.render_widget(paragraph, popup);
 }
 
@@ -796,9 +849,9 @@ fn format_lag(secs: Option<f64>) -> String {
 
 fn lag_color(secs: Option<f64>) -> Color {
     match secs {
-        Some(s) if s > 10.0 => Theme::BORDER_DANGER,
-        Some(s) if s > 1.0 => Theme::BORDER_WARN,
-        _ => Theme::FG,
+        Some(s) if s > 10.0 => Theme::border_danger(),
+        Some(s) if s > 1.0 => Theme::border_warn(),
+        _ => Theme::fg(),
     }
 }
 
