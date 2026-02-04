@@ -574,6 +574,52 @@ impl App {
         indices
     }
 
+    fn copy_to_clipboard(&mut self, text: &str) {
+        match arboard::Clipboard::new().and_then(|mut cb| cb.set_text(text)) {
+            Ok(()) => {
+                let preview: String = text.chars().take(40).collect();
+                let suffix = if text.len() > 40 { "..." } else { "" };
+                self.status_message = Some(format!("Copied: {}{}", preview, suffix));
+            }
+            Err(e) => {
+                self.status_message = Some(format!("Clipboard error: {}", e));
+            }
+        }
+    }
+
+    fn yank_selected(&mut self) {
+        let Some(snap) = &self.snapshot else { return };
+        match self.bottom_panel {
+            BottomPanel::Queries => {
+                let idx = self.query_table_state.selected().unwrap_or(0);
+                let indices = self.sorted_query_indices();
+                if let Some(&real_idx) = indices.get(idx) {
+                    if let Some(ref q) = snap.active_queries[real_idx].query {
+                        let text = q.clone();
+                        self.copy_to_clipboard(&text);
+                    }
+                }
+            }
+            BottomPanel::Indexes => {
+                let idx = self.index_table_state.selected().unwrap_or(0);
+                let indices = self.sorted_index_indices();
+                if let Some(&real_idx) = indices.get(idx) {
+                    let text = snap.indexes[real_idx].index_definition.clone();
+                    self.copy_to_clipboard(&text);
+                }
+            }
+            BottomPanel::Statements => {
+                let idx = self.stmt_table_state.selected().unwrap_or(0);
+                let indices = self.sorted_stmt_indices();
+                if let Some(&real_idx) = indices.get(idx) {
+                    let text = snap.stat_statements[real_idx].query.clone();
+                    self.copy_to_clipboard(&text);
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn switch_panel(&mut self, target: BottomPanel) {
         if self.bottom_panel == target {
             // Toggle back to Queries
@@ -803,6 +849,18 @@ impl App {
                     KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
                         self.view_mode = ViewMode::Normal;
                     }
+                    KeyCode::Char('y') => {
+                        if let Some(snap) = &self.snapshot {
+                            let idx = self.query_table_state.selected().unwrap_or(0);
+                            let indices = self.sorted_query_indices();
+                            if let Some(&real_idx) = indices.get(idx) {
+                                if let Some(ref q) = snap.active_queries[real_idx].query {
+                                    let text = q.clone();
+                                    self.copy_to_clipboard(&text);
+                                }
+                            }
+                        }
+                    }
                     _ => {}
                 }
                 return;
@@ -812,6 +870,16 @@ impl App {
                     KeyCode::Esc | KeyCode::Char('q') => {
                         self.view_mode = ViewMode::Normal;
                     }
+                    KeyCode::Char('y') => {
+                        if let Some(snap) = &self.snapshot {
+                            let idx = self.index_table_state.selected().unwrap_or(0);
+                            let indices = self.sorted_index_indices();
+                            if let Some(&real_idx) = indices.get(idx) {
+                                let text = snap.indexes[real_idx].index_definition.clone();
+                                self.copy_to_clipboard(&text);
+                            }
+                        }
+                    }
                     _ => {}
                 }
                 return;
@@ -820,6 +888,16 @@ impl App {
                 match key.code {
                     KeyCode::Esc | KeyCode::Char('q') => {
                         self.view_mode = ViewMode::Normal;
+                    }
+                    KeyCode::Char('y') => {
+                        if let Some(snap) = &self.snapshot {
+                            let idx = self.stmt_table_state.selected().unwrap_or(0);
+                            let indices = self.sorted_stmt_indices();
+                            if let Some(&real_idx) = indices.get(idx) {
+                                let text = snap.stat_statements[real_idx].query.clone();
+                                self.copy_to_clipboard(&text);
+                            }
+                        }
                     }
                     _ => {}
                 }
@@ -921,6 +999,10 @@ impl App {
             }
             KeyCode::Char(',') => {
                 self.view_mode = ViewMode::Config;
+                return;
+            }
+            KeyCode::Char('y') => {
+                self.yank_selected();
                 return;
             }
             _ => {}

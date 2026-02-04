@@ -69,6 +69,9 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             spans.push(key("s"));
             spans.push(desc("sort"));
             spans.push(sep());
+            spans.push(key("y"));
+            spans.push(desc("yank"));
+            spans.push(sep());
             spans.push(key("/"));
             spans.push(desc("filter"));
         }
@@ -94,6 +97,9 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             spans.push(sep());
             spans.push(key("s"));
             spans.push(desc("sort"));
+            spans.push(sep());
+            spans.push(key("y"));
+            spans.push(desc("yank"));
             spans.push(sep());
             spans.push(key("/"));
             spans.push(desc("filter"));

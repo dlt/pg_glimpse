@@ -46,7 +46,7 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(70, 70, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Query Details  [Esc] close", Theme::border_active());
+    let block = overlay_block("Query Details  [y] copy  [Esc] close", Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(
@@ -151,7 +151,7 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(75, 55, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Index Details  [Esc] back", Theme::border_active());
+    let block = overlay_block("Index Details  [y] copy  [Esc] back", Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -315,7 +315,7 @@ pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(80, 80, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Statement Details  [Esc] back", Theme::border_active());
+    let block = overlay_block("Statement Details  [y] copy  [Esc] back", Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -588,6 +588,7 @@ pub fn render_help(frame: &mut Frame, area: Rect) {
         section("Query Actions"),
         entry("C", "Cancel query (pg_cancel_backend)"),
         entry("K", "Kill backend (pg_terminate_backend)"),
+        entry("y", "Yank (copy to clipboard)"),
         Line::from(""),
         section("Filter"),
         entry("/", "Open fuzzy filter"),
