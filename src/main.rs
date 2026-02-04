@@ -37,8 +37,28 @@ async fn run(cli: Cli) -> Result<()> {
         return run_replay(replay_path, config).await;
     }
 
-    let pg_config = cli.pg_config()?;
-    let (client, connection) = pg_config.connect(tokio_postgres::NoTls).await?;
+    let pg_config = match cli.pg_config() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Error: invalid connection config: {e}\n");
+            eprintln!("Try: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword");
+            eprintln!("See: pg_glimpse --help");
+            std::process::exit(1);
+        }
+    };
+    let (client, connection) = match pg_config.connect(tokio_postgres::NoTls).await {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Error: could not connect to PostgreSQL: {e}\n");
+            eprintln!(
+                "Connection: {}:{}/{}",
+                cli.host, cli.port, cli.dbname
+            );
+            eprintln!("\nTry: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword");
+            eprintln!("See: pg_glimpse --help");
+            std::process::exit(1);
+        }
+    };
 
     tokio::spawn(async move {
         if let Err(e) = connection.await {
