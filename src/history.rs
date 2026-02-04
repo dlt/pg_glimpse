@@ -8,11 +8,10 @@ pub struct RingBuffer<T> {
 
 impl<T: Copy + Default> RingBuffer<T> {
     pub fn new(capacity: usize) -> Self {
-        let mut data = VecDeque::with_capacity(capacity);
-        for _ in 0..capacity {
-            data.push_back(T::default());
+        Self {
+            data: VecDeque::with_capacity(capacity),
+            capacity,
         }
-        Self { data, capacity }
     }
 
     pub fn push(&mut self, value: T) {

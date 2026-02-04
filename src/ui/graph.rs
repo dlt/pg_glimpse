@@ -109,15 +109,6 @@ pub fn render_ratio_chart(
         return;
     }
 
-    let min_data = data.iter().copied().min().unwrap_or(0) as f64;
-    let y_floor = if min_data > 900.0 {
-        900.0
-    } else if min_data > 500.0 {
-        500.0
-    } else {
-        0.0
-    };
-
     let n = data.len();
     let x_max = (n - 1).max(1) as f64;
     let fill_color = dim(color);
@@ -128,16 +119,15 @@ pub fn render_ratio_chart(
         .block(block)
         .marker(Marker::Braille)
         .x_bounds([0.0, x_max])
-        .y_bounds([y_floor, 1000.0])
+        .y_bounds([0.0, 1000.0])
         .paint(move |ctx| {
             for (i, &val) in data_owned.iter().enumerate() {
-                let v = val as f64;
-                if v > y_floor {
+                if val > 0 {
                     ctx.draw(&CanvasLine {
                         x1: i as f64,
-                        y1: y_floor,
+                        y1: 0.0,
                         x2: i as f64,
-                        y2: v,
+                        y2: val as f64,
                         color: fill_color,
                     });
                 }
