@@ -206,6 +206,8 @@ pub struct App {
     pub connection_history: RingBuffer<u64>,
     pub avg_query_time_history: RingBuffer<u64>,
     pub hit_ratio_history: RingBuffer<u64>,
+    pub active_query_history: RingBuffer<u64>,
+    pub lock_count_history: RingBuffer<u64>,
 
     pub server_info: ServerInfo,
 
@@ -258,6 +260,8 @@ impl App {
             connection_history: RingBuffer::new(history_len),
             avg_query_time_history: RingBuffer::new(history_len),
             hit_ratio_history: RingBuffer::new(history_len),
+            active_query_history: RingBuffer::new(history_len),
+            lock_count_history: RingBuffer::new(history_len),
             server_info,
             host,
             port,
@@ -293,6 +297,10 @@ impl App {
 
         self.hit_ratio_history
             .push((snapshot.buffer_cache.hit_ratio * 1000.0) as u64);
+        self.active_query_history
+            .push(snapshot.summary.active_query_count as u64);
+        self.lock_count_history
+            .push(snapshot.summary.lock_count as u64);
         self.snapshot = Some(snapshot);
         self.last_error = None;
     }

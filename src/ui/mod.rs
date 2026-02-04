@@ -5,6 +5,7 @@ mod header;
 mod layout;
 mod overlay;
 mod panels;
+mod sparkline;
 mod stats_panel;
 pub mod theme;
 mod util;

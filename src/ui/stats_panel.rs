@@ -6,6 +6,7 @@ use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
 use ratatui::Frame;
 
 use crate::app::App;
+use super::sparkline::render_sparkline;
 use super::theme::Theme;
 use super::util::format_bytes;
 
@@ -39,6 +40,9 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     ]));
 
     if let Some(snap) = &app.snapshot {
+        let inner_width = block.inner(area).width as usize;
+        let sparkline_width = inner_width.saturating_sub(20).min(10);
+
         // Line 2: DB size + connections
         let db_size = format_bytes(snap.db_size);
         let total = snap.summary.total_backends;
@@ -81,6 +85,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         } else {
             Theme::fg()
         };
+        let active_spark = render_sparkline(&app.active_query_history.as_vec(), sparkline_width);
         lines.push(Line::from(vec![
             Span::styled("Active: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
@@ -88,6 +93,10 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                 Style::default()
                     .fg(Theme::state_active())
                     .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!(" {}", active_spark),
+                Style::default().fg(Theme::state_active()),
             ),
             Span::styled("  Idle/Txn: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
@@ -115,6 +124,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             .map(|q| q.duration_secs)
             .fold(0.0_f64, f64::max);
         let longest_color = Theme::duration_color(longest);
+        let lock_spark = render_sparkline(&app.lock_count_history.as_vec(), sparkline_width);
         lines.push(Line::from(vec![
             Span::styled("Locks: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
@@ -122,6 +132,10 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                 Style::default()
                     .fg(lock_color)
                     .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!(" {}", lock_spark),
+                Style::default().fg(lock_color),
             ),
             Span::styled(" · ", Style::default().fg(Theme::border_dim())),
             Span::styled("Longest: ", Style::default().fg(Color::DarkGray)),
@@ -161,6 +175,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         } else {
             vec![]
         };
+        let cache_spark = render_sparkline(&app.hit_ratio_history.as_vec(), sparkline_width);
         let mut cache_line = vec![
             Span::styled("Cache: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
@@ -168,6 +183,10 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                 Style::default()
                     .fg(cache_color)
                     .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!(" {}", cache_spark),
+                Style::default().fg(cache_color),
             ),
         ];
         cache_line.extend(dead_spans);
