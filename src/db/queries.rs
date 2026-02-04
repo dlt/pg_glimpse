@@ -130,8 +130,7 @@ SELECT
     COALESCE(s.idx_tup_fetch, 0)::bigint AS idx_tup_fetch,
     pg_get_indexdef(s.indexrelid) AS index_definition
 FROM pg_stat_user_indexes s
-ORDER BY s.idx_scan ASC, pg_relation_size(s.indexrelid) DESC
-LIMIT 30
+ORDER BY pg_relation_size(s.indexrelid) DESC
 ";
 
 const ACTIVITY_SUMMARY_SQL: &str = "
