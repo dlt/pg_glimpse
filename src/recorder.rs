@@ -9,6 +9,7 @@ use crate::db::models::{PgSnapshot, ServerInfo};
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
+#[allow(clippy::large_enum_variant)]
 enum RecordLine {
     #[serde(rename = "header")]
     Header {
@@ -41,7 +42,7 @@ impl Recorder {
         let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
         let filename = format!("{}_{}_{}.jsonl", host, port, timestamp);
         // Sanitize filename: replace any path-unfriendly chars
-        let filename = filename.replace('/', "_").replace('\\', "_");
+        let filename = filename.replace(['/', '\\'], "_");
         let path = dir.join(filename);
 
         let file = File::create(&path)?;

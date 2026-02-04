@@ -235,6 +235,7 @@ pub struct App {
 }
 
 impl App {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         host: String,
         port: u16,
@@ -290,6 +291,7 @@ impl App {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_replay(
         host: String,
         port: u16,

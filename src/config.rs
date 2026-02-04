@@ -4,8 +4,9 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub enum GraphMarkerStyle {
+    #[default]
     Braille,
     HalfBlock,
     Block,
@@ -45,14 +46,9 @@ impl GraphMarkerStyle {
     }
 }
 
-impl Default for GraphMarkerStyle {
-    fn default() -> Self {
-        Self::Braille
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub enum ColorTheme {
+    #[default]
     TokyoNight,
     Dracula,
     Nord,
@@ -94,12 +90,6 @@ impl ColorTheme {
             Self::Nord => ThemeColors::nord(),
             Self::SolarizedDark => ThemeColors::solarized_dark(),
         }
-    }
-}
-
-impl Default for ColorTheme {
-    fn default() -> Self {
-        Self::TokyoNight
     }
 }
 

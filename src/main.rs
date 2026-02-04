@@ -269,10 +269,8 @@ async fn run_replay(path: &Path, config: AppConfig) -> Result<()> {
         }
 
         // Process pending actions (only SaveConfig matters in replay)
-        if let Some(action) = app.pending_action.take() {
-            if let AppAction::SaveConfig = action {
-                app.config.save();
-            }
+        if let Some(AppAction::SaveConfig) = app.pending_action.take() {
+            app.config.save();
         }
     }
 

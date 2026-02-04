@@ -8,6 +8,7 @@ use crate::db::models::{PgSnapshot, ServerInfo};
 
 #[derive(Deserialize)]
 #[serde(tag = "type")]
+#[allow(clippy::large_enum_variant)]
 enum RecordLine {
     #[serde(rename = "header")]
     Header {
@@ -62,9 +63,8 @@ impl ReplaySession {
                 continue;
             }
             let record: RecordLine = serde_json::from_str(&line)?;
-            match record {
-                RecordLine::Snapshot { data } => snapshots.push(data),
-                _ => {} // skip any extra headers
+            if let RecordLine::Snapshot { data } = record {
+                snapshots.push(data);
             }
         }
 

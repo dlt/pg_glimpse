@@ -1,23 +1,12 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct DetectedExtensions {
     pub pg_stat_statements: bool,
     pub pg_stat_kcache: bool,
     pub pg_wait_sampling: bool,
     pub pg_buffercache: bool,
-}
-
-impl Default for DetectedExtensions {
-    fn default() -> Self {
-        Self {
-            pg_stat_statements: false,
-            pg_stat_kcache: false,
-            pg_wait_sampling: false,
-            pg_buffercache: false,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

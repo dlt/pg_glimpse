@@ -38,6 +38,7 @@ fn make_block<'a>(title: &'a str, current_label: &'a str, color: Color, border_c
         .border_style(Style::default().fg(border_color))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_line_chart(
     frame: &mut Frame,
     area: Rect,
@@ -107,6 +108,7 @@ pub fn render_line_chart(
     frame.render_widget(canvas, area);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_ratio_chart(
     frame: &mut Frame,
     area: Rect,

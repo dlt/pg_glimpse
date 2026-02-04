@@ -50,17 +50,16 @@ fn render_live(frame: &mut Frame, app: &App, area: Rect) {
     let desc_style = Style::default().fg(Theme::fg());
 
     let sep = || Span::styled(" \u{2502} ", sep_style);
-    let key = |k: &str| Span::styled(format!("{}", k), key_style);
+    let key = |k: &str| Span::styled(k.to_string(), key_style);
     let desc = |d: &str| Span::styled(format!(" {}", d), desc_style);
 
-    let mut spans: Vec<Span> = Vec::new();
-
-    // Common prefix
-    spans.push(Span::styled(" q", key_style));
-    spans.push(desc("quit"));
-    spans.push(sep());
-    spans.push(key("p"));
-    spans.push(desc("pause"));
+    let mut spans: Vec<Span> = vec![
+        Span::styled(" q", key_style),
+        desc("quit"),
+        sep(),
+        key("p"),
+        desc("pause"),
+    ];
 
     render_panel_keys(&mut spans, app, &sep, &key, &desc);
     render_panel_switch_keys(&mut spans, &sep, &key, &desc);
@@ -79,26 +78,25 @@ fn render_replay(frame: &mut Frame, app: &App, area: Rect) {
     let desc_style = Style::default().fg(Theme::fg());
 
     let sep = || Span::styled(" \u{2502} ", sep_style);
-    let key = |k: &str| Span::styled(format!("{}", k), key_style);
+    let key = |k: &str| Span::styled(k.to_string(), key_style);
     let desc = |d: &str| Span::styled(format!(" {}", d), desc_style);
 
-    let mut spans: Vec<Span> = Vec::new();
-
-    // Replay controls
-    spans.push(Span::styled(" q", key_style));
-    spans.push(desc("quit"));
-    spans.push(sep());
-    spans.push(key("Space"));
-    spans.push(desc("play/pause"));
-    spans.push(sep());
-    spans.push(key("\u{2190}\u{2192}"));
-    spans.push(desc("step"));
-    spans.push(sep());
-    spans.push(key("<>"));
-    spans.push(desc("speed"));
-    spans.push(sep());
-    spans.push(key("g/G"));
-    spans.push(desc("start/end"));
+    let mut spans: Vec<Span> = vec![
+        Span::styled(" q", key_style),
+        desc("quit"),
+        sep(),
+        key("Space"),
+        desc("play/pause"),
+        sep(),
+        key("\u{2190}\u{2192}"),
+        desc("step"),
+        sep(),
+        key("<>"),
+        desc("speed"),
+        sep(),
+        key("g/G"),
+        desc("start/end"),
+    ];
 
     render_panel_keys(&mut spans, app, &sep, &key, &desc);
     render_panel_switch_keys(&mut spans, &sep, &key, &desc);
