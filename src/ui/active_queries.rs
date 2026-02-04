@@ -80,13 +80,13 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
     };
 
     let widths = [
-        Constraint::Length(7),
-        Constraint::Length(12),
-        Constraint::Length(12),
-        Constraint::Length(9),
-        Constraint::Length(10),
-        Constraint::Length(12),
-        Constraint::Min(20),
+        Constraint::Fill(1), // PID
+        Constraint::Fill(2), // User
+        Constraint::Fill(2), // Database
+        Constraint::Fill(1), // Duration
+        Constraint::Fill(2), // State
+        Constraint::Fill(2), // Wait
+        Constraint::Fill(6), // Query (gets most space)
     ];
 
     let table = Table::new(rows, widths)
