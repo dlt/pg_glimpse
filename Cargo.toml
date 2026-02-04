@@ -20,6 +20,7 @@ unicode-width = "0.2"
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 dirs = "6"
+nucleo-matcher = "0.3"
 
 [profile.release]
 lto = true

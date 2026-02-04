@@ -4,7 +4,9 @@
       "WebSearch",
       "Bash(cargo build:*)",
       "Bash(cargo clippy:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "WebFetch(domain:docs.rs)",
+      "Bash(git add:*)"
     ]
   }
 }
