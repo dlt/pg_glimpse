@@ -6,7 +6,7 @@ use ratatui::widgets::{
 };
 use ratatui::Frame;
 
-use crate::app::{App, IndexSortColumn};
+use crate::app::{App, IndexSortColumn, StatementSortColumn};
 use crate::config::ConfigItem;
 use super::theme::Theme;
 
@@ -883,4 +883,372 @@ fn truncate(s: &str, max: usize) -> &str {
     } else {
         &s[..max]
     }
+}
+
+fn format_time_ms(ms: f64) -> String {
+    if ms < 1.0 {
+        format!("{:.3} ms", ms)
+    } else if ms < 1_000.0 {
+        format!("{:.1} ms", ms)
+    } else if ms < 60_000.0 {
+        format!("{:.2} s", ms / 1_000.0)
+    } else if ms < 3_600_000.0 {
+        format!("{:.1} min", ms / 60_000.0)
+    } else {
+        format!("{:.1} hr", ms / 3_600_000.0)
+    }
+}
+
+fn collapse_whitespace(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
+    let popup = centered_rect(90, 75, area);
+    frame.render_widget(Clear, popup);
+
+    let block = overlay_block(
+        "pg_stat_statements  [s] sort  [Enter] inspect  [Esc] close",
+        Theme::border_active(),
+    );
+
+    let Some(snap) = &app.snapshot else {
+        frame.render_widget(Paragraph::new("No data").block(block), popup);
+        return;
+    };
+
+    if !snap.pg_stat_statements_available {
+        let lines = vec![
+            Line::from(""),
+            Line::from(Span::styled(
+                "  pg_stat_statements extension is not available",
+                Style::default()
+                    .fg(Theme::border_warn())
+                    .add_modifier(Modifier::BOLD),
+            )),
+            Line::from(""),
+            Line::from(Span::styled(
+                "  To enable it:",
+                Style::default().fg(Theme::fg()),
+            )),
+            Line::from(""),
+            Line::from(Span::styled(
+                "  1. Add to postgresql.conf:",
+                Style::default().fg(Color::DarkGray),
+            )),
+            Line::from(Span::styled(
+                "     shared_preload_libraries = 'pg_stat_statements'",
+                Style::default().fg(Theme::fg()),
+            )),
+            Line::from(""),
+            Line::from(Span::styled(
+                "  2. Restart PostgreSQL",
+                Style::default().fg(Color::DarkGray),
+            )),
+            Line::from(""),
+            Line::from(Span::styled(
+                "  3. Create the extension:",
+                Style::default().fg(Color::DarkGray),
+            )),
+            Line::from(Span::styled(
+                "     CREATE EXTENSION pg_stat_statements;",
+                Style::default().fg(Theme::fg()),
+            )),
+        ];
+        let paragraph = Paragraph::new(lines).block(block);
+        frame.render_widget(paragraph, popup);
+        return;
+    }
+
+    if snap.stat_statements.is_empty() {
+        let msg = Paragraph::new("\n  No statement data collected yet")
+            .style(
+                Style::default()
+                    .fg(Theme::border_ok())
+                    .add_modifier(Modifier::ITALIC),
+            )
+            .block(block);
+        frame.render_widget(msg, popup);
+        return;
+    }
+
+    let sort_indicator = |col: StatementSortColumn| -> &str {
+        if app.stmt_sort_column == col {
+            if app.stmt_sort_ascending {
+                " ↑"
+            } else {
+                " ↓"
+            }
+        } else {
+            ""
+        }
+    };
+
+    let header = Row::new(vec![
+        Cell::from("Query"),
+        Cell::from(format!("Calls{}", sort_indicator(StatementSortColumn::Calls))),
+        Cell::from(format!(
+            "Total{}",
+            sort_indicator(StatementSortColumn::TotalTime)
+        )),
+        Cell::from(format!(
+            "Mean{}",
+            sort_indicator(StatementSortColumn::MeanTime)
+        )),
+        Cell::from(format!(
+            "Max{}",
+            sort_indicator(StatementSortColumn::MaxTime)
+        )),
+        Cell::from(format!("Rows{}", sort_indicator(StatementSortColumn::Rows))),
+        Cell::from(format!(
+            "Rows/Call{}",
+            sort_indicator(StatementSortColumn::RowsPerCall)
+        )),
+        Cell::from(format!(
+            "Buffers{}",
+            sort_indicator(StatementSortColumn::Buffers)
+        )),
+        Cell::from("Hit %"),
+        Cell::from("Stddev"),
+        Cell::from("Temp Blks"),
+    ])
+    .style(Theme::title_style())
+    .bottom_margin(0);
+
+    let indices = app.sorted_stmt_indices();
+    let rows: Vec<Row> = indices
+        .iter()
+        .map(|&i| {
+            let stmt = &snap.stat_statements[i];
+            let query_display = collapse_whitespace(&stmt.query);
+            let hit_color = if stmt.hit_ratio >= 0.99 {
+                Theme::border_ok()
+            } else if stmt.hit_ratio >= 0.90 {
+                Theme::border_warn()
+            } else {
+                Theme::border_danger()
+            };
+            let temp_color = if stmt.temp_blks_written > 0 {
+                Theme::border_warn()
+            } else {
+                Theme::fg()
+            };
+            let rows_per_call = if stmt.calls > 0 {
+                format!("{:.1}", stmt.rows as f64 / stmt.calls as f64)
+            } else {
+                "-".into()
+            };
+            let total_bufs = stmt.shared_blks_hit + stmt.shared_blks_read;
+            Row::new(vec![
+                Cell::from(truncate(&query_display, 50).to_string()),
+                Cell::from(stmt.calls.to_string()),
+                Cell::from(format_time_ms(stmt.total_exec_time)),
+                Cell::from(format_time_ms(stmt.mean_exec_time)),
+                Cell::from(format_time_ms(stmt.max_exec_time)),
+                Cell::from(stmt.rows.to_string()),
+                Cell::from(rows_per_call),
+                Cell::from(format_number(total_bufs)),
+                Cell::from(format!("{:.1}%", stmt.hit_ratio * 100.0))
+                    .style(Style::default().fg(hit_color)),
+                Cell::from(format_time_ms(stmt.stddev_exec_time)),
+                Cell::from(stmt.temp_blks_written.to_string())
+                    .style(Style::default().fg(temp_color)),
+            ])
+        })
+        .collect();
+
+    let widths = [
+        Constraint::Min(20),
+        Constraint::Length(9),
+        Constraint::Length(11),
+        Constraint::Length(11),
+        Constraint::Length(11),
+        Constraint::Length(9),
+        Constraint::Length(10),
+        Constraint::Length(9),
+        Constraint::Length(7),
+        Constraint::Length(11),
+        Constraint::Length(10),
+    ];
+
+    let table = Table::new(rows, widths)
+        .header(header)
+        .block(block)
+        .row_highlight_style(
+            Style::default()
+                .bg(Theme::highlight_bg())
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("► ");
+
+    frame.render_stateful_widget(table, popup, &mut app.stmt_table_state);
+}
+
+pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
+    let popup = centered_rect(80, 80, area);
+    frame.render_widget(Clear, popup);
+
+    let block = overlay_block("Statement Details  [Esc] back", Theme::border_active());
+
+    let Some(snap) = &app.snapshot else {
+        frame.render_widget(Paragraph::new("No data").block(block), popup);
+        return;
+    };
+
+    let sel = app.stmt_table_state.selected().unwrap_or(0);
+    let indices = app.sorted_stmt_indices();
+    let Some(&real_idx) = indices.get(sel) else {
+        frame.render_widget(
+            Paragraph::new("No statement selected").block(block),
+            popup,
+        );
+        return;
+    };
+    let stmt = &snap.stat_statements[real_idx];
+
+    let hit_color = if stmt.hit_ratio >= 0.99 {
+        Theme::border_ok()
+    } else if stmt.hit_ratio >= 0.90 {
+        Theme::border_warn()
+    } else {
+        Theme::border_danger()
+    };
+
+    let label = |s: &'static str| Span::styled(s, Style::default().fg(Color::DarkGray));
+    let val = |s: String| Span::styled(s, Style::default().fg(Theme::fg()));
+    let val_bold =
+        |s: String| Span::styled(s, Style::default().fg(Theme::fg()).add_modifier(Modifier::BOLD));
+    let section = |s: &'static str| {
+        Line::from(Span::styled(
+            s,
+            Style::default()
+                .fg(Theme::border_active())
+                .add_modifier(Modifier::BOLD),
+        ))
+    };
+
+    let rows_per_call = if stmt.calls > 0 {
+        format!("{:.1}", stmt.rows as f64 / stmt.calls as f64)
+    } else {
+        "-".into()
+    };
+
+    let temp_color = if stmt.temp_blks_read + stmt.temp_blks_written > 0 {
+        Theme::border_warn()
+    } else {
+        Theme::fg()
+    };
+
+    let io_time_color = if stmt.blk_read_time + stmt.blk_write_time > 0.0 {
+        Theme::border_warn()
+    } else {
+        Theme::fg()
+    };
+
+    let lines = vec![
+        Line::from(vec![
+            label("  Query ID:        "),
+            val(stmt.queryid.to_string()),
+        ]),
+        Line::from(""),
+        section("  Query"),
+        Line::from(Span::styled(
+            format!("  {}", stmt.query),
+            Style::default().fg(Theme::fg()),
+        )),
+        Line::from(""),
+        section("  Execution"),
+        Line::from(vec![
+            label("  Calls:           "),
+            val_bold(stmt.calls.to_string()),
+            label("      Rows:          "),
+            val(stmt.rows.to_string()),
+            label("      Rows/Call:     "),
+            val(rows_per_call),
+        ]),
+        Line::from(vec![
+            label("  Total Time:      "),
+            val_bold(format_time_ms(stmt.total_exec_time)),
+        ]),
+        Line::from(vec![
+            label("  Mean Time:       "),
+            val(format_time_ms(stmt.mean_exec_time)),
+            label("      Min Time:      "),
+            val(format_time_ms(stmt.min_exec_time)),
+        ]),
+        Line::from(vec![
+            label("  Max Time:        "),
+            val(format_time_ms(stmt.max_exec_time)),
+            label("      Stddev:        "),
+            val(format_time_ms(stmt.stddev_exec_time)),
+        ]),
+        Line::from(""),
+        section("  Shared Buffers"),
+        Line::from(vec![
+            label("  Hit:             "),
+            val(stmt.shared_blks_hit.to_string()),
+            label("      Read:          "),
+            val(stmt.shared_blks_read.to_string()),
+        ]),
+        Line::from(vec![
+            label("  Dirtied:         "),
+            val(stmt.shared_blks_dirtied.to_string()),
+            label("      Written:       "),
+            val(stmt.shared_blks_written.to_string()),
+        ]),
+        Line::from(vec![
+            label("  Hit Ratio:       "),
+            Span::styled(
+                format!("{:.2}%", stmt.hit_ratio * 100.0),
+                Style::default()
+                    .fg(hit_color)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(""),
+        section("  Local Buffers"),
+        Line::from(vec![
+            label("  Hit:             "),
+            val(stmt.local_blks_hit.to_string()),
+            label("      Read:          "),
+            val(stmt.local_blks_read.to_string()),
+        ]),
+        Line::from(vec![
+            label("  Dirtied:         "),
+            val(stmt.local_blks_dirtied.to_string()),
+            label("      Written:       "),
+            val(stmt.local_blks_written.to_string()),
+        ]),
+        Line::from(""),
+        section("  Temp & I/O"),
+        Line::from(vec![
+            label("  Temp Read:       "),
+            Span::styled(
+                stmt.temp_blks_read.to_string(),
+                Style::default().fg(temp_color),
+            ),
+            label("      Temp Written:  "),
+            Span::styled(
+                stmt.temp_blks_written.to_string(),
+                Style::default().fg(temp_color),
+            ),
+        ]),
+        Line::from(vec![
+            label("  Blk Read Time:   "),
+            Span::styled(
+                format_time_ms(stmt.blk_read_time),
+                Style::default().fg(io_time_color),
+            ),
+            label("      Blk Write Time:"),
+            Span::styled(
+                format!(" {}", format_time_ms(stmt.blk_write_time)),
+                Style::default().fg(io_time_color),
+            ),
+        ]),
+    ];
+
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false });
+    frame.render_widget(paragraph, popup);
 }

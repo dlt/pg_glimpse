@@ -119,6 +119,33 @@ pub struct IndexInfo {
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
+pub struct StatStatement {
+    pub queryid: i64,
+    pub query: String,
+    pub calls: i64,
+    pub total_exec_time: f64,
+    pub min_exec_time: f64,
+    pub mean_exec_time: f64,
+    pub max_exec_time: f64,
+    pub stddev_exec_time: f64,
+    pub rows: i64,
+    pub shared_blks_hit: i64,
+    pub shared_blks_read: i64,
+    pub shared_blks_dirtied: i64,
+    pub shared_blks_written: i64,
+    pub local_blks_hit: i64,
+    pub local_blks_read: i64,
+    pub local_blks_dirtied: i64,
+    pub local_blks_written: i64,
+    pub temp_blks_read: i64,
+    pub temp_blks_written: i64,
+    pub blk_read_time: f64,
+    pub blk_write_time: f64,
+    pub hit_ratio: f64,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
 pub struct PgSnapshot {
     pub timestamp: DateTime<Utc>,
     pub active_queries: Vec<ActiveQuery>,
@@ -131,4 +158,6 @@ pub struct PgSnapshot {
     pub vacuum_progress: Vec<VacuumProgress>,
     pub wraparound: Vec<WraparoundInfo>,
     pub indexes: Vec<IndexInfo>,
+    pub stat_statements: Vec<StatStatement>,
+    pub pg_stat_statements_available: bool,
 }

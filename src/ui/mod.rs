@@ -102,6 +102,13 @@ pub fn render(frame: &mut Frame, app: &mut App) {
             overlay::render_indexes(frame, app, area);
         }
         ViewMode::IndexInspect => overlay::render_index_inspect(frame, app, frame.area()),
+        ViewMode::Statements => {
+            let area = frame.area();
+            overlay::render_statements(frame, app, area);
+        }
+        ViewMode::StatementInspect => {
+            overlay::render_statement_inspect(frame, app, frame.area())
+        }
         ViewMode::Config => overlay::render_config(frame, app, frame.area()),
         ViewMode::Normal => {}
     }

@@ -18,6 +18,8 @@ pub enum ViewMode {
     Wraparound,
     Indexes,
     IndexInspect,
+    Statements,
+    StatementInspect,
     ConfirmCancel(i32),
     ConfirmKill(i32),
     Config,
@@ -79,7 +81,43 @@ impl IndexSortColumn {
             Self::TupFetch => Self::Scans,
         }
     }
+}
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum StatementSortColumn {
+    TotalTime,
+    MeanTime,
+    MaxTime,
+    Calls,
+    Rows,
+    RowsPerCall,
+    Buffers,
+}
+
+impl StatementSortColumn {
+    pub fn next(self) -> Self {
+        match self {
+            Self::TotalTime => Self::MeanTime,
+            Self::MeanTime => Self::MaxTime,
+            Self::MaxTime => Self::Calls,
+            Self::Calls => Self::Rows,
+            Self::Rows => Self::RowsPerCall,
+            Self::RowsPerCall => Self::Buffers,
+            Self::Buffers => Self::TotalTime,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::TotalTime => "Total Time",
+            Self::MeanTime => "Mean Time",
+            Self::MaxTime => "Max Time",
+            Self::Calls => "Calls",
+            Self::Rows => "Rows",
+            Self::RowsPerCall => "Rows/Call",
+            Self::Buffers => "Buffers",
+        }
+    }
 }
 
 pub struct App {
@@ -93,6 +131,9 @@ pub struct App {
     pub index_table_state: TableState,
     pub index_sort_column: IndexSortColumn,
     pub index_sort_ascending: bool,
+    pub stmt_table_state: TableState,
+    pub stmt_sort_column: StatementSortColumn,
+    pub stmt_sort_ascending: bool,
 
     pub connection_history: RingBuffer<u64>,
     pub avg_query_time_history: RingBuffer<u64>,
@@ -134,6 +175,9 @@ impl App {
             index_table_state: TableState::default(),
             index_sort_column: IndexSortColumn::Scans,
             index_sort_ascending: true,
+            stmt_table_state: TableState::default(),
+            stmt_sort_column: StatementSortColumn::TotalTime,
+            stmt_sort_ascending: false,
             connection_history: RingBuffer::new(history_len),
             avg_query_time_history: RingBuffer::new(history_len),
             lock_count_history: RingBuffer::new(history_len),
@@ -264,6 +308,67 @@ impl App {
         indices
     }
 
+    pub fn sorted_stmt_indices(&self) -> Vec<usize> {
+        let Some(snap) = &self.snapshot else {
+            return vec![];
+        };
+        let mut indices: Vec<usize> = (0..snap.stat_statements.len()).collect();
+        let asc = self.stmt_sort_ascending;
+        match self.stmt_sort_column {
+            StatementSortColumn::TotalTime => indices.sort_by(|&a, &b| {
+                let cmp = snap.stat_statements[a]
+                    .total_exec_time
+                    .partial_cmp(&snap.stat_statements[b].total_exec_time)
+                    .unwrap_or(std::cmp::Ordering::Equal);
+                if asc { cmp } else { cmp.reverse() }
+            }),
+            StatementSortColumn::MeanTime => indices.sort_by(|&a, &b| {
+                let cmp = snap.stat_statements[a]
+                    .mean_exec_time
+                    .partial_cmp(&snap.stat_statements[b].mean_exec_time)
+                    .unwrap_or(std::cmp::Ordering::Equal);
+                if asc { cmp } else { cmp.reverse() }
+            }),
+            StatementSortColumn::MaxTime => indices.sort_by(|&a, &b| {
+                let cmp = snap.stat_statements[a]
+                    .max_exec_time
+                    .partial_cmp(&snap.stat_statements[b].max_exec_time)
+                    .unwrap_or(std::cmp::Ordering::Equal);
+                if asc { cmp } else { cmp.reverse() }
+            }),
+            StatementSortColumn::Calls => indices.sort_by(|&a, &b| {
+                let cmp = snap.stat_statements[a]
+                    .calls
+                    .cmp(&snap.stat_statements[b].calls);
+                if asc { cmp } else { cmp.reverse() }
+            }),
+            StatementSortColumn::Rows => indices.sort_by(|&a, &b| {
+                let cmp = snap.stat_statements[a]
+                    .rows
+                    .cmp(&snap.stat_statements[b].rows);
+                if asc { cmp } else { cmp.reverse() }
+            }),
+            StatementSortColumn::RowsPerCall => indices.sort_by(|&a, &b| {
+                let rpc = |s: &crate::db::models::StatStatement| {
+                    if s.calls > 0 { s.rows as f64 / s.calls as f64 } else { 0.0 }
+                };
+                let cmp = rpc(&snap.stat_statements[a])
+                    .partial_cmp(&rpc(&snap.stat_statements[b]))
+                    .unwrap_or(std::cmp::Ordering::Equal);
+                if asc { cmp } else { cmp.reverse() }
+            }),
+            StatementSortColumn::Buffers => indices.sort_by(|&a, &b| {
+                let bufs = |s: &crate::db::models::StatStatement| {
+                    s.shared_blks_hit + s.shared_blks_read
+                };
+                let cmp = bufs(&snap.stat_statements[a])
+                    .cmp(&bufs(&snap.stat_statements[b]));
+                if asc { cmp } else { cmp.reverse() }
+            }),
+        }
+        indices
+    }
+
     pub fn handle_key(&mut self, key: KeyEvent) {
         match &self.view_mode {
             ViewMode::ConfirmCancel(pid) => {
@@ -339,6 +444,62 @@ impl App {
                 match key.code {
                     KeyCode::Esc | KeyCode::Char('q') => {
                         self.view_mode = ViewMode::Indexes;
+                    }
+                    _ => {}
+                }
+                return;
+            }
+            ViewMode::Statements => {
+                match key.code {
+                    KeyCode::Esc | KeyCode::Char('q') => {
+                        self.view_mode = ViewMode::Normal;
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        let i = self.stmt_table_state.selected().unwrap_or(0);
+                        self.stmt_table_state.select(Some(i.saturating_sub(1)));
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        let max = self
+                            .snapshot
+                            .as_ref()
+                            .map_or(0, |s| s.stat_statements.len().saturating_sub(1));
+                        let i = self.stmt_table_state.selected().unwrap_or(0);
+                        self.stmt_table_state.select(Some((i + 1).min(max)));
+                    }
+                    KeyCode::Enter => {
+                        if self
+                            .snapshot
+                            .as_ref()
+                            .is_some_and(|s| !s.stat_statements.is_empty())
+                        {
+                            if self.stmt_table_state.selected().is_none() {
+                                self.stmt_table_state.select(Some(0));
+                            }
+                            self.view_mode = ViewMode::StatementInspect;
+                        }
+                    }
+                    KeyCode::Char('s') => {
+                        let next = self.stmt_sort_column.next();
+                        if next == self.stmt_sort_column {
+                            self.stmt_sort_ascending = !self.stmt_sort_ascending;
+                        } else {
+                            self.stmt_sort_column = next;
+                            self.stmt_sort_ascending = false;
+                        }
+                        self.status_message = Some(format!(
+                            "Sort: {} {}",
+                            self.stmt_sort_column.label(),
+                            if self.stmt_sort_ascending { "↑" } else { "↓" }
+                        ));
+                    }
+                    _ => {}
+                }
+                return;
+            }
+            ViewMode::StatementInspect => {
+                match key.code {
+                    KeyCode::Esc | KeyCode::Char('q') => {
+                        self.view_mode = ViewMode::Statements;
                     }
                     _ => {}
                 }
@@ -446,6 +607,9 @@ impl App {
             }
             KeyCode::Char('I') => {
                 self.view_mode = ViewMode::Indexes;
+            }
+            KeyCode::Char('S') => {
+                self.view_mode = ViewMode::Statements;
             }
             KeyCode::Char(',') => {
                 self.view_mode = ViewMode::Config;

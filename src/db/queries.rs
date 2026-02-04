@@ -133,6 +133,38 @@ FROM pg_stat_user_indexes s
 ORDER BY pg_relation_size(s.indexrelid) DESC
 ";
 
+const STAT_STATEMENTS_SQL: &str = "
+SELECT
+    COALESCE(queryid, 0) AS queryid,
+    query,
+    COALESCE(calls, 0) AS calls,
+    COALESCE(total_exec_time, 0) AS total_exec_time,
+    COALESCE(min_exec_time, 0) AS min_exec_time,
+    COALESCE(mean_exec_time, 0) AS mean_exec_time,
+    COALESCE(max_exec_time, 0) AS max_exec_time,
+    COALESCE(stddev_exec_time, 0) AS stddev_exec_time,
+    COALESCE(rows, 0) AS rows,
+    COALESCE(shared_blks_hit, 0) AS shared_blks_hit,
+    COALESCE(shared_blks_read, 0) AS shared_blks_read,
+    COALESCE(shared_blks_dirtied, 0) AS shared_blks_dirtied,
+    COALESCE(shared_blks_written, 0) AS shared_blks_written,
+    COALESCE(local_blks_hit, 0) AS local_blks_hit,
+    COALESCE(local_blks_read, 0) AS local_blks_read,
+    COALESCE(local_blks_dirtied, 0) AS local_blks_dirtied,
+    COALESCE(local_blks_written, 0) AS local_blks_written,
+    COALESCE(temp_blks_read, 0) AS temp_blks_read,
+    COALESCE(temp_blks_written, 0) AS temp_blks_written,
+    COALESCE(blk_read_time, 0) AS blk_read_time,
+    COALESCE(blk_write_time, 0) AS blk_write_time,
+    CASE
+        WHEN COALESCE(shared_blks_hit, 0) + COALESCE(shared_blks_read, 0) = 0 THEN 1.0
+        ELSE COALESCE(shared_blks_hit, 0)::float / (COALESCE(shared_blks_hit, 0) + COALESCE(shared_blks_read, 0))
+    END AS hit_ratio
+FROM pg_stat_statements
+ORDER BY total_exec_time DESC
+LIMIT 100
+";
+
 const ACTIVITY_SUMMARY_SQL: &str = "
 SELECT
     COUNT(*) FILTER (WHERE state = 'active' AND pid <> pg_backend_pid()) AS active_query_count,
@@ -303,6 +335,41 @@ pub async fn fetch_indexes(client: &Client) -> Result<Vec<IndexInfo>> {
     Ok(results)
 }
 
+pub async fn fetch_stat_statements(client: &Client) -> (Vec<StatStatement>, bool) {
+    let rows = match client.query(STAT_STATEMENTS_SQL, &[]).await {
+        Ok(rows) => rows,
+        Err(_) => return (vec![], false),
+    };
+    let mut results = Vec::with_capacity(rows.len());
+    for row in rows {
+        results.push(StatStatement {
+            queryid: row.get("queryid"),
+            query: row.get("query"),
+            calls: row.get("calls"),
+            total_exec_time: row.get("total_exec_time"),
+            min_exec_time: row.get("min_exec_time"),
+            mean_exec_time: row.get("mean_exec_time"),
+            max_exec_time: row.get("max_exec_time"),
+            stddev_exec_time: row.get("stddev_exec_time"),
+            rows: row.get("rows"),
+            shared_blks_hit: row.get("shared_blks_hit"),
+            shared_blks_read: row.get("shared_blks_read"),
+            shared_blks_dirtied: row.get("shared_blks_dirtied"),
+            shared_blks_written: row.get("shared_blks_written"),
+            local_blks_hit: row.get("local_blks_hit"),
+            local_blks_read: row.get("local_blks_read"),
+            local_blks_dirtied: row.get("local_blks_dirtied"),
+            local_blks_written: row.get("local_blks_written"),
+            temp_blks_read: row.get("temp_blks_read"),
+            temp_blks_written: row.get("temp_blks_written"),
+            blk_read_time: row.get("blk_read_time"),
+            blk_write_time: row.get("blk_write_time"),
+            hit_ratio: row.get("hit_ratio"),
+        });
+    }
+    (results, true)
+}
+
 pub async fn cancel_backend(client: &Client, pid: i32) -> Result<bool> {
     let row = client
         .query_one("SELECT pg_cancel_backend($1)", &[&pid])
@@ -318,7 +385,7 @@ pub async fn terminate_backend(client: &Client, pid: i32) -> Result<bool> {
 }
 
 pub async fn fetch_snapshot(client: &Client) -> Result<PgSnapshot> {
-    let (active, waits, blocks, cache, summary, tables, repl, vacuum, wrap, indexes) =
+    let (active, waits, blocks, cache, summary, tables, repl, vacuum, wrap, indexes, ss) =
         tokio::try_join!(
             fetch_active_queries(client),
             fetch_wait_events(client),
@@ -330,7 +397,9 @@ pub async fn fetch_snapshot(client: &Client) -> Result<PgSnapshot> {
             fetch_vacuum_progress(client),
             fetch_wraparound(client),
             fetch_indexes(client),
+            async { Ok(fetch_stat_statements(client).await) },
         )?;
+    let (stat_statements, pg_stat_statements_available) = ss;
     Ok(PgSnapshot {
         timestamp: chrono::Utc::now(),
         active_queries: active,
@@ -343,5 +412,7 @@ pub async fn fetch_snapshot(client: &Client) -> Result<PgSnapshot> {
         vacuum_progress: vacuum,
         wraparound: wrap,
         indexes,
+        stat_statements,
+        pg_stat_statements_available,
     })
 }
