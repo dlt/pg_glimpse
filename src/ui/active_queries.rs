@@ -3,14 +3,17 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::widgets::{Block, BorderType, Borders, Cell, Row, Table};
 use ratatui::Frame;
 
-use crate::app::{App, SortColumn};
+use crate::app::{App, BottomPanel, SortColumn};
 use super::theme::Theme;
 
 pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
-    let query_count = app
+    let total_count = app
         .snapshot
         .as_ref()
         .map_or(0, |s| s.active_queries.len());
+
+    let indices = app.sorted_query_indices();
+    let filtered_count = indices.len();
 
     let sort_indicator = |col: SortColumn| -> &str {
         if app.sort_column == col {
@@ -24,7 +27,14 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
         }
     };
 
-    let title = format!(" Queries [{}] ", query_count);
+    let title = if app.bottom_panel == BottomPanel::Queries && (app.filter_active || (!app.filter_text.is_empty() && app.view_mode == crate::app::ViewMode::Filter)) {
+        format!(
+            " Queries [{}/{}] (filter: {}) ",
+            filtered_count, total_count, app.filter_text
+        )
+    } else {
+        format!(" Queries [{}] ", total_count)
+    };
     let block = Block::default()
         .title(title)
         .title_style(Theme::title_style())
@@ -48,7 +58,6 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
     )
     .bottom_margin(0);
 
-    let indices = app.sorted_query_indices();
     let rows: Vec<Row> = match &app.snapshot {
         Some(snap) => indices
             .iter()

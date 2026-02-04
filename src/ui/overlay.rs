@@ -1,14 +1,13 @@
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{
-    Block, BorderType, Borders, Cell, Clear, Paragraph, Row, Table, Wrap,
-};
+use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap};
 use ratatui::Frame;
 
-use crate::app::{App, IndexSortColumn, StatementSortColumn};
+use crate::app::App;
 use crate::config::ConfigItem;
 use super::theme::Theme;
+use super::util::{format_bytes, format_time_ms};
 
 fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
     let v = Layout::default()
@@ -148,535 +147,6 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, popup);
 }
 
-pub fn render_blocking(frame: &mut Frame, app: &App, area: Rect) {
-    let popup = centered_rect(75, 60, area);
-    frame.render_widget(Clear, popup);
-
-    let block = overlay_block("Blocking Chains  [Esc] close", Theme::border_danger());
-
-    let Some(snap) = &app.snapshot else {
-        frame.render_widget(
-            Paragraph::new("No data").block(block),
-            popup,
-        );
-        return;
-    };
-
-    if snap.blocking_info.is_empty() {
-        let msg = Paragraph::new("\n  No blocking detected")
-            .style(
-                Style::default()
-                    .fg(Theme::border_ok())
-                    .add_modifier(Modifier::ITALIC),
-            )
-            .block(block);
-        frame.render_widget(msg, popup);
-        return;
-    }
-
-    let header = Row::new(vec!["Blocker", "", "Blocked", "Duration", "Blocker Query"])
-        .style(Theme::title_style())
-        .bottom_margin(0);
-
-    let rows: Vec<Row> = snap
-        .blocking_info
-        .iter()
-        .map(|b| {
-            Row::new(vec![
-                Cell::from(format!("{}", b.blocker_pid))
-                    .style(Style::default().fg(Theme::border_danger())),
-                Cell::from("→"),
-                Cell::from(format!("{}", b.blocked_pid))
-                    .style(Style::default().fg(Theme::border_warn())),
-                Cell::from(format!("{:.1}s", b.blocked_duration_secs))
-                    .style(Style::default().fg(Theme::duration_color(b.blocked_duration_secs))),
-                Cell::from(
-                    b.blocker_query.clone().unwrap_or_else(|| "-".into()),
-                ),
-            ])
-        })
-        .collect();
-
-    let widths = [
-        Constraint::Length(8),
-        Constraint::Length(2),
-        Constraint::Length(8),
-        Constraint::Length(9),
-        Constraint::Min(15),
-    ];
-
-    let table = Table::new(rows, widths).header(header).block(block);
-    frame.render_widget(table, popup);
-}
-
-pub fn render_wait_events(frame: &mut Frame, app: &App, area: Rect) {
-    let popup = centered_rect(60, 55, area);
-    frame.render_widget(Clear, popup);
-
-    let block = overlay_block("Wait Events  [Esc] close", Theme::border_warn());
-
-    let Some(snap) = &app.snapshot else {
-        frame.render_widget(
-            Paragraph::new("No data").block(block),
-            popup,
-        );
-        return;
-    };
-
-    if snap.wait_events.is_empty() {
-        let msg = Paragraph::new("\n  No active wait events")
-            .style(
-                Style::default()
-                    .fg(Theme::border_ok())
-                    .add_modifier(Modifier::ITALIC),
-            )
-            .block(block);
-        frame.render_widget(msg, popup);
-        return;
-    }
-
-    let max_count = snap.wait_events.iter().map(|w| w.count).max().unwrap_or(1);
-    let inner = block.inner(popup);
-    frame.render_widget(block, popup);
-
-    let bar_width = inner.width.saturating_sub(22) as i64;
-
-    let lines: Vec<Line> = snap
-        .wait_events
-        .iter()
-        .map(|w| {
-            let color = Theme::wait_event_color(&w.wait_event_type);
-            let label = format!("{:>12}", truncate(&w.wait_event_type, 12));
-            let bar_len = if max_count > 0 {
-                ((w.count as f64 / max_count as f64) * bar_width as f64) as usize
-            } else {
-                0
-            };
-            let bar: String = "█".repeat(bar_len);
-            let count_str = format!(" {}", w.count);
-
-            Line::from(vec![
-                Span::styled(label, Style::default().fg(Color::DarkGray)),
-                Span::raw(" "),
-                Span::styled(bar, Style::default().fg(color)),
-                Span::styled(count_str, Style::default().fg(color).add_modifier(Modifier::BOLD)),
-            ])
-        })
-        .collect();
-
-    let paragraph = Paragraph::new(lines);
-    frame.render_widget(paragraph, inner);
-}
-
-pub fn render_confirm_cancel(frame: &mut Frame, pid: i32, area: Rect) {
-    let popup = centered_rect(45, 20, area);
-    frame.render_widget(Clear, popup);
-
-    let block = overlay_block("Confirm Cancel", Theme::border_warn());
-
-    let lines = vec![
-        Line::from(""),
-        Line::from(Span::styled(
-            format!("  Cancel query on PID {}?", pid),
-            Style::default()
-                .fg(Theme::border_warn())
-                .add_modifier(Modifier::BOLD),
-        )),
-        Line::from(""),
-        Line::from(Span::styled(
-            "  The current query will be interrupted.",
-            Style::default().fg(Color::DarkGray),
-        )),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("  y", Style::default().fg(Theme::border_warn()).add_modifier(Modifier::BOLD)),
-            Span::styled(" confirm  ", Style::default().fg(Theme::fg())),
-            Span::styled("any key", Style::default().fg(Theme::border_ok()).add_modifier(Modifier::BOLD)),
-            Span::styled(" abort", Style::default().fg(Theme::fg())),
-        ]),
-    ];
-
-    let paragraph = Paragraph::new(lines)
-        .block(block)
-        .alignment(Alignment::Left);
-    frame.render_widget(paragraph, popup);
-}
-
-pub fn render_confirm_kill(frame: &mut Frame, pid: i32, area: Rect) {
-    let popup = centered_rect(45, 20, area);
-    frame.render_widget(Clear, popup);
-
-    let block = overlay_block("Confirm Kill", Theme::border_danger());
-
-    let lines = vec![
-        Line::from(""),
-        Line::from(Span::styled(
-            format!("  Terminate backend PID {}?", pid),
-            Style::default()
-                .fg(Theme::border_danger())
-                .add_modifier(Modifier::BOLD),
-        )),
-        Line::from(""),
-        Line::from(Span::styled(
-            "  This will kill the connection entirely.",
-            Style::default().fg(Color::DarkGray),
-        )),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("  y", Style::default().fg(Theme::border_danger()).add_modifier(Modifier::BOLD)),
-            Span::styled(" confirm  ", Style::default().fg(Theme::fg())),
-            Span::styled("any key", Style::default().fg(Theme::border_ok()).add_modifier(Modifier::BOLD)),
-            Span::styled(" abort", Style::default().fg(Theme::fg())),
-        ]),
-    ];
-
-    let paragraph = Paragraph::new(lines)
-        .block(block)
-        .alignment(Alignment::Left);
-    frame.render_widget(paragraph, popup);
-}
-
-pub fn render_table_stats(frame: &mut Frame, app: &App, area: Rect) {
-    let popup = centered_rect(80, 70, area);
-    frame.render_widget(Clear, popup);
-
-    let block = overlay_block("Table Stats  [Esc] close", Theme::border_active());
-
-    let Some(snap) = &app.snapshot else {
-        frame.render_widget(Paragraph::new("No data").block(block), popup);
-        return;
-    };
-
-    if snap.table_stats.is_empty() {
-        let msg = Paragraph::new("\n  No user tables found")
-            .style(
-                Style::default()
-                    .fg(Theme::border_ok())
-                    .add_modifier(Modifier::ITALIC),
-            )
-            .block(block);
-        frame.render_widget(msg, popup);
-        return;
-    }
-
-    let header = Row::new(vec![
-        "Table", "Size", "SeqScan", "IdxScan", "Dead", "Dead%", "Last Vacuum",
-    ])
-    .style(Theme::title_style())
-    .bottom_margin(0);
-
-    let rows: Vec<Row> = snap
-        .table_stats
-        .iter()
-        .map(|t| {
-            let dead_color = if t.dead_ratio > 20.0 {
-                Theme::border_danger()
-            } else if t.dead_ratio > 5.0 {
-                Theme::border_warn()
-            } else {
-                Theme::fg()
-            };
-            Row::new(vec![
-                Cell::from(format!("{}.{}", t.schemaname, truncate(&t.relname, 20))),
-                Cell::from(format_bytes(t.total_size_bytes)),
-                Cell::from(t.seq_scan.to_string()),
-                Cell::from(t.idx_scan.to_string()),
-                Cell::from(t.n_dead_tup.to_string()).style(Style::default().fg(dead_color)),
-                Cell::from(format!("{:.1}%", t.dead_ratio)).style(Style::default().fg(dead_color)),
-                Cell::from(
-                    t.last_autovacuum
-                        .map(|ts| ts.format("%m-%d %H:%M").to_string())
-                        .unwrap_or_else(|| "never".into()),
-                ),
-            ])
-        })
-        .collect();
-
-    let widths = [
-        Constraint::Min(20),
-        Constraint::Length(9),
-        Constraint::Length(8),
-        Constraint::Length(8),
-        Constraint::Length(8),
-        Constraint::Length(7),
-        Constraint::Length(13),
-    ];
-
-    let table = Table::new(rows, widths).header(header).block(block);
-    frame.render_widget(table, popup);
-}
-
-pub fn render_replication(frame: &mut Frame, app: &App, area: Rect) {
-    let popup = centered_rect(75, 50, area);
-    frame.render_widget(Clear, popup);
-
-    let block = overlay_block("Replication Lag  [Esc] close", Theme::border_active());
-
-    let Some(snap) = &app.snapshot else {
-        frame.render_widget(Paragraph::new("No data").block(block), popup);
-        return;
-    };
-
-    if snap.replication.is_empty() {
-        let msg = Paragraph::new("\n  No replicas connected")
-            .style(
-                Style::default()
-                    .fg(Theme::border_ok())
-                    .add_modifier(Modifier::ITALIC),
-            )
-            .block(block);
-        frame.render_widget(msg, popup);
-        return;
-    }
-
-    let header = Row::new(vec![
-        "App Name", "Client", "State", "Write Lag", "Flush Lag", "Replay Lag",
-    ])
-    .style(Theme::title_style())
-    .bottom_margin(0);
-
-    let rows: Vec<Row> = snap
-        .replication
-        .iter()
-        .map(|r| {
-            Row::new(vec![
-                Cell::from(
-                    r.application_name
-                        .clone()
-                        .unwrap_or_else(|| "-".into()),
-                ),
-                Cell::from(r.client_addr.clone().unwrap_or_else(|| "-".into())),
-                Cell::from(r.state.clone().unwrap_or_else(|| "-".into())),
-                Cell::from(format_lag(r.write_lag_secs)),
-                Cell::from(format_lag(r.flush_lag_secs)),
-                Cell::from(format_lag(r.replay_lag_secs)).style(Style::default().fg(
-                    lag_color(r.replay_lag_secs),
-                )),
-            ])
-        })
-        .collect();
-
-    let widths = [
-        Constraint::Min(14),
-        Constraint::Length(16),
-        Constraint::Length(12),
-        Constraint::Length(10),
-        Constraint::Length(10),
-        Constraint::Length(11),
-    ];
-
-    let table = Table::new(rows, widths).header(header).block(block);
-    frame.render_widget(table, popup);
-}
-
-pub fn render_vacuum_progress(frame: &mut Frame, app: &App, area: Rect) {
-    let popup = centered_rect(75, 50, area);
-    frame.render_widget(Clear, popup);
-
-    let block = overlay_block("Vacuum Progress  [Esc] close", Theme::border_warn());
-
-    let Some(snap) = &app.snapshot else {
-        frame.render_widget(Paragraph::new("No data").block(block), popup);
-        return;
-    };
-
-    if snap.vacuum_progress.is_empty() {
-        let msg = Paragraph::new("\n  No vacuums running")
-            .style(
-                Style::default()
-                    .fg(Theme::border_ok())
-                    .add_modifier(Modifier::ITALIC),
-            )
-            .block(block);
-        frame.render_widget(msg, popup);
-        return;
-    }
-
-    let header = Row::new(vec!["PID", "Table", "Phase", "Progress", "Dead Tuples"])
-        .style(Theme::title_style())
-        .bottom_margin(0);
-
-    let rows: Vec<Row> = snap
-        .vacuum_progress
-        .iter()
-        .map(|v| {
-            Row::new(vec![
-                Cell::from(v.pid.to_string()),
-                Cell::from(truncate(&v.table_name, 30).to_string()),
-                Cell::from(truncate(&v.phase, 20).to_string()),
-                Cell::from(format!("{:.1}%", v.progress_pct)),
-                Cell::from(v.num_dead_tuples.to_string()),
-            ])
-        })
-        .collect();
-
-    let widths = [
-        Constraint::Length(8),
-        Constraint::Min(20),
-        Constraint::Length(20),
-        Constraint::Length(10),
-        Constraint::Length(12),
-    ];
-
-    let table = Table::new(rows, widths).header(header).block(block);
-    frame.render_widget(table, popup);
-}
-
-pub fn render_wraparound(frame: &mut Frame, app: &App, area: Rect) {
-    let popup = centered_rect(70, 50, area);
-    frame.render_widget(Clear, popup);
-
-    let block = overlay_block("Transaction Wraparound  [Esc] close", Theme::border_warn());
-
-    let Some(snap) = &app.snapshot else {
-        frame.render_widget(Paragraph::new("No data").block(block), popup);
-        return;
-    };
-
-    if snap.wraparound.is_empty() {
-        let msg = Paragraph::new("\n  No databases found")
-            .style(
-                Style::default()
-                    .fg(Theme::border_ok())
-                    .add_modifier(Modifier::ITALIC),
-            )
-            .block(block);
-        frame.render_widget(msg, popup);
-        return;
-    }
-
-    let header = Row::new(vec!["Database", "XID Age", "Remaining", "% Used"])
-        .style(Theme::title_style())
-        .bottom_margin(0);
-
-    let rows: Vec<Row> = snap
-        .wraparound
-        .iter()
-        .map(|w| {
-            let pct_color = if w.pct_towards_wraparound > 75.0 {
-                Theme::border_danger()
-            } else if w.pct_towards_wraparound > 50.0 {
-                Theme::border_warn()
-            } else {
-                Theme::border_ok()
-            };
-            Row::new(vec![
-                Cell::from(w.datname.clone()),
-                Cell::from(format_number(w.xid_age as i64)),
-                Cell::from(format_number(w.xids_remaining)),
-                Cell::from(format!("{:.2}%", w.pct_towards_wraparound))
-                    .style(Style::default().fg(pct_color)),
-            ])
-        })
-        .collect();
-
-    let widths = [
-        Constraint::Min(16),
-        Constraint::Length(16),
-        Constraint::Length(16),
-        Constraint::Length(10),
-    ];
-
-    let table = Table::new(rows, widths).header(header).block(block);
-    frame.render_widget(table, popup);
-}
-
-pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {
-    let popup = centered_rect(85, 70, area);
-    frame.render_widget(Clear, popup);
-
-    let block = overlay_block(
-        "Indexes  [s] sort  [Enter] inspect  [Esc] close",
-        Theme::border_active(),
-    );
-
-    let Some(snap) = &app.snapshot else {
-        frame.render_widget(Paragraph::new("No data").block(block), popup);
-        return;
-    };
-
-    if snap.indexes.is_empty() {
-        let msg = Paragraph::new("\n  No user indexes found")
-            .style(
-                Style::default()
-                    .fg(Theme::border_ok())
-                    .add_modifier(Modifier::ITALIC),
-            )
-            .block(block);
-        frame.render_widget(msg, popup);
-        return;
-    }
-
-    let sort_indicator = |col: IndexSortColumn| -> &str {
-        if app.index_sort_column == col {
-            if app.index_sort_ascending {
-                " ↑"
-            } else {
-                " ↓"
-            }
-        } else {
-            ""
-        }
-    };
-
-    let header = Row::new(vec![
-        Cell::from("Table"),
-        Cell::from("Index"),
-        Cell::from(format!("Size{}", sort_indicator(IndexSortColumn::Size))),
-        Cell::from(format!("Scans{}", sort_indicator(IndexSortColumn::Scans))),
-        Cell::from(format!("Tup Read{}", sort_indicator(IndexSortColumn::TupRead))),
-        Cell::from(format!(
-            "Tup Fetch{}",
-            sort_indicator(IndexSortColumn::TupFetch)
-        )),
-    ])
-    .style(Theme::title_style())
-    .bottom_margin(0);
-
-    let indices = app.sorted_index_indices();
-    let rows: Vec<Row> = indices
-        .iter()
-        .map(|&i| {
-            let idx = &snap.indexes[i];
-            let scan_color = if idx.idx_scan == 0 {
-                Theme::border_danger()
-            } else {
-                Theme::fg()
-            };
-            Row::new(vec![
-                Cell::from(format!("{}.{}", idx.schemaname, idx.table_name)),
-                Cell::from(idx.index_name.clone()),
-                Cell::from(format_bytes(idx.index_size_bytes)),
-                Cell::from(idx.idx_scan.to_string())
-                    .style(Style::default().fg(scan_color)),
-                Cell::from(idx.idx_tup_read.to_string()),
-                Cell::from(idx.idx_tup_fetch.to_string()),
-            ])
-        })
-        .collect();
-
-    let widths = [
-        Constraint::Min(18),
-        Constraint::Min(20),
-        Constraint::Length(9),
-        Constraint::Length(10),
-        Constraint::Length(12),
-        Constraint::Length(12),
-    ];
-
-    let table = Table::new(rows, widths)
-        .header(header)
-        .block(block)
-        .row_highlight_style(
-            Style::default()
-                .bg(Theme::highlight_bg())
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol("► ");
-
-    frame.render_stateful_widget(table, popup, &mut app.index_table_state);
-}
-
 pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(75, 55, area);
     frame.render_widget(Clear, popup);
@@ -773,379 +243,72 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, popup);
 }
 
-pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
-    let popup = centered_rect(50, 45, area);
+pub fn render_confirm_cancel(frame: &mut Frame, pid: i32, area: Rect) {
+    let popup = centered_rect(45, 20, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block(
-        "Config  [←→] change  [Esc] save & close",
-        Theme::border_active(),
-    );
-
-    let mut lines = vec![Line::from("")];
-
-    for (i, item) in ConfigItem::ALL.iter().enumerate() {
-        let selected = i == app.config_selected;
-        let indicator = if selected { "► " } else { "  " };
-
-        let value_str = match item {
-            ConfigItem::GraphMarker => app.config.graph_marker.label().to_string(),
-            ConfigItem::ColorTheme => app.config.color_theme.label().to_string(),
-            ConfigItem::RefreshInterval => format!("{}s", app.config.refresh_interval_secs),
-            ConfigItem::WarnDuration => format!("{:.1}s", app.config.warn_duration_secs),
-            ConfigItem::DangerDuration => format!("{:.1}s", app.config.danger_duration_secs),
-        };
-
-        let label_style = if selected {
-            Style::default()
-                .fg(Theme::border_active())
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Theme::fg())
-        };
-
-        let value_style = if selected {
-            Style::default()
-                .fg(Theme::border_active())
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::DarkGray)
-        };
-
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("  {}{:<20}", indicator, item.label()),
-                label_style,
-            ),
-            Span::styled(format!("◄ {} ►", value_str), value_style),
-        ]));
-    }
-
-    let paragraph = Paragraph::new(lines).block(block);
-    frame.render_widget(paragraph, popup);
-}
-
-pub fn render_help(frame: &mut Frame, area: Rect) {
-    let popup = centered_rect(70, 80, area);
-    frame.render_widget(Clear, popup);
-
-    let block = overlay_block("Keybindings  [Esc] close", Theme::border_active());
-
-    let key_style = Style::default()
-        .fg(Theme::border_active())
-        .add_modifier(Modifier::BOLD);
-    let desc_style = Style::default().fg(Theme::fg());
-    let section_style = Style::default()
-        .fg(Theme::border_warn())
-        .add_modifier(Modifier::BOLD);
-
-    let entry = |key: &str, desc: &str| -> Line<'static> {
-        Line::from(vec![
-            Span::styled(format!("  {:<14}", key), key_style),
-            Span::styled(desc.to_string(), desc_style),
-        ])
-    };
-
-    let section = |title: &str| -> Line<'static> {
-        Line::from(Span::styled(format!("  {}", title), section_style))
-    };
+    let block = overlay_block("Confirm Cancel", Theme::border_warn());
 
     let lines = vec![
         Line::from(""),
-        section("Navigation"),
-        entry("q / Esc", "Quit application"),
-        entry("Ctrl+C", "Force quit"),
-        entry("p", "Pause / resume refresh"),
-        entry("r", "Force refresh now"),
-        entry("↑ / k", "Select previous row"),
-        entry("↓ / j", "Select next row"),
-        entry("s", "Cycle sort column"),
+        Line::from(Span::styled(
+            format!("  Cancel query on PID {}?", pid),
+            Style::default()
+                .fg(Theme::border_warn())
+                .add_modifier(Modifier::BOLD),
+        )),
         Line::from(""),
-        section("Query Actions"),
-        entry("Enter / i", "Inspect selected query"),
-        entry("C", "Cancel query (pg_cancel_backend)"),
-        entry("K", "Kill backend (pg_terminate_backend)"),
+        Line::from(Span::styled(
+            "  The current query will be interrupted.",
+            Style::default().fg(Color::DarkGray),
+        )),
         Line::from(""),
-        section("Views"),
-        entry("Tab", "Blocking chains"),
-        entry("w", "Wait events"),
-        entry("t", "Table stats"),
-        entry("R", "Replication lag"),
-        entry("v", "Vacuum progress"),
-        entry("x", "Transaction wraparound"),
-        entry("I", "Index stats"),
-        entry("S", "pg_stat_statements"),
-        entry("?", "This help screen"),
-        entry(",", "Configuration"),
-        Line::from(""),
-        section("Overlay Controls"),
-        entry("Esc / q", "Close overlay"),
-        entry("j / k", "Navigate rows (indexes, stmts)"),
-        entry("Enter", "Inspect row (indexes, stmts)"),
-        entry("s", "Cycle sort (indexes, stmts)"),
+        Line::from(vec![
+            Span::styled("  y", Style::default().fg(Theme::border_warn()).add_modifier(Modifier::BOLD)),
+            Span::styled(" confirm  ", Style::default().fg(Theme::fg())),
+            Span::styled("any key", Style::default().fg(Theme::border_ok()).add_modifier(Modifier::BOLD)),
+            Span::styled(" abort", Style::default().fg(Theme::fg())),
+        ]),
     ];
 
-    let paragraph = Paragraph::new(lines).block(block);
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .alignment(Alignment::Left);
     frame.render_widget(paragraph, popup);
 }
 
-fn format_bytes(bytes: i64) -> String {
-    const KB: i64 = 1024;
-    const MB: i64 = 1024 * 1024;
-    const GB: i64 = 1024 * 1024 * 1024;
-    if bytes >= GB {
-        format!("{:.1} GB", bytes as f64 / GB as f64)
-    } else if bytes >= MB {
-        format!("{:.1} MB", bytes as f64 / MB as f64)
-    } else if bytes >= KB {
-        format!("{:.0} KB", bytes as f64 / KB as f64)
-    } else {
-        format!("{} B", bytes)
-    }
-}
-
-fn format_lag(secs: Option<f64>) -> String {
-    match secs {
-        Some(s) => format!("{:.3}s", s),
-        None => "-".into(),
-    }
-}
-
-fn lag_color(secs: Option<f64>) -> Color {
-    match secs {
-        Some(s) if s > 10.0 => Theme::border_danger(),
-        Some(s) if s > 1.0 => Theme::border_warn(),
-        _ => Theme::fg(),
-    }
-}
-
-fn format_number(n: i64) -> String {
-    if n >= 1_000_000_000 {
-        format!("{:.2}B", n as f64 / 1_000_000_000.0)
-    } else if n >= 1_000_000 {
-        format!("{:.1}M", n as f64 / 1_000_000.0)
-    } else if n >= 1_000 {
-        format!("{:.1}K", n as f64 / 1_000.0)
-    } else {
-        n.to_string()
-    }
-}
-
-fn format_duration(secs: f64) -> String {
-    if secs < 60.0 {
-        format!("{:.1}s", secs)
-    } else if secs < 3600.0 {
-        format!("{:.0}m {:.0}s", secs / 60.0, secs % 60.0)
-    } else {
-        format!("{:.0}h {:.0}m", secs / 3600.0, (secs % 3600.0) / 60.0)
-    }
-}
-
-fn truncate(s: &str, max: usize) -> &str {
-    if s.len() <= max {
-        s
-    } else {
-        &s[..max]
-    }
-}
-
-fn format_time_ms(ms: f64) -> String {
-    if ms < 1.0 {
-        format!("{:.3} ms", ms)
-    } else if ms < 1_000.0 {
-        format!("{:.1} ms", ms)
-    } else if ms < 60_000.0 {
-        format!("{:.2} s", ms / 1_000.0)
-    } else if ms < 3_600_000.0 {
-        format!("{:.1} min", ms / 60_000.0)
-    } else {
-        format!("{:.1} hr", ms / 3_600_000.0)
-    }
-}
-
-fn collapse_whitespace(s: &str) -> String {
-    s.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
-    let popup = centered_rect(90, 75, area);
+pub fn render_confirm_kill(frame: &mut Frame, pid: i32, area: Rect) {
+    let popup = centered_rect(45, 20, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block(
-        "pg_stat_statements  [s] sort  [Enter] inspect  [Esc] close",
-        Theme::border_active(),
-    );
+    let block = overlay_block("Confirm Kill", Theme::border_danger());
 
-    let Some(snap) = &app.snapshot else {
-        frame.render_widget(Paragraph::new("No data").block(block), popup);
-        return;
-    };
-
-    if !snap.pg_stat_statements_available {
-        let lines = vec![
-            Line::from(""),
-            Line::from(Span::styled(
-                "  pg_stat_statements extension is not available",
-                Style::default()
-                    .fg(Theme::border_warn())
-                    .add_modifier(Modifier::BOLD),
-            )),
-            Line::from(""),
-            Line::from(Span::styled(
-                "  To enable it:",
-                Style::default().fg(Theme::fg()),
-            )),
-            Line::from(""),
-            Line::from(Span::styled(
-                "  1. Add to postgresql.conf:",
-                Style::default().fg(Color::DarkGray),
-            )),
-            Line::from(Span::styled(
-                "     shared_preload_libraries = 'pg_stat_statements'",
-                Style::default().fg(Theme::fg()),
-            )),
-            Line::from(""),
-            Line::from(Span::styled(
-                "  2. Restart PostgreSQL",
-                Style::default().fg(Color::DarkGray),
-            )),
-            Line::from(""),
-            Line::from(Span::styled(
-                "  3. Create the extension:",
-                Style::default().fg(Color::DarkGray),
-            )),
-            Line::from(Span::styled(
-                "     CREATE EXTENSION pg_stat_statements;",
-                Style::default().fg(Theme::fg()),
-            )),
-        ];
-        let paragraph = Paragraph::new(lines).block(block);
-        frame.render_widget(paragraph, popup);
-        return;
-    }
-
-    if snap.stat_statements.is_empty() {
-        let msg = Paragraph::new("\n  No statement data collected yet")
-            .style(
-                Style::default()
-                    .fg(Theme::border_ok())
-                    .add_modifier(Modifier::ITALIC),
-            )
-            .block(block);
-        frame.render_widget(msg, popup);
-        return;
-    }
-
-    let sort_indicator = |col: StatementSortColumn| -> &str {
-        if app.stmt_sort_column == col {
-            if app.stmt_sort_ascending {
-                " ↑"
-            } else {
-                " ↓"
-            }
-        } else {
-            ""
-        }
-    };
-
-    let header = Row::new(vec![
-        Cell::from("Query"),
-        Cell::from(format!("Calls{}", sort_indicator(StatementSortColumn::Calls))),
-        Cell::from(format!(
-            "Total{}",
-            sort_indicator(StatementSortColumn::TotalTime)
+    let lines = vec![
+        Line::from(""),
+        Line::from(Span::styled(
+            format!("  Terminate backend PID {}?", pid),
+            Style::default()
+                .fg(Theme::border_danger())
+                .add_modifier(Modifier::BOLD),
         )),
-        Cell::from(format!(
-            "Mean{}",
-            sort_indicator(StatementSortColumn::MeanTime)
+        Line::from(""),
+        Line::from(Span::styled(
+            "  This will kill the connection entirely.",
+            Style::default().fg(Color::DarkGray),
         )),
-        Cell::from(format!(
-            "Max{}",
-            sort_indicator(StatementSortColumn::MaxTime)
-        )),
-        Cell::from(format!("Rows{}", sort_indicator(StatementSortColumn::Rows))),
-        Cell::from(format!(
-            "Rows/Call{}",
-            sort_indicator(StatementSortColumn::RowsPerCall)
-        )),
-        Cell::from(format!(
-            "Buffers{}",
-            sort_indicator(StatementSortColumn::Buffers)
-        )),
-        Cell::from("Hit %"),
-        Cell::from("Stddev"),
-        Cell::from("Temp Blks"),
-    ])
-    .style(Theme::title_style())
-    .bottom_margin(0);
-
-    let indices = app.sorted_stmt_indices();
-    let rows: Vec<Row> = indices
-        .iter()
-        .map(|&i| {
-            let stmt = &snap.stat_statements[i];
-            let query_display = collapse_whitespace(&stmt.query);
-            let hit_color = if stmt.hit_ratio >= 0.99 {
-                Theme::border_ok()
-            } else if stmt.hit_ratio >= 0.90 {
-                Theme::border_warn()
-            } else {
-                Theme::border_danger()
-            };
-            let temp_color = if stmt.temp_blks_written > 0 {
-                Theme::border_warn()
-            } else {
-                Theme::fg()
-            };
-            let rows_per_call = if stmt.calls > 0 {
-                format!("{:.1}", stmt.rows as f64 / stmt.calls as f64)
-            } else {
-                "-".into()
-            };
-            let total_bufs = stmt.shared_blks_hit + stmt.shared_blks_read;
-            Row::new(vec![
-                Cell::from(truncate(&query_display, 50).to_string()),
-                Cell::from(stmt.calls.to_string()),
-                Cell::from(format_time_ms(stmt.total_exec_time)),
-                Cell::from(format_time_ms(stmt.mean_exec_time)),
-                Cell::from(format_time_ms(stmt.max_exec_time)),
-                Cell::from(stmt.rows.to_string()),
-                Cell::from(rows_per_call),
-                Cell::from(format_number(total_bufs)),
-                Cell::from(format!("{:.1}%", stmt.hit_ratio * 100.0))
-                    .style(Style::default().fg(hit_color)),
-                Cell::from(format_time_ms(stmt.stddev_exec_time)),
-                Cell::from(stmt.temp_blks_written.to_string())
-                    .style(Style::default().fg(temp_color)),
-            ])
-        })
-        .collect();
-
-    let widths = [
-        Constraint::Min(20),
-        Constraint::Length(9),
-        Constraint::Length(11),
-        Constraint::Length(11),
-        Constraint::Length(11),
-        Constraint::Length(9),
-        Constraint::Length(10),
-        Constraint::Length(9),
-        Constraint::Length(7),
-        Constraint::Length(11),
-        Constraint::Length(10),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  y", Style::default().fg(Theme::border_danger()).add_modifier(Modifier::BOLD)),
+            Span::styled(" confirm  ", Style::default().fg(Theme::fg())),
+            Span::styled("any key", Style::default().fg(Theme::border_ok()).add_modifier(Modifier::BOLD)),
+            Span::styled(" abort", Style::default().fg(Theme::fg())),
+        ]),
     ];
 
-    let table = Table::new(rows, widths)
-        .header(header)
+    let paragraph = Paragraph::new(lines)
         .block(block)
-        .row_highlight_style(
-            Style::default()
-                .bg(Theme::highlight_bg())
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol("► ");
-
-    frame.render_stateful_widget(table, popup, &mut app.stmt_table_state);
+        .alignment(Alignment::Left);
+    frame.render_widget(paragraph, popup);
 }
 
 pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
@@ -1315,4 +478,137 @@ pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
         .block(block)
         .wrap(Wrap { trim: false });
     frame.render_widget(paragraph, popup);
+}
+
+pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
+    let popup = centered_rect(50, 45, area);
+    frame.render_widget(Clear, popup);
+
+    let block = overlay_block(
+        "Config  [\u{2190}\u{2192}] change  [Esc] save & close",
+        Theme::border_active(),
+    );
+
+    let mut lines = vec![Line::from("")];
+
+    for (i, item) in ConfigItem::ALL.iter().enumerate() {
+        let selected = i == app.config_selected;
+        let indicator = if selected { "\u{25ba} " } else { "  " };
+
+        let value_str = match item {
+            ConfigItem::GraphMarker => app.config.graph_marker.label().to_string(),
+            ConfigItem::ColorTheme => app.config.color_theme.label().to_string(),
+            ConfigItem::RefreshInterval => format!("{}s", app.config.refresh_interval_secs),
+            ConfigItem::WarnDuration => format!("{:.1}s", app.config.warn_duration_secs),
+            ConfigItem::DangerDuration => format!("{:.1}s", app.config.danger_duration_secs),
+        };
+
+        let label_style = if selected {
+            Style::default()
+                .fg(Theme::border_active())
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Theme::fg())
+        };
+
+        let value_style = if selected {
+            Style::default()
+                .fg(Theme::border_active())
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("  {}{:<20}", indicator, item.label()),
+                label_style,
+            ),
+            Span::styled(format!("\u{25c4} {} \u{25ba}", value_str), value_style),
+        ]));
+    }
+
+    let paragraph = Paragraph::new(lines).block(block);
+    frame.render_widget(paragraph, popup);
+}
+
+pub fn render_help(frame: &mut Frame, area: Rect) {
+    let popup = centered_rect(70, 80, area);
+    frame.render_widget(Clear, popup);
+
+    let block = overlay_block("Keybindings  [Esc] close", Theme::border_active());
+
+    let key_style = Style::default()
+        .fg(Theme::border_active())
+        .add_modifier(Modifier::BOLD);
+    let desc_style = Style::default().fg(Theme::fg());
+    let section_style = Style::default()
+        .fg(Theme::border_warn())
+        .add_modifier(Modifier::BOLD);
+
+    let entry = |key: &str, desc: &str| -> Line<'static> {
+        Line::from(vec![
+            Span::styled(format!("  {:<14}", key), key_style),
+            Span::styled(desc.to_string(), desc_style),
+        ])
+    };
+
+    let section = |title: &str| -> Line<'static> {
+        Line::from(Span::styled(format!("  {}", title), section_style))
+    };
+
+    let lines = vec![
+        Line::from(""),
+        section("Navigation"),
+        entry("q", "Quit application"),
+        entry("Ctrl+C", "Force quit"),
+        entry("p", "Pause / resume refresh"),
+        entry("r", "Force refresh now"),
+        entry("?", "This help screen"),
+        entry(",", "Configuration"),
+        Line::from(""),
+        section("Panels"),
+        entry("Tab", "Blocking chains"),
+        entry("w", "Wait events"),
+        entry("t", "Table stats"),
+        entry("R", "Replication lag"),
+        entry("v", "Vacuum progress"),
+        entry("x", "Transaction wraparound"),
+        entry("I", "Index stats"),
+        entry("S", "pg_stat_statements"),
+        Line::from(""),
+        section("Panel Controls"),
+        entry("Esc", "Back to queries (or quit from queries)"),
+        entry("\u{2191} / k", "Select previous row"),
+        entry("\u{2193} / j", "Select next row"),
+        entry("s", "Cycle sort column"),
+        entry("/", "Fuzzy filter (queries, indexes, stmts)"),
+        entry("Enter", "Inspect selected row"),
+        Line::from(""),
+        section("Query Actions"),
+        entry("C", "Cancel query (pg_cancel_backend)"),
+        entry("K", "Kill backend (pg_terminate_backend)"),
+        Line::from(""),
+        section("Filter"),
+        entry("/", "Open fuzzy filter"),
+        entry("Enter", "Confirm filter"),
+        entry("Esc", "Clear filter and close"),
+        entry("Backspace", "Delete character"),
+        Line::from(""),
+        section("Overlay Controls"),
+        entry("Esc / q", "Close overlay"),
+    ];
+
+    let paragraph = Paragraph::new(lines).block(block);
+    frame.render_widget(paragraph, popup);
+}
+
+fn format_duration(secs: f64) -> String {
+    if secs < 60.0 {
+        format!("{:.1}s", secs)
+    } else if secs < 3600.0 {
+        format!("{:.0}m {:.0}s", secs / 60.0, secs % 60.0)
+    } else {
+        format!("{:.0}h {:.0}m", secs / 3600.0, (secs % 3600.0) / 60.0)
+    }
 }

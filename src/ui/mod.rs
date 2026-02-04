@@ -4,9 +4,11 @@ mod graph;
 mod header;
 mod layout;
 mod overlay;
+mod panels;
 pub mod theme;
+mod util;
 
-use crate::app::{App, ViewMode};
+use crate::app::{App, BottomPanel, ViewMode};
 use ratatui::Frame;
 use theme::Theme;
 
@@ -77,41 +79,38 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         marker,
     );
 
-    // Bottom half: full-width query table
-    active_queries::render(frame, app, areas.queries);
+    // Bottom half: dispatch based on active panel
+    let panel = app.bottom_panel;
+    match panel {
+        BottomPanel::Queries => active_queries::render(frame, app, areas.queries),
+        BottomPanel::Blocking => panels::render_blocking(frame, app, areas.queries),
+        BottomPanel::WaitEvents => panels::render_wait_events(frame, app, areas.queries),
+        BottomPanel::TableStats => panels::render_table_stats(frame, app, areas.queries),
+        BottomPanel::Replication => panels::render_replication(frame, app, areas.queries),
+        BottomPanel::VacuumProgress => panels::render_vacuum_progress(frame, app, areas.queries),
+        BottomPanel::Wraparound => panels::render_wraparound(frame, app, areas.queries),
+        BottomPanel::Indexes => panels::render_indexes(frame, app, areas.queries),
+        BottomPanel::Statements => panels::render_statements(frame, app, areas.queries),
+    }
 
-    footer::render(frame, areas.footer);
+    footer::render(frame, app, areas.footer);
 
-    // Overlays
+    // Overlays (popup-only)
     match &app.view_mode {
         ViewMode::Inspect => overlay::render_inspect(frame, app, frame.area()),
-        ViewMode::Blocking => overlay::render_blocking(frame, app, frame.area()),
-        ViewMode::WaitEvents => overlay::render_wait_events(frame, app, frame.area()),
+        ViewMode::IndexInspect => overlay::render_index_inspect(frame, app, frame.area()),
+        ViewMode::StatementInspect => {
+            overlay::render_statement_inspect(frame, app, frame.area())
+        }
         ViewMode::ConfirmCancel(pid) => {
             overlay::render_confirm_cancel(frame, *pid, frame.area())
         }
         ViewMode::ConfirmKill(pid) => {
             overlay::render_confirm_kill(frame, *pid, frame.area())
         }
-        ViewMode::TableStats => overlay::render_table_stats(frame, app, frame.area()),
-        ViewMode::Replication => overlay::render_replication(frame, app, frame.area()),
-        ViewMode::VacuumProgress => overlay::render_vacuum_progress(frame, app, frame.area()),
-        ViewMode::Wraparound => overlay::render_wraparound(frame, app, frame.area()),
-        ViewMode::Indexes => {
-            let area = frame.area();
-            overlay::render_indexes(frame, app, area);
-        }
-        ViewMode::IndexInspect => overlay::render_index_inspect(frame, app, frame.area()),
-        ViewMode::Statements => {
-            let area = frame.area();
-            overlay::render_statements(frame, app, area);
-        }
-        ViewMode::StatementInspect => {
-            overlay::render_statement_inspect(frame, app, frame.area())
-        }
         ViewMode::Config => overlay::render_config(frame, app, frame.area()),
         ViewMode::Help => overlay::render_help(frame, frame.area()),
-        ViewMode::Normal => {}
+        ViewMode::Normal | ViewMode::Filter => {}
     }
 }
 

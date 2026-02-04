@@ -1,15 +1,16 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
+use nucleo_matcher::{Config as MatcherConfig, Matcher};
 use ratatui::widgets::TableState;
 
 use crate::config::{AppConfig, ConfigItem};
-use crate::db::models::PgSnapshot;
+use crate::db::models::{ActiveQuery, IndexInfo, PgSnapshot, StatStatement};
 use crate::history::RingBuffer;
 use crate::ui::theme;
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ViewMode {
-    Normal,
-    Inspect,
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BottomPanel {
+    Queries,
     Blocking,
     WaitEvents,
     TableStats,
@@ -17,8 +18,36 @@ pub enum ViewMode {
     VacuumProgress,
     Wraparound,
     Indexes,
-    IndexInspect,
     Statements,
+}
+
+impl BottomPanel {
+    pub fn supports_filter(self) -> bool {
+        matches!(self, Self::Queries | Self::Indexes | Self::Statements)
+    }
+
+    #[allow(dead_code)]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Queries => "Queries",
+            Self::Blocking => "Blocking",
+            Self::WaitEvents => "Wait Events",
+            Self::TableStats => "Table Stats",
+            Self::Replication => "Replication",
+            Self::VacuumProgress => "Vacuum Progress",
+            Self::Wraparound => "Wraparound",
+            Self::Indexes => "Indexes",
+            Self::Statements => "Statements",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ViewMode {
+    Normal,
+    Filter,
+    Inspect,
+    IndexInspect,
     StatementInspect,
     ConfirmCancel(i32),
     ConfirmKill(i32),
@@ -127,6 +156,7 @@ pub struct App {
     pub snapshot: Option<PgSnapshot>,
     pub query_table_state: TableState,
     pub view_mode: ViewMode,
+    pub bottom_panel: BottomPanel,
     pub sort_column: SortColumn,
     pub sort_ascending: bool,
     pub index_table_state: TableState,
@@ -153,6 +183,9 @@ pub struct App {
 
     pub config: AppConfig,
     pub config_selected: usize,
+
+    pub filter_text: String,
+    pub filter_active: bool,
 }
 
 impl App {
@@ -171,6 +204,7 @@ impl App {
             snapshot: None,
             query_table_state: TableState::default(),
             view_mode: ViewMode::Normal,
+            bottom_panel: BottomPanel::Queries,
             sort_column: SortColumn::Duration,
             sort_ascending: false,
             index_table_state: TableState::default(),
@@ -193,6 +227,8 @@ impl App {
             pending_action: None,
             config,
             config_selected: 0,
+            filter_text: String::new(),
+            filter_active: false,
         }
     }
 
@@ -200,7 +236,6 @@ impl App {
         self.connection_history
             .push(snapshot.summary.total_backends as u64);
 
-        // Average duration of active queries in milliseconds
         let active: Vec<&_> = snapshot
             .active_queries
             .iter()
@@ -226,11 +261,53 @@ impl App {
         self.last_error = Some(err);
     }
 
+    fn query_to_filter_string(q: &ActiveQuery) -> String {
+        format!(
+            "{} {} {} {} {} {}",
+            q.pid,
+            q.usename.as_deref().unwrap_or(""),
+            q.datname.as_deref().unwrap_or(""),
+            q.state.as_deref().unwrap_or(""),
+            q.wait_event.as_deref().unwrap_or(""),
+            q.query.as_deref().unwrap_or(""),
+        )
+    }
+
+    fn index_to_filter_string(idx: &IndexInfo) -> String {
+        format!(
+            "{} {} {} {}",
+            idx.schemaname, idx.table_name, idx.index_name, idx.index_definition
+        )
+    }
+
+    fn stmt_to_filter_string(stmt: &StatStatement) -> String {
+        stmt.query.clone()
+    }
+
     pub fn sorted_query_indices(&self) -> Vec<usize> {
         let Some(snap) = &self.snapshot else {
             return vec![];
         };
         let mut indices: Vec<usize> = (0..snap.active_queries.len()).collect();
+
+        // Apply fuzzy filter only when on the Queries panel
+        let filter_text = &self.filter_text;
+        if self.bottom_panel == BottomPanel::Queries
+            && !filter_text.is_empty()
+            && (self.filter_active || self.view_mode == ViewMode::Filter)
+        {
+            let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
+            let pattern =
+                Pattern::parse(filter_text, CaseMatching::Ignore, Normalization::Smart);
+            indices.retain(|&i| {
+                let haystack = Self::query_to_filter_string(&snap.active_queries[i]);
+                let mut buf = Vec::new();
+                pattern
+                    .score(nucleo_matcher::Utf32Str::new(&haystack, &mut buf), &mut matcher)
+                    .is_some()
+            });
+        }
+
         let asc = self.sort_ascending;
         match self.sort_column {
             SortColumn::Pid => indices.sort_by(|&a, &b| {
@@ -275,6 +352,25 @@ impl App {
             return vec![];
         };
         let mut indices: Vec<usize> = (0..snap.indexes.len()).collect();
+
+        // Apply fuzzy filter only when on the Indexes panel
+        let filter_text = &self.filter_text;
+        if self.bottom_panel == BottomPanel::Indexes
+            && !filter_text.is_empty()
+            && (self.filter_active || self.view_mode == ViewMode::Filter)
+        {
+            let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
+            let pattern =
+                Pattern::parse(filter_text, CaseMatching::Ignore, Normalization::Smart);
+            indices.retain(|&i| {
+                let haystack = Self::index_to_filter_string(&snap.indexes[i]);
+                let mut buf = Vec::new();
+                pattern
+                    .score(nucleo_matcher::Utf32Str::new(&haystack, &mut buf), &mut matcher)
+                    .is_some()
+            });
+        }
+
         let asc = self.index_sort_ascending;
         match self.index_sort_column {
             IndexSortColumn::Scans => indices.sort_by(|&a, &b| {
@@ -314,6 +410,25 @@ impl App {
             return vec![];
         };
         let mut indices: Vec<usize> = (0..snap.stat_statements.len()).collect();
+
+        // Apply fuzzy filter only when on the Statements panel
+        let filter_text = &self.filter_text;
+        if self.bottom_panel == BottomPanel::Statements
+            && !filter_text.is_empty()
+            && (self.filter_active || self.view_mode == ViewMode::Filter)
+        {
+            let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
+            let pattern =
+                Pattern::parse(filter_text, CaseMatching::Ignore, Normalization::Smart);
+            indices.retain(|&i| {
+                let haystack = Self::stmt_to_filter_string(&snap.stat_statements[i]);
+                let mut buf = Vec::new();
+                pattern
+                    .score(nucleo_matcher::Utf32Str::new(&haystack, &mut buf), &mut matcher)
+                    .is_some()
+            });
+        }
+
         let asc = self.stmt_sort_ascending;
         match self.stmt_sort_column {
             StatementSortColumn::TotalTime => indices.sort_by(|&a, &b| {
@@ -370,7 +485,167 @@ impl App {
         indices
     }
 
+    fn switch_panel(&mut self, target: BottomPanel) {
+        if self.bottom_panel == target {
+            // Toggle back to Queries
+            self.bottom_panel = BottomPanel::Queries;
+        } else {
+            self.bottom_panel = target;
+        }
+        // Clear filter state when switching panels
+        self.filter_text.clear();
+        self.filter_active = false;
+        self.view_mode = ViewMode::Normal;
+    }
+
+    fn reset_panel_selection(&mut self) {
+        match self.bottom_panel {
+            BottomPanel::Queries => self.query_table_state.select(Some(0)),
+            BottomPanel::Indexes => self.index_table_state.select(Some(0)),
+            BottomPanel::Statements => self.stmt_table_state.select(Some(0)),
+            _ => {}
+        }
+    }
+
+    fn handle_queries_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                let i = self.query_table_state.selected().unwrap_or(0);
+                self.query_table_state.select(Some(i.saturating_sub(1)));
+                self.status_message = None;
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let max = self.sorted_query_indices().len().saturating_sub(1);
+                let i = self.query_table_state.selected().unwrap_or(0);
+                self.query_table_state.select(Some((i + 1).min(max)));
+                self.status_message = None;
+            }
+            KeyCode::Enter | KeyCode::Char('i') => {
+                if self.selected_query_pid().is_some() {
+                    self.view_mode = ViewMode::Inspect;
+                }
+            }
+            KeyCode::Char('K') => {
+                if let Some(pid) = self.selected_query_pid() {
+                    self.view_mode = ViewMode::ConfirmKill(pid);
+                }
+            }
+            KeyCode::Char('C') => {
+                if let Some(pid) = self.selected_query_pid() {
+                    self.view_mode = ViewMode::ConfirmCancel(pid);
+                }
+            }
+            KeyCode::Char('s') => {
+                let next = self.sort_column.next();
+                if next == self.sort_column {
+                    self.sort_ascending = !self.sort_ascending;
+                } else {
+                    self.sort_column = next;
+                    self.sort_ascending = false;
+                }
+                self.status_message = Some(format!(
+                    "Sort: {} {}",
+                    self.sort_column.label(),
+                    if self.sort_ascending { "\u{2191}" } else { "\u{2193}" }
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_indexes_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                let i = self.index_table_state.selected().unwrap_or(0);
+                self.index_table_state.select(Some(i.saturating_sub(1)));
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let max = self
+                    .sorted_index_indices()
+                    .len()
+                    .saturating_sub(1);
+                let i = self.index_table_state.selected().unwrap_or(0);
+                self.index_table_state.select(Some((i + 1).min(max)));
+            }
+            KeyCode::Enter => {
+                if self.snapshot.as_ref().is_some_and(|s| !s.indexes.is_empty()) {
+                    if self.index_table_state.selected().is_none() {
+                        self.index_table_state.select(Some(0));
+                    }
+                    self.view_mode = ViewMode::IndexInspect;
+                }
+            }
+            KeyCode::Char('s') => {
+                let next = self.index_sort_column.next();
+                if next == self.index_sort_column {
+                    self.index_sort_ascending = !self.index_sort_ascending;
+                } else {
+                    self.index_sort_column = next;
+                    self.index_sort_ascending = matches!(
+                        next,
+                        IndexSortColumn::Scans | IndexSortColumn::Name
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_statements_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                let i = self.stmt_table_state.selected().unwrap_or(0);
+                self.stmt_table_state.select(Some(i.saturating_sub(1)));
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let max = self
+                    .sorted_stmt_indices()
+                    .len()
+                    .saturating_sub(1);
+                let i = self.stmt_table_state.selected().unwrap_or(0);
+                self.stmt_table_state.select(Some((i + 1).min(max)));
+            }
+            KeyCode::Enter => {
+                if self
+                    .snapshot
+                    .as_ref()
+                    .is_some_and(|s| !s.stat_statements.is_empty())
+                {
+                    if self.stmt_table_state.selected().is_none() {
+                        self.stmt_table_state.select(Some(0));
+                    }
+                    self.view_mode = ViewMode::StatementInspect;
+                }
+            }
+            KeyCode::Char('s') => {
+                let next = self.stmt_sort_column.next();
+                if next == self.stmt_sort_column {
+                    self.stmt_sort_ascending = !self.stmt_sort_ascending;
+                } else {
+                    self.stmt_sort_column = next;
+                    self.stmt_sort_ascending = false;
+                }
+                self.status_message = Some(format!(
+                    "Sort: {} {}",
+                    self.stmt_sort_column.label(),
+                    if self.stmt_sort_ascending { "\u{2191}" } else { "\u{2193}" }
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_panel_key(&mut self, key: KeyEvent) {
+        match self.bottom_panel {
+            BottomPanel::Queries => self.handle_queries_key(key),
+            BottomPanel::Indexes => self.handle_indexes_key(key),
+            BottomPanel::Statements => self.handle_statements_key(key),
+            _ => {} // Static panels have no panel-specific keys
+        }
+    }
+
     pub fn handle_key(&mut self, key: KeyEvent) {
+        // Layer 1: Modal overlays consume all input
         match &self.view_mode {
             ViewMode::ConfirmCancel(pid) => {
                 let pid = *pid;
@@ -400,42 +675,10 @@ impl App {
                 }
                 return;
             }
-            ViewMode::Indexes => {
+            ViewMode::Inspect => {
                 match key.code {
-                    KeyCode::Esc | KeyCode::Char('q') => {
+                    KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
                         self.view_mode = ViewMode::Normal;
-                    }
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        let i = self.index_table_state.selected().unwrap_or(0);
-                        self.index_table_state.select(Some(i.saturating_sub(1)));
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        let max = self
-                            .snapshot
-                            .as_ref()
-                            .map_or(0, |s| s.indexes.len().saturating_sub(1));
-                        let i = self.index_table_state.selected().unwrap_or(0);
-                        self.index_table_state.select(Some((i + 1).min(max)));
-                    }
-                    KeyCode::Enter => {
-                        if self.snapshot.as_ref().is_some_and(|s| !s.indexes.is_empty()) {
-                            if self.index_table_state.selected().is_none() {
-                                self.index_table_state.select(Some(0));
-                            }
-                            self.view_mode = ViewMode::IndexInspect;
-                        }
-                    }
-                    KeyCode::Char('s') => {
-                        let next = self.index_sort_column.next();
-                        if next == self.index_sort_column {
-                            self.index_sort_ascending = !self.index_sort_ascending;
-                        } else {
-                            self.index_sort_column = next;
-                            self.index_sort_ascending = matches!(
-                                next,
-                                IndexSortColumn::Scans | IndexSortColumn::Name
-                            );
-                        }
                     }
                     _ => {}
                 }
@@ -444,54 +687,7 @@ impl App {
             ViewMode::IndexInspect => {
                 match key.code {
                     KeyCode::Esc | KeyCode::Char('q') => {
-                        self.view_mode = ViewMode::Indexes;
-                    }
-                    _ => {}
-                }
-                return;
-            }
-            ViewMode::Statements => {
-                match key.code {
-                    KeyCode::Esc | KeyCode::Char('q') => {
                         self.view_mode = ViewMode::Normal;
-                    }
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        let i = self.stmt_table_state.selected().unwrap_or(0);
-                        self.stmt_table_state.select(Some(i.saturating_sub(1)));
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        let max = self
-                            .snapshot
-                            .as_ref()
-                            .map_or(0, |s| s.stat_statements.len().saturating_sub(1));
-                        let i = self.stmt_table_state.selected().unwrap_or(0);
-                        self.stmt_table_state.select(Some((i + 1).min(max)));
-                    }
-                    KeyCode::Enter => {
-                        if self
-                            .snapshot
-                            .as_ref()
-                            .is_some_and(|s| !s.stat_statements.is_empty())
-                        {
-                            if self.stmt_table_state.selected().is_none() {
-                                self.stmt_table_state.select(Some(0));
-                            }
-                            self.view_mode = ViewMode::StatementInspect;
-                        }
-                    }
-                    KeyCode::Char('s') => {
-                        let next = self.stmt_sort_column.next();
-                        if next == self.stmt_sort_column {
-                            self.stmt_sort_ascending = !self.stmt_sort_ascending;
-                        } else {
-                            self.stmt_sort_column = next;
-                            self.stmt_sort_ascending = false;
-                        }
-                        self.status_message = Some(format!(
-                            "Sort: {} {}",
-                            self.stmt_sort_column.label(),
-                            if self.stmt_sort_ascending { "↑" } else { "↓" }
-                        ));
                     }
                     _ => {}
                 }
@@ -500,7 +696,7 @@ impl App {
             ViewMode::StatementInspect => {
                 match key.code {
                     KeyCode::Esc | KeyCode::Char('q') => {
-                        self.view_mode = ViewMode::Statements;
+                        self.view_mode = ViewMode::Normal;
                     }
                     _ => {}
                 }
@@ -532,14 +728,7 @@ impl App {
                 }
                 return;
             }
-            ViewMode::Inspect
-            | ViewMode::Blocking
-            | ViewMode::WaitEvents
-            | ViewMode::TableStats
-            | ViewMode::Replication
-            | ViewMode::VacuumProgress
-            | ViewMode::Wraparound
-            | ViewMode::Help => {
+            ViewMode::Help => {
                 match key.code {
                     KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
                         self.view_mode = ViewMode::Normal;
@@ -548,93 +737,117 @@ impl App {
                 }
                 return;
             }
+            ViewMode::Filter => {
+                match key.code {
+                    KeyCode::Esc => {
+                        self.filter_text.clear();
+                        self.filter_active = false;
+                        self.view_mode = ViewMode::Normal;
+                        self.reset_panel_selection();
+                    }
+                    KeyCode::Enter => {
+                        self.filter_active = !self.filter_text.is_empty();
+                        self.view_mode = ViewMode::Normal;
+                        self.reset_panel_selection();
+                    }
+                    KeyCode::Backspace => {
+                        self.filter_text.pop();
+                        self.reset_panel_selection();
+                    }
+                    KeyCode::Char(c) => {
+                        self.filter_text.push(c);
+                        self.reset_panel_selection();
+                    }
+                    _ => {}
+                }
+                return;
+            }
             ViewMode::Normal => {}
         }
 
+        // Layer 2: Normal mode global keys
         match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => self.running = false,
+            KeyCode::Char('q') => {
+                self.running = false;
+                return;
+            }
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.running = false;
+                return;
             }
-            KeyCode::Char('p') => self.paused = !self.paused,
+            KeyCode::Esc => {
+                if self.bottom_panel != BottomPanel::Queries {
+                    // Go back to Queries panel
+                    self.switch_panel(BottomPanel::Queries);
+                } else {
+                    self.running = false;
+                }
+                return;
+            }
+            KeyCode::Char('p') => {
+                self.paused = !self.paused;
+                return;
+            }
             KeyCode::Char('r') => {
                 self.pending_action = Some(AppAction::ForceRefresh);
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                let i = self.query_table_state.selected().unwrap_or(0);
-                self.query_table_state.select(Some(i.saturating_sub(1)));
-                self.status_message = None;
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                let max = self
-                    .snapshot
-                    .as_ref()
-                    .map_or(0, |s| s.active_queries.len().saturating_sub(1));
-                let i = self.query_table_state.selected().unwrap_or(0);
-                self.query_table_state.select(Some((i + 1).min(max)));
-                self.status_message = None;
-            }
-            KeyCode::Enter | KeyCode::Char('i') => {
-                if self.selected_query_pid().is_some() {
-                    self.view_mode = ViewMode::Inspect;
-                }
-            }
-            KeyCode::Char('K') => {
-                if let Some(pid) = self.selected_query_pid() {
-                    self.view_mode = ViewMode::ConfirmKill(pid);
-                }
-            }
-            KeyCode::Char('C') => {
-                if let Some(pid) = self.selected_query_pid() {
-                    self.view_mode = ViewMode::ConfirmCancel(pid);
-                }
-            }
-            KeyCode::Tab => {
-                self.view_mode = ViewMode::Blocking;
-            }
-            KeyCode::Char('w') => {
-                self.view_mode = ViewMode::WaitEvents;
-            }
-            KeyCode::Char('t') => {
-                self.view_mode = ViewMode::TableStats;
-            }
-            KeyCode::Char('R') => {
-                self.view_mode = ViewMode::Replication;
-            }
-            KeyCode::Char('v') => {
-                self.view_mode = ViewMode::VacuumProgress;
-            }
-            KeyCode::Char('x') => {
-                self.view_mode = ViewMode::Wraparound;
-            }
-            KeyCode::Char('I') => {
-                self.view_mode = ViewMode::Indexes;
-            }
-            KeyCode::Char('S') => {
-                self.view_mode = ViewMode::Statements;
-            }
-            KeyCode::Char(',') => {
-                self.view_mode = ViewMode::Config;
+                return;
             }
             KeyCode::Char('?') => {
                 self.view_mode = ViewMode::Help;
+                return;
             }
-            KeyCode::Char('s') => {
-                let next = self.sort_column.next();
-                if next == self.sort_column {
-                    self.sort_ascending = !self.sort_ascending;
-                } else {
-                    self.sort_column = next;
-                    self.sort_ascending = false;
-                }
-                self.status_message = Some(format!(
-                    "Sort: {} {}",
-                    self.sort_column.label(),
-                    if self.sort_ascending { "↑" } else { "↓" }
-                ));
+            KeyCode::Char(',') => {
+                self.view_mode = ViewMode::Config;
+                return;
             }
             _ => {}
         }
+
+        // Layer 3: Panel-switch keys
+        match key.code {
+            KeyCode::Tab => {
+                self.switch_panel(BottomPanel::Blocking);
+                return;
+            }
+            KeyCode::Char('w') => {
+                self.switch_panel(BottomPanel::WaitEvents);
+                return;
+            }
+            KeyCode::Char('t') => {
+                self.switch_panel(BottomPanel::TableStats);
+                return;
+            }
+            KeyCode::Char('R') => {
+                self.switch_panel(BottomPanel::Replication);
+                return;
+            }
+            KeyCode::Char('v') => {
+                self.switch_panel(BottomPanel::VacuumProgress);
+                return;
+            }
+            KeyCode::Char('x') => {
+                self.switch_panel(BottomPanel::Wraparound);
+                return;
+            }
+            KeyCode::Char('I') => {
+                self.switch_panel(BottomPanel::Indexes);
+                return;
+            }
+            KeyCode::Char('S') => {
+                self.switch_panel(BottomPanel::Statements);
+                return;
+            }
+            KeyCode::Char('/') => {
+                if self.bottom_panel.supports_filter() {
+                    self.view_mode = ViewMode::Filter;
+                }
+                return;
+            }
+            _ => {}
+        }
+
+        // Layer 4: Panel-specific keys
+        self.handle_panel_key(key);
     }
 
     fn config_adjust(&mut self, direction: i8) {
