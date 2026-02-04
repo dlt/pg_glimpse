@@ -4,7 +4,7 @@ use nucleo_matcher::{Config as MatcherConfig, Matcher};
 use ratatui::widgets::TableState;
 
 use crate::config::{AppConfig, ConfigItem};
-use crate::db::models::{ActiveQuery, IndexInfo, PgSnapshot, StatStatement};
+use crate::db::models::{ActiveQuery, IndexInfo, PgSnapshot, ServerInfo, StatStatement};
 use crate::history::RingBuffer;
 use crate::ui::theme;
 
@@ -205,8 +205,9 @@ pub struct App {
 
     pub connection_history: RingBuffer<u64>,
     pub avg_query_time_history: RingBuffer<u64>,
-    pub lock_count_history: RingBuffer<u64>,
     pub hit_ratio_history: RingBuffer<u64>,
+
+    pub server_info: ServerInfo,
 
     pub host: String,
     pub port: u16,
@@ -234,6 +235,7 @@ impl App {
         refresh: u64,
         history_len: usize,
         config: AppConfig,
+        server_info: ServerInfo,
     ) -> Self {
         Self {
             running: true,
@@ -255,8 +257,8 @@ impl App {
             table_stat_sort_ascending: false,
             connection_history: RingBuffer::new(history_len),
             avg_query_time_history: RingBuffer::new(history_len),
-            lock_count_history: RingBuffer::new(history_len),
             hit_ratio_history: RingBuffer::new(history_len),
+            server_info,
             host,
             port,
             dbname,
@@ -289,8 +291,6 @@ impl App {
         };
         self.avg_query_time_history.push(avg_ms);
 
-        self.lock_count_history
-            .push(snapshot.summary.lock_count as u64);
         self.hit_ratio_history
             .push((snapshot.buffer_cache.hit_ratio * 1000.0) as u64);
         self.snapshot = Some(snapshot);

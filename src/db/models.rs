@@ -1,5 +1,43 @@
 use chrono::{DateTime, Utc};
 
+#[derive(Debug, Clone, Copy)]
+pub struct DetectedExtensions {
+    pub pg_stat_statements: bool,
+    pub pg_stat_kcache: bool,
+    pub pg_wait_sampling: bool,
+    pub pg_buffercache: bool,
+}
+
+impl Default for DetectedExtensions {
+    fn default() -> Self {
+        Self {
+            pg_stat_statements: false,
+            pg_stat_kcache: false,
+            pg_wait_sampling: false,
+            pg_buffercache: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ServerInfo {
+    pub version: String,
+    pub start_time: DateTime<Utc>,
+    pub max_connections: i64,
+    pub extensions: DetectedExtensions,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy)]
+pub struct CheckpointStats {
+    pub checkpoints_timed: i64,
+    pub checkpoints_req: i64,
+    pub checkpoint_write_time: f64,
+    pub checkpoint_sync_time: f64,
+    pub buffers_checkpoint: i64,
+    pub buffers_backend: i64,
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct ActiveQuery {
@@ -159,5 +197,7 @@ pub struct PgSnapshot {
     pub wraparound: Vec<WraparoundInfo>,
     pub indexes: Vec<IndexInfo>,
     pub stat_statements: Vec<StatStatement>,
-    pub pg_stat_statements_available: bool,
+    pub extensions: DetectedExtensions,
+    pub db_size: i64,
+    pub checkpoint_stats: Option<CheckpointStats>,
 }

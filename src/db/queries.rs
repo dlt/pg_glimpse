@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use color_eyre::Result;
 use tokio_postgres::Client;
 
@@ -176,6 +177,83 @@ FROM pg_stat_activity
 WHERE backend_type = 'client backend'
 ";
 
+const EXTENSIONS_SQL: &str = "
+SELECT extname FROM pg_extension
+WHERE extname IN ('pg_stat_statements', 'pg_stat_kcache', 'pg_wait_sampling', 'pg_buffercache')
+";
+
+const SERVER_INFO_SQL: &str = "
+SELECT
+    version(),
+    pg_postmaster_start_time(),
+    (SELECT setting::bigint FROM pg_settings WHERE name = 'max_connections') AS max_connections
+";
+
+const DB_SIZE_SQL: &str = "
+SELECT pg_database_size(current_database()) AS db_size
+";
+
+const CHECKPOINT_STATS_SQL: &str = "
+SELECT
+    COALESCE(checkpoints_timed, 0) AS checkpoints_timed,
+    COALESCE(checkpoints_req, 0) AS checkpoints_req,
+    COALESCE(checkpoint_write_time, 0) AS checkpoint_write_time,
+    COALESCE(checkpoint_sync_time, 0) AS checkpoint_sync_time,
+    COALESCE(buffers_checkpoint, 0) AS buffers_checkpoint,
+    COALESCE(buffers_backend, 0) AS buffers_backend
+FROM pg_stat_bgwriter
+";
+
+pub async fn detect_extensions(client: &Client) -> DetectedExtensions {
+    let rows = match client.query(EXTENSIONS_SQL, &[]).await {
+        Ok(rows) => rows,
+        Err(_) => return DetectedExtensions::default(),
+    };
+    let mut ext = DetectedExtensions::default();
+    for row in rows {
+        let name: String = row.get("extname");
+        match name.as_str() {
+            "pg_stat_statements" => ext.pg_stat_statements = true,
+            "pg_stat_kcache" => ext.pg_stat_kcache = true,
+            "pg_wait_sampling" => ext.pg_wait_sampling = true,
+            "pg_buffercache" => ext.pg_buffercache = true,
+            _ => {}
+        }
+    }
+    ext
+}
+
+pub async fn fetch_server_info(client: &Client) -> Result<ServerInfo> {
+    let extensions = detect_extensions(client).await;
+    let row = client.query_one(SERVER_INFO_SQL, &[]).await?;
+    let version: String = row.get(0);
+    let start_time: DateTime<Utc> = row.get(1);
+    let max_connections: i64 = row.get(2);
+    Ok(ServerInfo {
+        version,
+        start_time,
+        max_connections,
+        extensions,
+    })
+}
+
+pub async fn fetch_db_size(client: &Client) -> Result<i64> {
+    let row = client.query_one(DB_SIZE_SQL, &[]).await?;
+    Ok(row.get("db_size"))
+}
+
+pub async fn fetch_checkpoint_stats(client: &Client) -> Result<CheckpointStats> {
+    let row = client.query_one(CHECKPOINT_STATS_SQL, &[]).await?;
+    Ok(CheckpointStats {
+        checkpoints_timed: row.get("checkpoints_timed"),
+        checkpoints_req: row.get("checkpoints_req"),
+        checkpoint_write_time: row.get("checkpoint_write_time"),
+        checkpoint_sync_time: row.get("checkpoint_sync_time"),
+        buffers_checkpoint: row.get("buffers_checkpoint"),
+        buffers_backend: row.get("buffers_backend"),
+    })
+}
+
 pub async fn fetch_active_queries(client: &Client) -> Result<Vec<ActiveQuery>> {
     let rows = client.query(ACTIVE_QUERIES_SQL, &[]).await?;
     let mut results = Vec::with_capacity(rows.len());
@@ -335,7 +413,13 @@ pub async fn fetch_indexes(client: &Client) -> Result<Vec<IndexInfo>> {
     Ok(results)
 }
 
-pub async fn fetch_stat_statements(client: &Client) -> (Vec<StatStatement>, bool) {
+pub async fn fetch_stat_statements(
+    client: &Client,
+    extensions: &DetectedExtensions,
+) -> (Vec<StatStatement>, bool) {
+    if !extensions.pg_stat_statements {
+        return (vec![], false);
+    }
     let rows = match client.query(STAT_STATEMENTS_SQL, &[]).await {
         Ok(rows) => rows,
         Err(_) => return (vec![], false),
@@ -384,8 +468,12 @@ pub async fn terminate_backend(client: &Client, pid: i32) -> Result<bool> {
     Ok(row.get(0))
 }
 
-pub async fn fetch_snapshot(client: &Client) -> Result<PgSnapshot> {
-    let (active, waits, blocks, cache, summary, tables, repl, vacuum, wrap, indexes, ss) =
+pub async fn fetch_snapshot(
+    client: &Client,
+    extensions: &DetectedExtensions,
+) -> Result<PgSnapshot> {
+    let ext = *extensions;
+    let (active, waits, blocks, cache, summary, tables, repl, vacuum, wrap, indexes, ss, db_size, chkpt) =
         tokio::try_join!(
             fetch_active_queries(client),
             fetch_wait_events(client),
@@ -397,9 +485,13 @@ pub async fn fetch_snapshot(client: &Client) -> Result<PgSnapshot> {
             fetch_vacuum_progress(client),
             fetch_wraparound(client),
             fetch_indexes(client),
-            async { Ok(fetch_stat_statements(client).await) },
+            async { Ok(fetch_stat_statements(client, &ext).await) },
+            fetch_db_size(client),
+            async { Ok(fetch_checkpoint_stats(client).await.ok()) },
         )?;
-    let (stat_statements, pg_stat_statements_available) = ss;
+    let (stat_statements, ss_available) = ss;
+    let mut snap_extensions = ext;
+    snap_extensions.pg_stat_statements = ss_available;
     Ok(PgSnapshot {
         timestamp: chrono::Utc::now(),
         active_queries: active,
@@ -413,6 +505,8 @@ pub async fn fetch_snapshot(client: &Client) -> Result<PgSnapshot> {
         wraparound: wrap,
         indexes,
         stat_statements,
-        pg_stat_statements_available,
+        extensions: snap_extensions,
+        db_size,
+        checkpoint_stats: chkpt,
     })
 }

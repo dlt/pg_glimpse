@@ -43,6 +43,9 @@ async fn run(cli: Cli) -> Result<()> {
 
     let refresh = cli.refresh.unwrap_or(config.refresh_interval_secs);
 
+    // Fetch server info and extensions at startup
+    let server_info = db::queries::fetch_server_info(&client).await?;
+
     let mut app = app::App::new(
         cli.host.clone(),
         cli.port,
@@ -51,14 +54,17 @@ async fn run(cli: Cli) -> Result<()> {
         refresh,
         cli.history_length,
         config,
+        server_info,
     );
 
     let mut terminal = ratatui::init();
     let mut events = event::EventHandler::new(Duration::from_millis(50));
     let mut tick_interval = tokio::time::interval(Duration::from_secs(refresh));
 
+    let extensions = app.server_info.extensions;
+
     // Initial fetch
-    match db::queries::fetch_snapshot(&client).await {
+    match db::queries::fetch_snapshot(&client, &extensions).await {
         Ok(snap) => app.update(snap),
         Err(e) => app.update_error(e.to_string()),
     }
@@ -69,7 +75,7 @@ async fn run(cli: Cli) -> Result<()> {
         tokio::select! {
             _ = tick_interval.tick() => {
                 if !app.paused {
-                    match db::queries::fetch_snapshot(&client).await {
+                    match db::queries::fetch_snapshot(&client, &extensions).await {
                         Ok(snap) => app.update(snap),
                         Err(e) => app.update_error(e.to_string()),
                     }
@@ -91,7 +97,7 @@ async fn run(cli: Cli) -> Result<()> {
         if let Some(action) = app.pending_action.take() {
             match action {
                 AppAction::ForceRefresh => {
-                    match db::queries::fetch_snapshot(&client).await {
+                    match db::queries::fetch_snapshot(&client, &extensions).await {
                         Ok(snap) => app.update(snap),
                         Err(e) => app.update_error(e.to_string()),
                     }
@@ -112,7 +118,7 @@ async fn run(cli: Cli) -> Result<()> {
                         }
                     }
                     // Refresh after action
-                    if let Ok(snap) = db::queries::fetch_snapshot(&client).await {
+                    if let Ok(snap) = db::queries::fetch_snapshot(&client, &extensions).await {
                         app.update(snap);
                     }
                 }
@@ -132,7 +138,7 @@ async fn run(cli: Cli) -> Result<()> {
                         }
                     }
                     // Refresh after action
-                    if let Ok(snap) = db::queries::fetch_snapshot(&client).await {
+                    if let Ok(snap) = db::queries::fetch_snapshot(&client, &extensions).await {
                         app.update(snap);
                     }
                 }

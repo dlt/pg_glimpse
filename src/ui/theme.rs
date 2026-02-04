@@ -49,16 +49,12 @@ impl Theme {
         ACTIVE_THEME.read().unwrap().graph_connections
     }
 
-    pub fn graph_queries() -> Color {
-        ACTIVE_THEME.read().unwrap().graph_queries
-    }
-
     pub fn graph_cache() -> Color {
         ACTIVE_THEME.read().unwrap().graph_cache
     }
 
-    pub fn graph_locks() -> Color {
-        ACTIVE_THEME.read().unwrap().graph_locks
+    pub fn graph_latency() -> Color {
+        ACTIVE_THEME.read().unwrap().graph_latency
     }
 
     pub fn duration_ok() -> Color {

@@ -5,6 +5,7 @@ mod header;
 mod layout;
 mod overlay;
 mod panels;
+mod stats_panel;
 pub mod theme;
 mod util;
 
@@ -32,19 +33,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         marker,
     );
 
-    let avg_data = app.avg_query_time_history.as_vec();
-    let avg_current = app.avg_query_time_history.last().unwrap_or(0);
-    let avg_label = format_duration_ms(avg_current);
-    graph::render_line_chart(
-        frame,
-        areas.graph_tr,
-        "Avg Query Time",
-        &avg_label,
-        &avg_data,
-        Theme::graph_queries(),
-        Theme::graph_queries(),
-        marker,
-    );
+    stats_panel::render(frame, app, areas.graph_tr);
 
     let cache_data = app.hit_ratio_history.as_vec();
     let cache_current = app.hit_ratio_history.last().unwrap_or(0);
@@ -61,21 +50,17 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         marker,
     );
 
-    let lock_data = app.lock_count_history.as_vec();
-    let lock_current = app.lock_count_history.last().unwrap_or(0);
-    let lock_color = if lock_current > 0 {
-        Theme::graph_locks()
-    } else {
-        Theme::border_ok()
-    };
+    let avg_data = app.avg_query_time_history.as_vec();
+    let avg_current = app.avg_query_time_history.last().unwrap_or(0);
+    let avg_label = format_duration_ms(avg_current);
     graph::render_line_chart(
         frame,
         areas.graph_br,
-        "Locks",
-        &lock_current.to_string(),
-        &lock_data,
-        lock_color,
-        Theme::graph_locks(),
+        "Avg Query Time",
+        &avg_label,
+        &avg_data,
+        Theme::graph_latency(),
+        Theme::graph_latency(),
         marker,
     );
 
@@ -123,3 +108,4 @@ fn format_duration_ms(ms: u64) -> String {
         format!("{:.0}m{:.0}s", ms / 60_000, (ms % 60_000) / 1000)
     }
 }
+

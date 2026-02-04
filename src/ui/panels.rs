@@ -532,7 +532,7 @@ pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
         return;
     };
 
-    if !snap.pg_stat_statements_available {
+    if !snap.extensions.pg_stat_statements {
         let lines = vec![
             Line::from(""),
             Line::from(Span::styled(
