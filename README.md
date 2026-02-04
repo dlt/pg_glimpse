@@ -1,107 +1,164 @@
-```
-┌─────────────────────────────────────────────┐
-│                                             │
-│   ╔═╗╔═╗  ╔═╗╦  ╦╔╦╗╔═╗╔═╗╔═╗               │
-│   ╠═╝║ ╦  ║ ╦║  ║║║║╠═╝╚═╗║╣                │
-│   ╩  ╚═╝  ╚═╝╩═╝╩╩ ╩╩  ╚═╝╚═╝               │
-│                                             │
-│   Terminal-based PostgreSQL monitoring      │
-│                                             │
-└─────────────────────────────────────────────┘
-```
+# pg_glimpse
 
-pg_glimpse gives you real-time visibility into your PostgreSQL database — active queries, connections, locks, cache performance, replication lag, and more — all from your terminal.
+Terminal-based PostgreSQL monitoring tool. Real-time visibility into active queries, connections, locks, cache performance, replication lag, and more.
 
-## Features
+## Install
 
-- **Active queries** — view, inspect, cancel, or terminate running queries
-- **Live sparkline graphs** — connections, average query time, cache hit ratio, lock count
-- **Lock blocking chains** — see which queries are blocking others
-- **Wait events** — breakdown of what backends are waiting on
-- **Table statistics** — row counts, dead tuples, last vacuum/analyze
-- **Replication status** — streaming replication lag monitoring
-- **Vacuum progress** — track in-progress vacuum operations
-- **XID wraparound** — transaction ID age monitoring
-- **Index stats** — scan counts, tuple reads, index sizes
-
-## Installation
-
-Requires Rust 1.74+.
+**Homebrew** (macOS):
 
 ```bash
-cargo build --release
+brew install dlt/tap/pg_glimpse
 ```
 
-The binary will be at `target/release/pg_glimpse`.
+**Cargo** (any platform with Rust 1.74+):
+
+```bash
+cargo install pg_glimpse
+```
+
+**Binary download**: grab a prebuilt binary from [GitHub Releases](https://github.com/dlt/pg_glimpse/releases).
 
 ## Usage
 
 ```bash
-# Connect using individual parameters
+# Connect with individual parameters
 pg_glimpse -H localhost -p 5432 -d mydb -U postgres
 
-# Connect using a connection string
+# Connection string
 pg_glimpse -c "host=localhost port=5432 dbname=mydb user=postgres"
 
-# Connect using a PostgreSQL URI
+# PostgreSQL URI
 pg_glimpse -c "postgresql://user:pass@host:5432/dbname"
 
-# Custom refresh interval (seconds) and history length
+# Custom refresh interval and history length
 pg_glimpse -r 1 --history-length 240
+
+# Replay a recorded session
+pg_glimpse --replay ~/.local/share/pg_glimpse/recordings/localhost_5432_20260204_143022.jsonl
 ```
 
 ### Options
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `-c`, `--connection` | Connection string (overrides individual params) | — |
+| `-c`, `--connection` | Connection string (overrides individual params) | -- |
 | `-H`, `--host` | PostgreSQL host | `localhost` |
 | `-p`, `--port` | PostgreSQL port | `5432` |
 | `-d`, `--dbname` | Database name | `postgres` |
 | `-U`, `--user` | Database user | `postgres` |
-| `-W`, `--password` | Database password | — |
+| `-W`, `--password` | Database password | -- |
 | `-r`, `--refresh` | Refresh interval in seconds | `2` |
-| `--history-length` | Number of sparkline data points | `120` |
+| `--history-length` | Sparkline data points to keep | `120` |
+| `--replay` | Replay a recorded JSONL session file | -- |
 
 ### Environment Variables
 
-Connection parameters can also be set via standard PostgreSQL environment variables:
+Standard PostgreSQL environment variables are supported: `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, and `PG_GLIMPSE_CONNECTION`.
 
-- `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`
-- `PG_GLIMPSE_CONNECTION` — full connection string
+## Features
 
-## Keyboard Shortcuts
+### Panels
 
-### Main View
+| Key | Panel | Description |
+|-----|-------|-------------|
+| (default) | **Queries** | Active queries with PID, user, state, duration, wait events. Cancel or kill queries. |
+| `Tab` | **Blocking** | Lock blocking chains showing blocked/blocker pairs |
+| `w` | **Wait Events** | Breakdown of what backends are waiting on |
+| `t` | **Table Stats** | Row counts, dead tuples, dead ratio, last vacuum, sizes |
+| `R` | **Replication** | Streaming replication lag (write/flush/replay) |
+| `v` | **Vacuum** | In-progress vacuum operations with phase and progress |
+| `x` | **Wraparound** | Transaction ID age and XID wraparound risk |
+| `I` | **Indexes** | Scan counts, tuple reads/fetches, sizes, definitions |
+| `S` | **Statements** | pg_stat_statements: timing, calls, rows, buffer usage |
+
+### Live Graphs
+
+Sparkline graphs for connections, average query time, cache hit ratio, active queries, and lock count. Configurable marker style (Braille, HalfBlock, Block).
+
+### Stats Panel
+
+Server version, uptime, database size, connection usage, activity summary, cache hit ratio, dead tuple count, wraparound status, replication lag, and checkpoint stats.
+
+### Recording & Replay
+
+Every monitoring snapshot is automatically recorded to `~/.local/share/pg_glimpse/recordings/` as JSONL. Old recordings are pruned on startup (default: 1 hour retention, configurable).
+
+Replay a recorded session:
+
+```bash
+pg_glimpse --replay recording.jsonl
+```
+
+All panels, sorting, inspection, filtering, and yank work identically in replay mode.
 
 | Key | Action |
 |-----|--------|
-| `q` / `Esc` / `Ctrl+C` | Quit |
-| `p` | Pause/resume refresh |
+| `Space` | Play / pause |
+| `Left` / `h` | Step back one snapshot |
+| `Right` / `l` | Step forward one snapshot |
+| `<` | Slow down (0.25x, 0.5x, 1x, 2x, 4x, 8x) |
+| `>` | Speed up |
+| `g` | Jump to start |
+| `G` | Jump to end |
+
+### Fuzzy Filter
+
+Press `/` in Queries, Indexes, or Statements panels to fuzzy-filter rows. Matches against all visible fields.
+
+### Clipboard
+
+Press `y` to yank the selected query text, index definition, or statement to the system clipboard.
+
+## Keyboard Reference
+
+### Global
+
+| Key | Action |
+|-----|--------|
+| `q` / `Ctrl+C` | Quit |
+| `Esc` | Back to Queries (or quit) |
+| `p` | Pause / resume |
 | `r` | Force refresh |
-| `↑` / `k` | Select previous query |
-| `↓` / `j` | Select next query |
-| `Enter` / `i` | Inspect selected query |
-| `C` | Cancel selected query (`pg_cancel_backend`) |
-| `K` | Terminate selected backend (`pg_terminate_backend`) |
-| `s` | Cycle sort column (Duration → PID → User → State) |
-| `Tab` | Lock blocking chains |
-| `w` | Wait events |
-| `t` | Table statistics |
-| `R` | Replication status |
-| `v` | Vacuum progress |
-| `x` | XID wraparound |
-| `I` | Indexes |
+| `?` | Help |
+| `,` | Configuration |
+| `y` | Yank to clipboard |
+| `/` | Fuzzy filter |
 
-### Overlay Views
+### Panel Controls
 
 | Key | Action |
 |-----|--------|
-| `Esc` / `q` | Close overlay |
-| `↑↓` / `jk` | Navigate (Indexes view) |
-| `Enter` | Inspect selected index (Indexes view) |
-| `s` | Cycle sort column (Indexes view) |
+| `Up` / `k` | Previous row |
+| `Down` / `j` | Next row |
+| `Enter` | Inspect |
+| `s` | Cycle sort column |
+| `C` | Cancel query (Queries panel) |
+| `K` | Terminate backend (Queries panel) |
+
+### Configuration
+
+Press `,` to open the config overlay. Use `Left`/`Right` to adjust values. Settings are saved to `~/.config/pg_glimpse/config.toml`.
+
+| Setting | Range | Default |
+|---------|-------|---------|
+| Graph Marker | Braille / HalfBlock / Block | Braille |
+| Color Theme | Tokyo Night / Dracula / Nord / Solarized Dark | Tokyo Night |
+| Refresh Interval | 1-60s | 2s |
+| Warn Duration | 0.1s - danger threshold | 1.0s |
+| Danger Duration | warn threshold - 300s | 10.0s |
+| Recording Retention | 10m - 24h | 1h |
+
+## Extension Support
+
+pg_glimpse automatically detects and uses these PostgreSQL extensions when available:
+
+- **pg_stat_statements** -- query-level statistics
+- **pg_buffercache** -- buffer cache inspection
+- **pg_stat_kcache** -- OS-level cache stats
+- **pg_wait_sampling** -- wait event profiling
+
+Panels that depend on missing extensions are gracefully skipped.
 
 ## License
 
-MIT
+[MIT](LICENSE)

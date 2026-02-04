@@ -7,6 +7,10 @@ license = "MIT"
 keywords = ["postgresql", "monitoring", "tui", "database"]
 categories = ["command-line-utilities", "database"]
 rust-version = "1.74"
+repository = "https://github.com/dlt/pg_glimpse"
+homepage = "https://github.com/dlt/pg_glimpse"
+readme = "README.md"
+exclude = ["target/", "error.log", ".claude/", ".github/", "Formula/"]
 
 [dependencies]
 ratatui = "0.29"
