@@ -72,6 +72,17 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             spans.push(key("/"));
             spans.push(desc("filter"));
         }
+        BottomPanel::TableStats => {
+            spans.push(sep());
+            spans.push(key("\u{2191}\u{2193}"));
+            spans.push(desc("select"));
+            spans.push(sep());
+            spans.push(key("s"));
+            spans.push(desc("sort"));
+            spans.push(sep());
+            spans.push(key("Esc"));
+            spans.push(desc("back"));
+        }
         BottomPanel::Indexes | BottomPanel::Statements => {
             // Interactive panels with sort/filter
             spans.push(sep());

@@ -114,6 +114,40 @@ impl IndexSortColumn {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+pub enum TableStatSortColumn {
+    DeadTuples,
+    Size,
+    Name,
+    SeqScan,
+    IdxScan,
+    DeadRatio,
+}
+
+impl TableStatSortColumn {
+    pub fn next(self) -> Self {
+        match self {
+            Self::DeadTuples => Self::Size,
+            Self::Size => Self::Name,
+            Self::Name => Self::SeqScan,
+            Self::SeqScan => Self::IdxScan,
+            Self::IdxScan => Self::DeadRatio,
+            Self::DeadRatio => Self::DeadTuples,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::DeadTuples => "Dead Tuples",
+            Self::Size => "Size",
+            Self::Name => "Name",
+            Self::SeqScan => "Seq Scan",
+            Self::IdxScan => "Idx Scan",
+            Self::DeadRatio => "Dead %",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum StatementSortColumn {
     TotalTime,
     MeanTime,
@@ -165,6 +199,9 @@ pub struct App {
     pub stmt_table_state: TableState,
     pub stmt_sort_column: StatementSortColumn,
     pub stmt_sort_ascending: bool,
+    pub table_stat_table_state: TableState,
+    pub table_stat_sort_column: TableStatSortColumn,
+    pub table_stat_sort_ascending: bool,
 
     pub connection_history: RingBuffer<u64>,
     pub avg_query_time_history: RingBuffer<u64>,
@@ -213,6 +250,9 @@ impl App {
             stmt_table_state: TableState::default(),
             stmt_sort_column: StatementSortColumn::TotalTime,
             stmt_sort_ascending: false,
+            table_stat_table_state: TableState::default(),
+            table_stat_sort_column: TableStatSortColumn::DeadTuples,
+            table_stat_sort_ascending: false,
             connection_history: RingBuffer::new(history_len),
             avg_query_time_history: RingBuffer::new(history_len),
             lock_count_history: RingBuffer::new(history_len),
@@ -485,6 +525,55 @@ impl App {
         indices
     }
 
+    pub fn sorted_table_stat_indices(&self) -> Vec<usize> {
+        let Some(snap) = &self.snapshot else {
+            return vec![];
+        };
+        let mut indices: Vec<usize> = (0..snap.table_stats.len()).collect();
+
+        let asc = self.table_stat_sort_ascending;
+        match self.table_stat_sort_column {
+            TableStatSortColumn::DeadTuples => indices.sort_by(|&a, &b| {
+                let cmp = snap.table_stats[a]
+                    .n_dead_tup
+                    .cmp(&snap.table_stats[b].n_dead_tup);
+                if asc { cmp } else { cmp.reverse() }
+            }),
+            TableStatSortColumn::Size => indices.sort_by(|&a, &b| {
+                let cmp = snap.table_stats[a]
+                    .total_size_bytes
+                    .cmp(&snap.table_stats[b].total_size_bytes);
+                if asc { cmp } else { cmp.reverse() }
+            }),
+            TableStatSortColumn::Name => indices.sort_by(|&a, &b| {
+                let cmp = snap.table_stats[a]
+                    .relname
+                    .cmp(&snap.table_stats[b].relname);
+                if asc { cmp } else { cmp.reverse() }
+            }),
+            TableStatSortColumn::SeqScan => indices.sort_by(|&a, &b| {
+                let cmp = snap.table_stats[a]
+                    .seq_scan
+                    .cmp(&snap.table_stats[b].seq_scan);
+                if asc { cmp } else { cmp.reverse() }
+            }),
+            TableStatSortColumn::IdxScan => indices.sort_by(|&a, &b| {
+                let cmp = snap.table_stats[a]
+                    .idx_scan
+                    .cmp(&snap.table_stats[b].idx_scan);
+                if asc { cmp } else { cmp.reverse() }
+            }),
+            TableStatSortColumn::DeadRatio => indices.sort_by(|&a, &b| {
+                let cmp = snap.table_stats[a]
+                    .dead_ratio
+                    .partial_cmp(&snap.table_stats[b].dead_ratio)
+                    .unwrap_or(std::cmp::Ordering::Equal);
+                if asc { cmp } else { cmp.reverse() }
+            }),
+        }
+        indices
+    }
+
     fn switch_panel(&mut self, target: BottomPanel) {
         if self.bottom_panel == target {
             // Toggle back to Queries
@@ -503,6 +592,7 @@ impl App {
             BottomPanel::Queries => self.query_table_state.select(Some(0)),
             BottomPanel::Indexes => self.index_table_state.select(Some(0)),
             BottomPanel::Statements => self.stmt_table_state.select(Some(0)),
+            BottomPanel::TableStats => self.table_stat_table_state.select(Some(0)),
             _ => {}
         }
     }
@@ -635,11 +725,44 @@ impl App {
         }
     }
 
+    fn handle_table_stats_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                let i = self.table_stat_table_state.selected().unwrap_or(0);
+                self.table_stat_table_state.select(Some(i.saturating_sub(1)));
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let max = self
+                    .sorted_table_stat_indices()
+                    .len()
+                    .saturating_sub(1);
+                let i = self.table_stat_table_state.selected().unwrap_or(0);
+                self.table_stat_table_state.select(Some((i + 1).min(max)));
+            }
+            KeyCode::Char('s') => {
+                let next = self.table_stat_sort_column.next();
+                if next == self.table_stat_sort_column {
+                    self.table_stat_sort_ascending = !self.table_stat_sort_ascending;
+                } else {
+                    self.table_stat_sort_column = next;
+                    self.table_stat_sort_ascending = false;
+                }
+                self.status_message = Some(format!(
+                    "Sort: {} {}",
+                    self.table_stat_sort_column.label(),
+                    if self.table_stat_sort_ascending { "\u{2191}" } else { "\u{2193}" }
+                ));
+            }
+            _ => {}
+        }
+    }
+
     fn handle_panel_key(&mut self, key: KeyEvent) {
         match self.bottom_panel {
             BottomPanel::Queries => self.handle_queries_key(key),
             BottomPanel::Indexes => self.handle_indexes_key(key),
             BottomPanel::Statements => self.handle_statements_key(key),
+            BottomPanel::TableStats => self.handle_table_stats_key(key),
             _ => {} // Static panels have no panel-specific keys
         }
     }

@@ -4,7 +4,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Cell, Paragraph, Row, Table};
 use ratatui::Frame;
 
-use crate::app::{App, BottomPanel, IndexSortColumn, StatementSortColumn, ViewMode};
+use crate::app::{App, BottomPanel, IndexSortColumn, StatementSortColumn, TableStatSortColumn, ViewMode};
 use super::theme::Theme;
 use super::util::{
     collapse_whitespace, format_bytes, format_lag, format_number, format_time_ms, lag_color,
@@ -129,8 +129,15 @@ pub fn render_wait_events(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, inner);
 }
 
-pub fn render_table_stats(frame: &mut Frame, app: &App, area: Rect) {
-    let block = panel_block("Table Stats");
+pub fn render_table_stats(frame: &mut Frame, app: &mut App, area: Rect) {
+    let indices = app.sorted_table_stat_indices();
+    let total_count = app
+        .snapshot
+        .as_ref()
+        .map_or(0, |s| s.table_stats.len());
+
+    let title = format!("Table Stats [{}]", total_count);
+    let block = panel_block(&title);
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), area);
@@ -149,16 +156,34 @@ pub fn render_table_stats(frame: &mut Frame, app: &App, area: Rect) {
         return;
     }
 
+    let sort_indicator = |col: TableStatSortColumn| -> &str {
+        if app.table_stat_sort_column == col {
+            if app.table_stat_sort_ascending {
+                " \u{2191}"
+            } else {
+                " \u{2193}"
+            }
+        } else {
+            ""
+        }
+    };
+
     let header = Row::new(vec![
-        "Table", "Size", "SeqScan", "IdxScan", "Dead", "Dead%", "Last Vacuum",
+        Cell::from(format!("Table{}", sort_indicator(TableStatSortColumn::Name))),
+        Cell::from(format!("Size{}", sort_indicator(TableStatSortColumn::Size))),
+        Cell::from(format!("SeqScan{}", sort_indicator(TableStatSortColumn::SeqScan))),
+        Cell::from(format!("IdxScan{}", sort_indicator(TableStatSortColumn::IdxScan))),
+        Cell::from(format!("Dead{}", sort_indicator(TableStatSortColumn::DeadTuples))),
+        Cell::from(format!("Dead%{}", sort_indicator(TableStatSortColumn::DeadRatio))),
+        Cell::from("Last Vacuum"),
     ])
     .style(Theme::title_style())
     .bottom_margin(0);
 
-    let rows: Vec<Row> = snap
-        .table_stats
+    let rows: Vec<Row> = indices
         .iter()
-        .map(|t| {
+        .map(|&i| {
+            let t = &snap.table_stats[i];
             let dead_color = if t.dead_ratio > 20.0 {
                 Theme::border_danger()
             } else if t.dead_ratio > 5.0 {
@@ -186,15 +211,24 @@ pub fn render_table_stats(frame: &mut Frame, app: &App, area: Rect) {
     let widths = [
         Constraint::Min(20),
         Constraint::Length(9),
-        Constraint::Length(8),
-        Constraint::Length(8),
-        Constraint::Length(8),
-        Constraint::Length(7),
+        Constraint::Length(10),
+        Constraint::Length(10),
+        Constraint::Length(10),
+        Constraint::Length(9),
         Constraint::Length(13),
     ];
 
-    let table = Table::new(rows, widths).header(header).block(block);
-    frame.render_widget(table, area);
+    let table = Table::new(rows, widths)
+        .header(header)
+        .block(block)
+        .row_highlight_style(
+            Style::default()
+                .bg(Theme::highlight_bg())
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("\u{25ba} ");
+
+    frame.render_stateful_widget(table, area, &mut app.table_stat_table_state);
 }
 
 pub fn render_replication(frame: &mut Frame, app: &App, area: Rect) {
