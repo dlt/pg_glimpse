@@ -226,6 +226,12 @@ pub struct App {
 
     pub filter_text: String,
     pub filter_active: bool,
+    pub replay_mode: bool,
+    pub replay_filename: Option<String>,
+    pub replay_position: usize,
+    pub replay_total: usize,
+    pub replay_speed: f64,
+    pub replay_playing: bool,
 }
 
 impl App {
@@ -275,7 +281,31 @@ impl App {
             config_selected: 0,
             filter_text: String::new(),
             filter_active: false,
+            replay_mode: false,
+            replay_filename: None,
+            replay_position: 0,
+            replay_total: 0,
+            replay_speed: 1.0,
+            replay_playing: false,
         }
+    }
+
+    pub fn new_replay(
+        host: String,
+        port: u16,
+        dbname: String,
+        user: String,
+        history_len: usize,
+        config: AppConfig,
+        server_info: ServerInfo,
+        filename: String,
+        total_snapshots: usize,
+    ) -> Self {
+        let mut app = Self::new(host, port, dbname, user, 0, history_len, config, server_info);
+        app.replay_mode = true;
+        app.replay_filename = Some(filename);
+        app.replay_total = total_snapshots;
+        app
     }
 
     pub fn update(&mut self, snapshot: PgSnapshot) {
@@ -669,12 +699,12 @@ impl App {
                     self.view_mode = ViewMode::Inspect;
                 }
             }
-            KeyCode::Char('K') => {
+            KeyCode::Char('K') if !self.replay_mode => {
                 if let Some(pid) = self.selected_query_pid() {
                     self.view_mode = ViewMode::ConfirmKill(pid);
                 }
             }
-            KeyCode::Char('C') => {
+            KeyCode::Char('C') if !self.replay_mode => {
                 if let Some(pid) = self.selected_query_pid() {
                     self.view_mode = ViewMode::ConfirmCancel(pid);
                 }
@@ -993,11 +1023,11 @@ impl App {
                 }
                 return;
             }
-            KeyCode::Char('p') => {
+            KeyCode::Char('p') if !self.replay_mode => {
                 self.paused = !self.paused;
                 return;
             }
-            KeyCode::Char('r') => {
+            KeyCode::Char('r') if !self.replay_mode => {
                 self.pending_action = Some(AppAction::ForceRefresh);
                 return;
             }
@@ -1102,6 +1132,15 @@ impl App {
                     self.config.warn_duration_secs,
                     self.config.danger_duration_secs,
                 );
+            }
+            ConfigItem::RecordingRetention => {
+                let step: i64 = if self.config.recording_retention_secs >= 7200 {
+                    3600
+                } else {
+                    600
+                };
+                let val = self.config.recording_retention_secs as i64 + direction as i64 * step;
+                self.config.recording_retention_secs = val.clamp(600, 86400) as u64;
             }
         }
     }

@@ -220,6 +220,7 @@ pub struct AppConfig {
     pub refresh_interval_secs: u64,
     pub warn_duration_secs: f64,
     pub danger_duration_secs: f64,
+    pub recording_retention_secs: u64,
 }
 
 impl Default for AppConfig {
@@ -230,6 +231,7 @@ impl Default for AppConfig {
             refresh_interval_secs: 2,
             warn_duration_secs: 1.0,
             danger_duration_secs: 10.0,
+            recording_retention_secs: 3600,
         }
     }
 }
@@ -269,15 +271,17 @@ pub enum ConfigItem {
     RefreshInterval,
     WarnDuration,
     DangerDuration,
+    RecordingRetention,
 }
 
 impl ConfigItem {
-    pub const ALL: [ConfigItem; 5] = [
+    pub const ALL: [ConfigItem; 6] = [
         ConfigItem::GraphMarker,
         ConfigItem::ColorTheme,
         ConfigItem::RefreshInterval,
         ConfigItem::WarnDuration,
         ConfigItem::DangerDuration,
+        ConfigItem::RecordingRetention,
     ];
 
     pub fn label(self) -> &'static str {
@@ -287,6 +291,7 @@ impl ConfigItem {
             Self::RefreshInterval => "Refresh Interval",
             Self::WarnDuration => "Warn Duration",
             Self::DangerDuration => "Danger Duration",
+            Self::RecordingRetention => "Recording Retention",
         }
     }
 }

@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct DetectedExtensions {
     pub pg_stat_statements: bool,
     pub pg_stat_kcache: bool,
@@ -19,7 +20,7 @@ impl Default for DetectedExtensions {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerInfo {
     pub version: String,
     pub start_time: DateTime<Utc>,
@@ -27,8 +28,7 @@ pub struct ServerInfo {
     pub extensions: DetectedExtensions,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct CheckpointStats {
     pub checkpoints_timed: i64,
     pub checkpoints_req: i64,
@@ -38,8 +38,7 @@ pub struct CheckpointStats {
     pub buffers_backend: i64,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActiveQuery {
     pub pid: i32,
     pub usename: Option<String>,
@@ -53,16 +52,14 @@ pub struct ActiveQuery {
     pub backend_type: Option<String>,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WaitEventCount {
     pub wait_event_type: String,
     pub wait_event: String,
     pub count: i64,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockingInfo {
     pub blocked_pid: i32,
     pub blocked_user: Option<String>,
@@ -74,16 +71,14 @@ pub struct BlockingInfo {
     pub blocker_state: Option<String>,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct BufferCacheStats {
     pub blks_hit: i64,
     pub blks_read: i64,
     pub hit_ratio: f64,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct ActivitySummary {
     pub active_query_count: i64,
     pub idle_in_transaction_count: i64,
@@ -92,8 +87,7 @@ pub struct ActivitySummary {
     pub waiting_count: i64,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TableStat {
     pub schemaname: String,
     pub relname: String,
@@ -106,8 +100,7 @@ pub struct TableStat {
     pub last_autovacuum: Option<DateTime<Utc>>,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReplicationInfo {
     pub pid: i32,
     pub usename: Option<String>,
@@ -120,8 +113,7 @@ pub struct ReplicationInfo {
     pub sync_state: Option<String>,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VacuumProgress {
     pub pid: i32,
     pub datname: Option<String>,
@@ -133,8 +125,7 @@ pub struct VacuumProgress {
     pub num_dead_tuples: i64,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WraparoundInfo {
     pub datname: String,
     pub xid_age: i32,
@@ -142,8 +133,7 @@ pub struct WraparoundInfo {
     pub pct_towards_wraparound: f64,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexInfo {
     pub schemaname: String,
     pub table_name: String,
@@ -155,8 +145,7 @@ pub struct IndexInfo {
     pub index_definition: String,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StatStatement {
     pub queryid: i64,
     pub query: String,
@@ -182,8 +171,7 @@ pub struct StatStatement {
     pub hit_ratio: f64,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PgSnapshot {
     pub timestamp: DateTime<Utc>,
     pub active_queries: Vec<ActiveQuery>,

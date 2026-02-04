@@ -501,6 +501,14 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
             ConfigItem::RefreshInterval => format!("{}s", app.config.refresh_interval_secs),
             ConfigItem::WarnDuration => format!("{:.1}s", app.config.warn_duration_secs),
             ConfigItem::DangerDuration => format!("{:.1}s", app.config.danger_duration_secs),
+            ConfigItem::RecordingRetention => {
+                let secs = app.config.recording_retention_secs;
+                if secs >= 3600 {
+                    format!("{}h", secs / 3600)
+                } else {
+                    format!("{}m", secs / 60)
+                }
+            }
         };
 
         let label_style = if selected {

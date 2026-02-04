@@ -1,9 +1,14 @@
 use clap::Parser;
+use std::path::PathBuf;
 
 /// pg_glimpse - A terminal-based PostgreSQL monitoring tool
 #[derive(Parser, Debug)]
 #[command(name = "pg_glimpse", version, about)]
 pub struct Cli {
+    /// Replay a recorded session instead of connecting to a database
+    #[arg(long)]
+    pub replay: Option<PathBuf>,
+
     /// PostgreSQL connection string (overrides individual params)
     /// Example: "host=localhost port=5432 dbname=mydb user=postgres password=secret"
     /// Or URI: "postgresql://user:pass@host:port/dbname"
