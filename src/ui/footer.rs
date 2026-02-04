@@ -59,6 +59,9 @@ pub fn render(frame: &mut Frame, area: Rect) {
         Span::styled("S", key_style),
         Span::styled(" stmts", desc_style),
         Span::styled(" │ ", sep_style),
+        Span::styled("?", key_style),
+        Span::styled(" help", desc_style),
+        Span::styled(" │ ", sep_style),
         Span::styled(",", key_style),
         Span::styled(" config", desc_style),
     ];

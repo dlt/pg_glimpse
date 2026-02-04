@@ -825,6 +825,70 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, popup);
 }
 
+pub fn render_help(frame: &mut Frame, area: Rect) {
+    let popup = centered_rect(70, 80, area);
+    frame.render_widget(Clear, popup);
+
+    let block = overlay_block("Keybindings  [Esc] close", Theme::border_active());
+
+    let key_style = Style::default()
+        .fg(Theme::border_active())
+        .add_modifier(Modifier::BOLD);
+    let desc_style = Style::default().fg(Theme::fg());
+    let section_style = Style::default()
+        .fg(Theme::border_warn())
+        .add_modifier(Modifier::BOLD);
+
+    let entry = |key: &str, desc: &str| -> Line<'static> {
+        Line::from(vec![
+            Span::styled(format!("  {:<14}", key), key_style),
+            Span::styled(desc.to_string(), desc_style),
+        ])
+    };
+
+    let section = |title: &str| -> Line<'static> {
+        Line::from(Span::styled(format!("  {}", title), section_style))
+    };
+
+    let lines = vec![
+        Line::from(""),
+        section("Navigation"),
+        entry("q / Esc", "Quit application"),
+        entry("Ctrl+C", "Force quit"),
+        entry("p", "Pause / resume refresh"),
+        entry("r", "Force refresh now"),
+        entry("↑ / k", "Select previous row"),
+        entry("↓ / j", "Select next row"),
+        entry("s", "Cycle sort column"),
+        Line::from(""),
+        section("Query Actions"),
+        entry("Enter / i", "Inspect selected query"),
+        entry("C", "Cancel query (pg_cancel_backend)"),
+        entry("K", "Kill backend (pg_terminate_backend)"),
+        Line::from(""),
+        section("Views"),
+        entry("Tab", "Blocking chains"),
+        entry("w", "Wait events"),
+        entry("t", "Table stats"),
+        entry("R", "Replication lag"),
+        entry("v", "Vacuum progress"),
+        entry("x", "Transaction wraparound"),
+        entry("I", "Index stats"),
+        entry("S", "pg_stat_statements"),
+        entry("?", "This help screen"),
+        entry(",", "Configuration"),
+        Line::from(""),
+        section("Overlay Controls"),
+        entry("Esc / q", "Close overlay"),
+        entry("j / k", "Navigate rows (indexes, stmts)"),
+        entry("Enter", "Inspect row (indexes, stmts)"),
+        entry("s", "Cycle sort (indexes, stmts)"),
+    ];
+
+    let paragraph = Paragraph::new(lines).block(block);
+    frame.render_widget(paragraph, popup);
+}
+
 fn format_bytes(bytes: i64) -> String {
     const KB: i64 = 1024;
     const MB: i64 = 1024 * 1024;

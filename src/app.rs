@@ -23,6 +23,7 @@ pub enum ViewMode {
     ConfirmCancel(i32),
     ConfirmKill(i32),
     Config,
+    Help,
 }
 
 #[derive(Debug, Clone)]
@@ -537,7 +538,8 @@ impl App {
             | ViewMode::TableStats
             | ViewMode::Replication
             | ViewMode::VacuumProgress
-            | ViewMode::Wraparound => {
+            | ViewMode::Wraparound
+            | ViewMode::Help => {
                 match key.code {
                     KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
                         self.view_mode = ViewMode::Normal;
@@ -613,6 +615,9 @@ impl App {
             }
             KeyCode::Char(',') => {
                 self.view_mode = ViewMode::Config;
+            }
+            KeyCode::Char('?') => {
+                self.view_mode = ViewMode::Help;
             }
             KeyCode::Char('s') => {
                 let next = self.sort_column.next();

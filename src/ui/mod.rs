@@ -110,6 +110,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
             overlay::render_statement_inspect(frame, app, frame.area())
         }
         ViewMode::Config => overlay::render_config(frame, app, frame.area()),
+        ViewMode::Help => overlay::render_help(frame, frame.area()),
         ViewMode::Normal => {}
     }
 }
