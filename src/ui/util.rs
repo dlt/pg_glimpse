@@ -66,6 +66,3 @@ pub fn format_time_ms(ms: f64) -> String {
     }
 }
 
-pub fn collapse_whitespace(s: &str) -> String {
-    s.split_whitespace().collect::<Vec<_>>().join(" ")
-}

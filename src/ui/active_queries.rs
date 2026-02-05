@@ -1,9 +1,11 @@
 use ratatui::layout::{Constraint, Rect};
 use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::Line;
 use ratatui::widgets::{Block, BorderType, Borders, Cell, Row, Table};
 use ratatui::Frame;
 
 use crate::app::{App, BottomPanel, SortColumn};
+use super::overlay::highlight_sql_inline;
 use super::theme::Theme;
 
 pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
@@ -58,6 +60,9 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
     )
     .bottom_margin(0);
 
+    // Calculate query column width: Fill(6) out of total Fill(16), minus borders/highlight
+    let query_width = ((area.width.saturating_sub(4)) as usize * 6 / 16).max(20);
+
     let rows: Vec<Row> = match &app.snapshot {
         Some(snap) => indices
             .iter()
@@ -65,6 +70,7 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
                 let q = &snap.active_queries[i];
                 let dur_color = Theme::duration_color(q.duration_secs);
                 let state_color = Theme::state_color(q.state.as_deref());
+                let query_text = q.query.as_deref().unwrap_or("");
 
                 Row::new(vec![
                     Cell::from(q.pid.to_string()),
@@ -81,7 +87,7 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
                         } else {
                             Color::DarkGray
                         })),
-                    Cell::from(q.query.clone().unwrap_or_default()),
+                    Cell::from(Line::from(highlight_sql_inline(query_text, query_width))),
                 ])
             })
             .collect(),
