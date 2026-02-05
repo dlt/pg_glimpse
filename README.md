@@ -60,9 +60,10 @@ Server version, uptime, database size, connection usage, cache hit ratio, dead t
 
 ### More
 
+- **Inspect overlay** — press `Enter` to see full query details, index definitions, or statement stats
 - **Fuzzy filter** — press `/` to filter queries, indexes, or statements
 - **Clipboard** — press `y` to yank SQL to clipboard
-- **SQL highlighting** — syntax-highlighted queries in inspect views
+- **SQL highlighting** — syntax-highlighted queries everywhere
 - **Themes** — Tokyo Night, Dracula, Nord, Solarized, Catppuccin
 
 ## Usage
@@ -127,18 +128,34 @@ pg_glimpse -r 1 --history-length 240
 
 ## Recording & Replay
 
-Sessions are automatically recorded to `~/.local/share/pg_glimpse/recordings/`.
+Every live session is automatically recorded to `~/.local/share/pg_glimpse/recordings/`. This is useful for:
+
+- **Incident investigation** — review what happened during an outage
+- **Sharing with teammates** — send a recording file for async debugging
+- **Post-mortem analysis** — step through events at your own pace
+
+### How it works
+
+- Recordings are saved as JSONL files named `host_port_YYYYMMDD_HHMMSS.jsonl`
+- Each snapshot (every refresh interval) is captured with all panel data
+- Old recordings are automatically cleaned up based on retention setting (default: 1 hour)
+
+### Replay a session
 
 ```bash
-pg_glimpse --replay recording.jsonl
+pg_glimpse --replay ~/.local/share/pg_glimpse/recordings/localhost_5432_20260205_143022.jsonl
 ```
+
+All panels, sorting, filtering, and inspection work identically in replay mode. Actions that modify the database (Cancel/Kill) are disabled.
+
+### Replay controls
 
 | Key | Action |
 |-----|--------|
 | `Space` | Play / pause |
-| `←` / `h` | Step back |
-| `→` / `l` | Step forward |
-| `<` / `>` | Adjust speed |
+| `←` / `h` | Step back one snapshot |
+| `→` / `l` | Step forward one snapshot |
+| `<` / `>` | Adjust playback speed (0.25x – 8x) |
 | `g` / `G` | Jump to start / end |
 
 ## Configuration
