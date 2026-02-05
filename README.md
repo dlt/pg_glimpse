@@ -142,7 +142,7 @@ Press `,` to open the config overlay. Use `Left`/`Right` to adjust values. Setti
 | Setting | Range | Default |
 |---------|-------|---------|
 | Graph Marker | Braille / HalfBlock / Block | Braille |
-| Color Theme | Tokyo Night / Dracula / Nord / Solarized Dark | Tokyo Night |
+| Color Theme | Tokyo Night / Dracula / Nord / Solarized Dark / Solarized Light / Catppuccin Latte | Tokyo Night |
 | Refresh Interval | 1-60s | 2s |
 | Warn Duration | 0.1s - danger threshold | 1.0s |
 | Danger Duration | warn threshold - 300s | 10.0s |
