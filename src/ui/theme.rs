@@ -85,6 +85,22 @@ impl Theme {
         ACTIVE_THEME.read().unwrap().highlight_bg
     }
 
+    pub fn sql_keyword() -> Color {
+        ACTIVE_THEME.read().unwrap().sql_keyword
+    }
+
+    pub fn sql_string() -> Color {
+        ACTIVE_THEME.read().unwrap().sql_string
+    }
+
+    pub fn sql_number() -> Color {
+        ACTIVE_THEME.read().unwrap().sql_number
+    }
+
+    pub fn sql_comment() -> Color {
+        ACTIVE_THEME.read().unwrap().sql_comment
+    }
+
     pub fn title_style() -> Style {
         Style::default()
             .fg(Self::fg())

@@ -122,6 +122,11 @@ pub struct ThemeColors {
     pub state_idle_txn: Color,
     pub overlay_bg: Color,
     pub highlight_bg: Color,
+    // SQL syntax highlighting
+    pub sql_keyword: Color,
+    pub sql_string: Color,
+    pub sql_number: Color,
+    pub sql_comment: Color,
 }
 
 impl ThemeColors {
@@ -143,6 +148,10 @@ impl ThemeColors {
         state_idle_txn: Color::Yellow,
         overlay_bg: Color::Rgb(26, 27, 38),
         highlight_bg: Color::Rgb(40, 42, 64),
+        sql_keyword: Color::Rgb(198, 120, 221),  // purple
+        sql_string: Color::Rgb(152, 195, 121),   // green
+        sql_number: Color::Rgb(209, 154, 102),   // orange
+        sql_comment: Color::Rgb(92, 99, 112),    // gray
     };
 
     pub fn dracula() -> Self {
@@ -164,6 +173,10 @@ impl ThemeColors {
             state_idle_txn: Color::Rgb(241, 250, 140),
             overlay_bg: Color::Rgb(33, 34, 44),
             highlight_bg: Color::Rgb(55, 57, 74),
+            sql_keyword: Color::Rgb(255, 121, 198),  // pink
+            sql_string: Color::Rgb(241, 250, 140),   // yellow
+            sql_number: Color::Rgb(189, 147, 249),   // purple
+            sql_comment: Color::Rgb(98, 114, 164),   // comment gray
         }
     }
 
@@ -186,6 +199,10 @@ impl ThemeColors {
             state_idle_txn: Color::Rgb(235, 203, 139),
             overlay_bg: Color::Rgb(38, 44, 57),
             highlight_bg: Color::Rgb(59, 66, 82),
+            sql_keyword: Color::Rgb(180, 142, 173),  // purple (nord15)
+            sql_string: Color::Rgb(163, 190, 140),   // green (nord14)
+            sql_number: Color::Rgb(208, 135, 112),   // orange (nord12)
+            sql_comment: Color::Rgb(76, 86, 106),    // gray (nord3)
         }
     }
 
@@ -208,6 +225,10 @@ impl ThemeColors {
             state_idle_txn: Color::Rgb(181, 137, 0),
             overlay_bg: Color::Rgb(0, 36, 46),
             highlight_bg: Color::Rgb(7, 54, 66),
+            sql_keyword: Color::Rgb(108, 113, 196),  // violet
+            sql_string: Color::Rgb(42, 161, 152),    // cyan
+            sql_number: Color::Rgb(203, 75, 22),     // orange
+            sql_comment: Color::Rgb(88, 110, 117),   // base01
         }
     }
 
@@ -230,6 +251,10 @@ impl ThemeColors {
             state_idle_txn: Color::Rgb(181, 137, 0),
             overlay_bg: Color::Rgb(253, 246, 227),   // base3
             highlight_bg: Color::Rgb(238, 232, 213), // base2
+            sql_keyword: Color::Rgb(108, 113, 196),  // violet
+            sql_string: Color::Rgb(42, 161, 152),    // cyan
+            sql_number: Color::Rgb(203, 75, 22),     // orange
+            sql_comment: Color::Rgb(147, 161, 161),  // base1
         }
     }
 
@@ -252,6 +277,10 @@ impl ThemeColors {
             state_idle_txn: Color::Rgb(223, 142, 29),
             overlay_bg: Color::Rgb(239, 241, 245),   // base
             highlight_bg: Color::Rgb(220, 224, 232), // surface0
+            sql_keyword: Color::Rgb(136, 57, 239),   // mauve
+            sql_string: Color::Rgb(64, 160, 43),     // green
+            sql_number: Color::Rgb(254, 100, 11),    // peach
+            sql_comment: Color::Rgb(140, 143, 161),  // overlay0
         }
     }
 }

@@ -643,10 +643,10 @@ const SQL_KEYWORDS: &[&str] = &[
 
 /// Highlight SQL syntax in the given text, returning styled spans
 fn highlight_sql(text: &str, indent: &str) -> Vec<Span<'static>> {
-    let keyword_style = Style::default().fg(Color::Rgb(198, 120, 221)); // purple for keywords
-    let string_style = Style::default().fg(Color::Rgb(152, 195, 121));  // green for strings
-    let number_style = Style::default().fg(Color::Rgb(209, 154, 102));  // orange for numbers
-    let comment_style = Style::default().fg(Color::DarkGray);           // gray for comments
+    let keyword_style = Style::default().fg(Theme::sql_keyword());
+    let string_style = Style::default().fg(Theme::sql_string());
+    let number_style = Style::default().fg(Theme::sql_number());
+    let comment_style = Style::default().fg(Theme::sql_comment());
     let default_style = Style::default().fg(Theme::fg());
 
     let mut spans: Vec<Span<'static>> = vec![Span::styled(indent.to_string(), default_style)];
