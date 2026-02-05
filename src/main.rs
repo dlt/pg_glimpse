@@ -14,8 +14,11 @@ use cli::Cli;
 use color_eyre::Result;
 use config::AppConfig;
 use crossterm::event::KeyCode;
+use db::models::PgSnapshot;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio::sync::mpsc;
 use ui::theme;
 
 fn main() -> Result<()> {
@@ -99,40 +102,74 @@ async fn run(cli: Cli) -> Result<()> {
         server_info,
     );
 
-    let mut terminal = ratatui::init();
-    let mut events = event::EventHandler::new(Duration::from_millis(50));
-    let mut tick_interval = tokio::time::interval(Duration::from_secs(refresh));
-
     let extensions = app.server_info.extensions;
 
-    // Initial fetch
-    match db::queries::fetch_snapshot(&client, &extensions).await {
-        Ok(snap) => {
-            if let Some(ref mut rec) = recorder {
-                let _ = rec.record(&snap);
-            }
-            app.update(snap);
-        }
-        Err(e) => app.update_error(e.to_string()),
+    // Channel for DB commands and results
+    enum DbCommand {
+        FetchSnapshot,
+        CancelQuery(i32),
+        TerminateBackend(i32),
     }
+    #[allow(clippy::large_enum_variant)]
+    enum DbResult {
+        Snapshot(Result<PgSnapshot, String>),
+        CancelQuery(i32, Result<bool, String>),
+        TerminateBackend(i32, Result<bool, String>),
+    }
+
+    let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel::<DbCommand>();
+    let (result_tx, mut result_rx) = mpsc::unbounded_channel::<DbResult>();
+    let client = Arc::new(client);
+    let db_client = Arc::clone(&client);
+
+    // Background task for DB operations
+    tokio::spawn(async move {
+        while let Some(cmd) = cmd_rx.recv().await {
+            let result = match cmd {
+                DbCommand::FetchSnapshot => {
+                    DbResult::Snapshot(
+                        db::queries::fetch_snapshot(&db_client, &extensions)
+                            .await
+                            .map_err(|e| e.to_string()),
+                    )
+                }
+                DbCommand::CancelQuery(pid) => {
+                    DbResult::CancelQuery(
+                        pid,
+                        db::queries::cancel_backend(&db_client, pid)
+                            .await
+                            .map_err(|e| e.to_string()),
+                    )
+                }
+                DbCommand::TerminateBackend(pid) => {
+                    DbResult::TerminateBackend(
+                        pid,
+                        db::queries::terminate_backend(&db_client, pid)
+                            .await
+                            .map_err(|e| e.to_string()),
+                    )
+                }
+            };
+            if result_tx.send(result).is_err() {
+                break;
+            }
+        }
+    });
+
+    // Initial fetch
+    let _ = cmd_tx.send(DbCommand::FetchSnapshot);
+
+    let mut terminal = ratatui::init();
+    let mut events = event::EventHandler::new(Duration::from_millis(10));
+    let mut tick_interval = tokio::time::interval(Duration::from_secs(refresh));
+    let mut refresh_interval_secs = refresh;
 
     while app.running {
         terminal.draw(|frame| ui::render(frame, &mut app))?;
 
         tokio::select! {
-            _ = tick_interval.tick() => {
-                if !app.paused {
-                    match db::queries::fetch_snapshot(&client, &extensions).await {
-                        Ok(snap) => {
-                            if let Some(ref mut rec) = recorder {
-                                let _ = rec.record(&snap);
-                            }
-                            app.update(snap);
-                        }
-                        Err(e) => app.update_error(e.to_string()),
-                    }
-                }
-            }
+            biased;
+
             event = events.next() => {
                 if let Some(evt) = event {
                     match evt {
@@ -143,75 +180,68 @@ async fn run(cli: Cli) -> Result<()> {
                     }
                 }
             }
+            result = result_rx.recv() => {
+                if let Some(res) = result {
+                    match res {
+                        DbResult::Snapshot(Ok(snap)) => {
+                            if let Some(ref mut rec) = recorder {
+                                let _ = rec.record(&snap);
+                            }
+                            app.update(snap);
+                        }
+                        DbResult::Snapshot(Err(e)) => {
+                            app.update_error(e);
+                        }
+                        DbResult::CancelQuery(pid, Ok(true)) => {
+                            app.status_message = Some(format!("Cancelled query on PID {}", pid));
+                            let _ = cmd_tx.send(DbCommand::FetchSnapshot);
+                        }
+                        DbResult::CancelQuery(pid, Ok(false)) => {
+                            app.status_message = Some(format!("PID {} not found or already finished", pid));
+                        }
+                        DbResult::CancelQuery(_, Err(e)) => {
+                            app.status_message = Some(format!("Cancel failed: {}", e));
+                        }
+                        DbResult::TerminateBackend(pid, Ok(true)) => {
+                            app.status_message = Some(format!("Terminated backend PID {}", pid));
+                            let _ = cmd_tx.send(DbCommand::FetchSnapshot);
+                        }
+                        DbResult::TerminateBackend(pid, Ok(false)) => {
+                            app.status_message = Some(format!("PID {} not found or already finished", pid));
+                        }
+                        DbResult::TerminateBackend(_, Err(e)) => {
+                            app.status_message = Some(format!("Terminate failed: {}", e));
+                        }
+                    }
+                }
+            }
+            _ = tick_interval.tick() => {
+                if !app.paused {
+                    let _ = cmd_tx.send(DbCommand::FetchSnapshot);
+                }
+            }
         }
 
         // Process pending actions
         if let Some(action) = app.pending_action.take() {
             match action {
                 AppAction::ForceRefresh => {
-                    match db::queries::fetch_snapshot(&client, &extensions).await {
-                        Ok(snap) => {
-                            if let Some(ref mut rec) = recorder {
-                                let _ = rec.record(&snap);
-                            }
-                            app.update(snap);
-                        }
-                        Err(e) => app.update_error(e.to_string()),
-                    }
+                    let _ = cmd_tx.send(DbCommand::FetchSnapshot);
                 }
                 AppAction::CancelQuery(pid) => {
-                    match db::queries::cancel_backend(&client, pid).await {
-                        Ok(true) => {
-                            app.status_message =
-                                Some(format!("Cancelled query on PID {}", pid));
-                        }
-                        Ok(false) => {
-                            app.status_message =
-                                Some(format!("PID {} not found or already finished", pid));
-                        }
-                        Err(e) => {
-                            app.status_message =
-                                Some(format!("Cancel failed: {}", e));
-                        }
-                    }
-                    // Refresh after action
-                    if let Ok(snap) = db::queries::fetch_snapshot(&client, &extensions).await {
-                        if let Some(ref mut rec) = recorder {
-                            let _ = rec.record(&snap);
-                        }
-                        app.update(snap);
-                    }
+                    let _ = cmd_tx.send(DbCommand::CancelQuery(pid));
                 }
                 AppAction::TerminateBackend(pid) => {
-                    match db::queries::terminate_backend(&client, pid).await {
-                        Ok(true) => {
-                            app.status_message =
-                                Some(format!("Terminated backend PID {}", pid));
-                        }
-                        Ok(false) => {
-                            app.status_message =
-                                Some(format!("PID {} not found or already finished", pid));
-                        }
-                        Err(e) => {
-                            app.status_message =
-                                Some(format!("Terminate failed: {}", e));
-                        }
-                    }
-                    // Refresh after action
-                    if let Ok(snap) = db::queries::fetch_snapshot(&client, &extensions).await {
-                        if let Some(ref mut rec) = recorder {
-                            let _ = rec.record(&snap);
-                        }
-                        app.update(snap);
-                    }
+                    let _ = cmd_tx.send(DbCommand::TerminateBackend(pid));
                 }
                 AppAction::SaveConfig => {
                     app.config.save();
                 }
                 AppAction::RefreshIntervalChanged => {
-                    tick_interval = tokio::time::interval(Duration::from_secs(
-                        app.config.refresh_interval_secs,
-                    ));
+                    if app.config.refresh_interval_secs != refresh_interval_secs {
+                        refresh_interval_secs = app.config.refresh_interval_secs;
+                        tick_interval = tokio::time::interval(Duration::from_secs(refresh_interval_secs));
+                    }
                 }
             }
         }
@@ -249,7 +279,7 @@ async fn run_replay(path: &Path, config: AppConfig) -> Result<()> {
     }
 
     let mut terminal = ratatui::init();
-    let mut events = event::EventHandler::new(Duration::from_millis(50));
+    let mut events = event::EventHandler::new(Duration::from_millis(10));
 
     let mut last_advance = Instant::now();
 
@@ -275,6 +305,8 @@ async fn run_replay(path: &Path, config: AppConfig) -> Result<()> {
 
         // Handle events with a short timeout so auto-advance works
         tokio::select! {
+            biased;
+
             event = events.next() => {
                 if let Some(evt) = event {
                     match evt {
@@ -289,7 +321,7 @@ async fn run_replay(path: &Path, config: AppConfig) -> Result<()> {
                     }
                 }
             }
-            _ = tokio::time::sleep(Duration::from_millis(50)) => {}
+            _ = tokio::time::sleep(Duration::from_millis(10)) => {}
         }
 
         // Process pending actions (only SaveConfig matters in replay)
