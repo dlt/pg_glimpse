@@ -132,9 +132,9 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
                 .fg(Color::DarkGray)
                 .add_modifier(Modifier::BOLD),
         )),
-        Line::from(Span::styled(
-            format!("  {}", q.query.clone().unwrap_or_else(|| "<no query>".into())),
-            Style::default().fg(Theme::fg()),
+        Line::from(highlight_sql(
+            q.query.as_deref().unwrap_or("<no query>"),
+            "  ",
         )),
         Line::from(""),
         Line::from(Span::styled(
@@ -231,10 +231,7 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
                 .fg(Color::DarkGray)
                 .add_modifier(Modifier::BOLD),
         )),
-        Line::from(Span::styled(
-            format!("  {}", idx.index_definition),
-            Style::default().fg(Theme::fg()),
-        )),
+        Line::from(highlight_sql(&idx.index_definition, "  ")),
     ];
 
     let paragraph = Paragraph::new(lines)
@@ -379,10 +376,7 @@ pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
         ]),
         Line::from(""),
         section("  Query"),
-        Line::from(Span::styled(
-            format!("  {}", stmt.query),
-            Style::default().fg(Theme::fg()),
-        )),
+        Line::from(highlight_sql(&stmt.query, "  ")),
         Line::from(""),
         section("  Execution"),
         Line::from(vec![
@@ -620,4 +614,170 @@ fn format_duration(secs: f64) -> String {
     } else {
         format!("{:.0}h {:.0}m", secs / 3600.0, (secs % 3600.0) / 60.0)
     }
+}
+
+/// SQL keywords to highlight
+const SQL_KEYWORDS: &[&str] = &[
+    "SELECT", "FROM", "WHERE", "AND", "OR", "NOT", "IN", "IS", "NULL", "AS",
+    "JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "FULL", "CROSS", "ON", "USING",
+    "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE", "TRUNCATE",
+    "CREATE", "ALTER", "DROP", "TABLE", "INDEX", "VIEW", "SCHEMA", "DATABASE",
+    "PRIMARY", "KEY", "FOREIGN", "REFERENCES", "UNIQUE", "CHECK", "DEFAULT",
+    "CONSTRAINT", "CASCADE", "RESTRICT", "GRANT", "REVOKE", "COMMIT", "ROLLBACK",
+    "BEGIN", "END", "TRANSACTION", "SAVEPOINT", "RELEASE",
+    "ORDER", "BY", "ASC", "DESC", "NULLS", "FIRST", "LAST",
+    "GROUP", "HAVING", "LIMIT", "OFFSET", "FETCH", "NEXT", "ROWS", "ONLY",
+    "UNION", "INTERSECT", "EXCEPT", "ALL", "DISTINCT", "EXISTS",
+    "CASE", "WHEN", "THEN", "ELSE", "COALESCE", "NULLIF", "CAST",
+    "TRUE", "FALSE", "LIKE", "ILIKE", "SIMILAR", "BETWEEN", "ANY", "SOME",
+    "WITH", "RECURSIVE", "RETURNING", "CONFLICT", "DO", "NOTHING",
+    "OVER", "PARTITION", "WINDOW", "FILTER", "WITHIN", "LATERAL",
+    "FOR", "SHARE", "NOWAIT", "SKIP", "LOCKED",
+    "EXPLAIN", "ANALYZE", "VERBOSE", "COSTS", "BUFFERS", "TIMING", "FORMAT",
+    "VACUUM", "REINDEX", "CLUSTER", "REFRESH", "MATERIALIZED",
+    "TRIGGER", "FUNCTION", "PROCEDURE", "RETURNS", "LANGUAGE", "SECURITY", "DEFINER",
+    "IF", "THEN", "ELSIF", "LOOP", "WHILE", "EXIT", "CONTINUE", "RETURN",
+    "DECLARE", "VARIABLE", "CONSTANT", "CURSOR", "EXCEPTION", "RAISE", "PERFORM",
+    "EXECUTE", "PREPARE", "DEALLOCATE",
+];
+
+/// Highlight SQL syntax in the given text, returning styled spans
+fn highlight_sql(text: &str, indent: &str) -> Vec<Span<'static>> {
+    let keyword_style = Style::default().fg(Color::Rgb(198, 120, 221)); // purple for keywords
+    let string_style = Style::default().fg(Color::Rgb(152, 195, 121));  // green for strings
+    let number_style = Style::default().fg(Color::Rgb(209, 154, 102));  // orange for numbers
+    let comment_style = Style::default().fg(Color::DarkGray);           // gray for comments
+    let default_style = Style::default().fg(Theme::fg());
+
+    let mut spans: Vec<Span<'static>> = vec![Span::styled(indent.to_string(), default_style)];
+    let chars: Vec<char> = text.chars().collect();
+    let len = chars.len();
+    let mut i = 0;
+
+    while i < len {
+        let c = chars[i];
+
+        // Check for single-line comment --
+        if c == '-' && i + 1 < len && chars[i + 1] == '-' {
+            let start = i;
+            while i < len && chars[i] != '\n' {
+                i += 1;
+            }
+            let comment: String = chars[start..i].iter().collect();
+            spans.push(Span::styled(comment, comment_style));
+            continue;
+        }
+
+        // Check for multi-line comment /* */
+        if c == '/' && i + 1 < len && chars[i + 1] == '*' {
+            let start = i;
+            i += 2;
+            while i + 1 < len && !(chars[i] == '*' && chars[i + 1] == '/') {
+                i += 1;
+            }
+            if i + 1 < len {
+                i += 2; // skip */
+            }
+            let comment: String = chars[start..i].iter().collect();
+            spans.push(Span::styled(comment, comment_style));
+            continue;
+        }
+
+        // Check for string literal
+        if c == '\'' {
+            let start = i;
+            i += 1;
+            while i < len {
+                if chars[i] == '\'' {
+                    if i + 1 < len && chars[i + 1] == '\'' {
+                        i += 2; // escaped quote
+                    } else {
+                        i += 1;
+                        break;
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+            let s: String = chars[start..i].iter().collect();
+            spans.push(Span::styled(s, string_style));
+            continue;
+        }
+
+        // Check for dollar-quoted string $tag$...$tag$
+        if c == '$' {
+            let tag_start = i;
+            i += 1;
+            while i < len && (chars[i].is_alphanumeric() || chars[i] == '_') {
+                i += 1;
+            }
+            if i < len && chars[i] == '$' {
+                i += 1;
+                let tag: String = chars[tag_start..i].iter().collect();
+                // Find closing tag
+                while i < len {
+                    if chars[i] == '$' {
+                        let mut matches = true;
+                        for (j, tc) in tag.chars().enumerate() {
+                            if i + j >= len || chars[i + j] != tc {
+                                matches = false;
+                                break;
+                            }
+                        }
+                        if matches {
+                            i += tag.len();
+                            break;
+                        }
+                    }
+                    i += 1;
+                }
+                let s: String = chars[tag_start..i].iter().collect();
+                spans.push(Span::styled(s, string_style));
+                continue;
+            } else {
+                // Not a dollar-quoted string, just a $
+                i = tag_start;
+            }
+        }
+
+        // Check for number
+        if c.is_ascii_digit() || (c == '.' && i + 1 < len && chars[i + 1].is_ascii_digit()) {
+            let start = i;
+            while i < len && (chars[i].is_ascii_digit() || chars[i] == '.' || chars[i] == 'e' || chars[i] == 'E' || chars[i] == '+' || chars[i] == '-') {
+                // Handle scientific notation carefully
+                if (chars[i] == '+' || chars[i] == '-') && i > start {
+                    let prev = chars[i - 1];
+                    if prev != 'e' && prev != 'E' {
+                        break;
+                    }
+                }
+                i += 1;
+            }
+            let num: String = chars[start..i].iter().collect();
+            spans.push(Span::styled(num, number_style));
+            continue;
+        }
+
+        // Check for identifier/keyword
+        if c.is_alphabetic() || c == '_' {
+            let start = i;
+            while i < len && (chars[i].is_alphanumeric() || chars[i] == '_') {
+                i += 1;
+            }
+            let word: String = chars[start..i].iter().collect();
+            let upper = word.to_uppercase();
+            if SQL_KEYWORDS.contains(&upper.as_str()) {
+                spans.push(Span::styled(word, keyword_style));
+            } else {
+                spans.push(Span::styled(word, default_style));
+            }
+            continue;
+        }
+
+        // Any other character
+        spans.push(Span::styled(c.to_string(), default_style));
+        i += 1;
+    }
+
+    spans
 }
