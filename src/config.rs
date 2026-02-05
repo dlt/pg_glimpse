@@ -53,6 +53,8 @@ pub enum ColorTheme {
     Dracula,
     Nord,
     SolarizedDark,
+    SolarizedLight,
+    CatppuccinLatte,
 }
 
 impl ColorTheme {
@@ -61,16 +63,20 @@ impl ColorTheme {
             Self::TokyoNight => Self::Dracula,
             Self::Dracula => Self::Nord,
             Self::Nord => Self::SolarizedDark,
-            Self::SolarizedDark => Self::TokyoNight,
+            Self::SolarizedDark => Self::SolarizedLight,
+            Self::SolarizedLight => Self::CatppuccinLatte,
+            Self::CatppuccinLatte => Self::TokyoNight,
         }
     }
 
     pub fn prev(self) -> Self {
         match self {
-            Self::TokyoNight => Self::SolarizedDark,
+            Self::TokyoNight => Self::CatppuccinLatte,
             Self::Dracula => Self::TokyoNight,
             Self::Nord => Self::Dracula,
             Self::SolarizedDark => Self::Nord,
+            Self::SolarizedLight => Self::SolarizedDark,
+            Self::CatppuccinLatte => Self::SolarizedLight,
         }
     }
 
@@ -80,6 +86,8 @@ impl ColorTheme {
             Self::Dracula => "Dracula",
             Self::Nord => "Nord",
             Self::SolarizedDark => "Solarized Dark",
+            Self::SolarizedLight => "Solarized Light",
+            Self::CatppuccinLatte => "Catppuccin Latte",
         }
     }
 
@@ -89,6 +97,8 @@ impl ColorTheme {
             Self::Dracula => ThemeColors::dracula(),
             Self::Nord => ThemeColors::nord(),
             Self::SolarizedDark => ThemeColors::solarized_dark(),
+            Self::SolarizedLight => ThemeColors::solarized_light(),
+            Self::CatppuccinLatte => ThemeColors::catppuccin_latte(),
         }
     }
 }
@@ -198,6 +208,50 @@ impl ThemeColors {
             state_idle_txn: Color::Rgb(181, 137, 0),
             overlay_bg: Color::Rgb(0, 36, 46),
             highlight_bg: Color::Rgb(7, 54, 66),
+        }
+    }
+
+    pub fn solarized_light() -> Self {
+        Self {
+            header_bg: Color::Rgb(238, 232, 213),    // base2
+            fg: Color::Rgb(101, 123, 131),           // base00
+            border_active: Color::Rgb(38, 139, 210), // blue
+            border_warn: Color::Rgb(181, 137, 0),    // yellow
+            border_danger: Color::Rgb(220, 50, 47),  // red
+            border_ok: Color::Rgb(133, 153, 0),      // green
+            border_dim: Color::Rgb(147, 161, 161),   // base1
+            graph_connections: Color::Rgb(38, 139, 210),
+            graph_cache: Color::Rgb(42, 161, 152),   // cyan
+            graph_latency: Color::Rgb(133, 153, 0),
+            duration_ok: Color::Rgb(133, 153, 0),
+            duration_warn: Color::Rgb(181, 137, 0),
+            duration_danger: Color::Rgb(220, 50, 47),
+            state_active: Color::Rgb(133, 153, 0),
+            state_idle_txn: Color::Rgb(181, 137, 0),
+            overlay_bg: Color::Rgb(253, 246, 227),   // base3
+            highlight_bg: Color::Rgb(238, 232, 213), // base2
+        }
+    }
+
+    pub fn catppuccin_latte() -> Self {
+        Self {
+            header_bg: Color::Rgb(230, 233, 239),    // mantle
+            fg: Color::Rgb(76, 79, 105),             // text
+            border_active: Color::Rgb(30, 102, 245), // blue
+            border_warn: Color::Rgb(223, 142, 29),   // yellow
+            border_danger: Color::Rgb(210, 15, 57),  // red
+            border_ok: Color::Rgb(64, 160, 43),      // green
+            border_dim: Color::Rgb(140, 143, 161),   // overlay0
+            graph_connections: Color::Rgb(30, 102, 245),
+            graph_cache: Color::Rgb(23, 146, 153),   // teal
+            graph_latency: Color::Rgb(64, 160, 43),
+            duration_ok: Color::Rgb(64, 160, 43),
+            duration_warn: Color::Rgb(223, 142, 29),
+            duration_danger: Color::Rgb(210, 15, 57),
+            state_active: Color::Rgb(64, 160, 43),
+            state_idle_txn: Color::Rgb(223, 142, 29),
+            overlay_bg: Color::Rgb(239, 241, 245),   // base
+            highlight_bg: Color::Rgb(220, 224, 232), // surface0
         }
     }
 }
