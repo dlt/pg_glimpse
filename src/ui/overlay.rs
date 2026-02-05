@@ -482,7 +482,7 @@ pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
-    let popup = centered_rect(50, 45, area);
+    let popup = centered_rect(70, 75, area);
     frame.render_widget(Clear, popup);
 
     let block = overlay_block(
@@ -490,7 +490,18 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
         Theme::border_active(),
     );
 
-    let mut lines = vec![Line::from("")];
+    let logo_style = Style::default().fg(Theme::border_active());
+    let mut lines = vec![
+        Line::from(""),
+        Line::from(Span::styled(" ██████╗  ██████╗     ██████╗ ██╗     ██╗███╗   ███╗██████╗ ███████╗███████╗", logo_style)),
+        Line::from(Span::styled(" ██╔══██╗██╔════╝    ██╔════╝ ██║     ██║████╗ ████║██╔══██╗██╔════╝██╔════╝", logo_style)),
+        Line::from(Span::styled(" ██████╔╝██║  ███╗   ██║  ███╗██║     ██║██╔████╔██║██████╔╝███████╗█████╗  ", logo_style)),
+        Line::from(Span::styled(" ██╔═══╝ ██║   ██║   ██║   ██║██║     ██║██║╚██╔╝██║██╔═══╝ ╚════██║██╔══╝  ", logo_style)),
+        Line::from(Span::styled(" ██║     ╚██████╔╝   ╚██████╔╝███████╗██║██║ ╚═╝ ██║██║     ███████║███████╗", logo_style)),
+        Line::from(Span::styled(" ╚═╝      ╚═════╝     ╚═════╝ ╚══════╝╚═╝╚═╝     ╚═╝╚═╝     ╚══════╝╚══════╝", logo_style)),
+        Line::from(""),
+        Line::from(""),
+    ];
 
     for (i, item) in ConfigItem::ALL.iter().enumerate() {
         let selected = i == app.config_selected;
@@ -536,6 +547,37 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled(format!("\u{25c4} {} \u{25ba}", value_str), value_style),
         ]));
     }
+
+    // About section
+    let label_style = Style::default().fg(Color::DarkGray);
+    let value_style = Style::default().fg(Theme::fg());
+    let link_style = Style::default().fg(Theme::border_active());
+    let section_style = Style::default().fg(Theme::border_warn()).add_modifier(Modifier::BOLD);
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled("  About", section_style)));
+    lines.push(Line::from(vec![
+        Span::styled("  Version:    ", label_style),
+        Span::styled(env!("CARGO_PKG_VERSION"), value_style),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled("  License:    ", label_style),
+        Span::styled("MIT", value_style),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled("  Built with: ", label_style),
+        Span::styled("Rust + ratatui + tokio-postgres", value_style),
+    ]));
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::styled("  GitHub:     ", label_style),
+        Span::styled("github.com/dlt/pg_glimpse", link_style),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled("  Issues:     ", label_style),
+        Span::styled("github.com/dlt/pg_glimpse/issues", link_style),
+    ]));
 
     let paragraph = Paragraph::new(lines).block(block);
     frame.render_widget(paragraph, popup);
