@@ -57,7 +57,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     graph::render_line_chart(
         frame,
         areas.graph_br,
-        "Avg Query Time",
+        "Avg Duration",
         &avg_label,
         &avg_data,
         Theme::graph_latency(),

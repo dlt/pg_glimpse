@@ -328,7 +328,7 @@ impl App {
         let active: Vec<&_> = snapshot
             .active_queries
             .iter()
-            .filter(|q| q.state.as_deref() == Some("active"))
+            .filter(|q| matches!(q.state.as_deref(), Some("active") | Some("idle in transaction")))
             .collect();
         let avg_ms = if active.is_empty() {
             0u64
