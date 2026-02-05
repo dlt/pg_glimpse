@@ -44,6 +44,14 @@ pub struct Cli {
     pub history_length: usize,
 }
 
+/// Connection display info for the header
+pub struct ConnectionInfo {
+    pub host: String,
+    pub port: u16,
+    pub dbname: String,
+    pub user: String,
+}
+
 impl Cli {
     pub fn pg_config(&self) -> Result<tokio_postgres::Config, tokio_postgres::Error> {
         if let Some(ref conn_str) = self.connection_string {
@@ -58,6 +66,46 @@ impl Cli {
                 config.password(pw);
             }
             Ok(config)
+        }
+    }
+
+    /// Extract connection info for display, parsing from connection string if provided
+    pub fn connection_info(&self) -> ConnectionInfo {
+        if let Some(ref conn_str) = self.connection_string {
+            if let Ok(config) = conn_str.parse::<tokio_postgres::Config>() {
+                let host = config
+                    .get_hosts()
+                    .first()
+                    .map(|h| match h {
+                        tokio_postgres::config::Host::Tcp(s) => s.clone(),
+                        #[cfg(unix)]
+                        tokio_postgres::config::Host::Unix(p) => {
+                            p.to_string_lossy().into_owned()
+                        }
+                    })
+                    .unwrap_or_else(|| self.host.clone());
+                let port = config.get_ports().first().copied().unwrap_or(self.port);
+                let dbname = config
+                    .get_dbname()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| self.dbname.clone());
+                let user = config
+                    .get_user()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| self.user.clone());
+                return ConnectionInfo {
+                    host,
+                    port,
+                    dbname,
+                    user,
+                };
+            }
+        }
+        ConnectionInfo {
+            host: self.host.clone(),
+            port: self.port,
+            dbname: self.dbname.clone(),
+            user: self.user.clone(),
         }
     }
 }

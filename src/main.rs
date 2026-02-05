@@ -49,10 +49,11 @@ async fn run(cli: Cli) -> Result<()> {
     let (client, connection) = match pg_config.connect(tokio_postgres::NoTls).await {
         Ok(c) => c,
         Err(e) => {
+            let info = cli.connection_info();
             eprintln!("Error: could not connect to PostgreSQL: {e}\n");
             eprintln!(
                 "Connection: {}:{}/{}",
-                cli.host, cli.port, cli.dbname
+                info.host, info.port, info.dbname
             );
             eprintln!("\nTry: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword");
             eprintln!("See: pg_glimpse --help");
@@ -80,15 +81,18 @@ async fn run(cli: Cli) -> Result<()> {
     // Fetch server info and extensions at startup
     let server_info = db::queries::fetch_server_info(&client).await?;
 
+    // Get connection info for display
+    let conn_info = cli.connection_info();
+
     // Start recorder
     let mut recorder =
-        recorder::Recorder::new(&cli.host, cli.port, &cli.dbname, &cli.user, &server_info).ok();
+        recorder::Recorder::new(&conn_info.host, conn_info.port, &conn_info.dbname, &conn_info.user, &server_info).ok();
 
     let mut app = app::App::new(
-        cli.host.clone(),
-        cli.port,
-        cli.dbname.clone(),
-        cli.user.clone(),
+        conn_info.host,
+        conn_info.port,
+        conn_info.dbname,
+        conn_info.user,
         refresh,
         cli.history_length,
         config,
