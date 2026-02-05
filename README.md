@@ -179,6 +179,12 @@ Automatically detects and uses:
 - **pg_stat_kcache** — OS-level cache stats
 - **pg_wait_sampling** — wait event profiling
 
+## FAQ
+
+**Did you build it or did Claude?**
+
+Yes.
+
 ## License
 
 [MIT](LICENSE)
