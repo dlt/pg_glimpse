@@ -152,10 +152,13 @@ pub enum StatementSortColumn {
     TotalTime,
     MeanTime,
     MaxTime,
+    Stddev,
     Calls,
     Rows,
-    RowsPerCall,
-    Buffers,
+    HitRatio,
+    SharedReads,
+    IoTime,
+    Temp,
 }
 
 impl StatementSortColumn {
@@ -163,11 +166,14 @@ impl StatementSortColumn {
         match self {
             Self::TotalTime => Self::MeanTime,
             Self::MeanTime => Self::MaxTime,
-            Self::MaxTime => Self::Calls,
+            Self::MaxTime => Self::Stddev,
+            Self::Stddev => Self::Calls,
             Self::Calls => Self::Rows,
-            Self::Rows => Self::RowsPerCall,
-            Self::RowsPerCall => Self::Buffers,
-            Self::Buffers => Self::TotalTime,
+            Self::Rows => Self::HitRatio,
+            Self::HitRatio => Self::SharedReads,
+            Self::SharedReads => Self::IoTime,
+            Self::IoTime => Self::Temp,
+            Self::Temp => Self::TotalTime,
         }
     }
 
@@ -176,10 +182,13 @@ impl StatementSortColumn {
             Self::TotalTime => "Total Time",
             Self::MeanTime => "Mean Time",
             Self::MaxTime => "Max Time",
+            Self::Stddev => "Stddev",
             Self::Calls => "Calls",
             Self::Rows => "Rows",
-            Self::RowsPerCall => "Rows/Call",
-            Self::Buffers => "Buffers",
+            Self::HitRatio => "Hit %",
+            Self::SharedReads => "Reads",
+            Self::IoTime => "I/O Time",
+            Self::Temp => "Temp",
         }
     }
 }
@@ -532,6 +541,13 @@ impl App {
                     .unwrap_or(std::cmp::Ordering::Equal);
                 if asc { cmp } else { cmp.reverse() }
             }),
+            StatementSortColumn::Stddev => indices.sort_by(|&a, &b| {
+                let cmp = snap.stat_statements[a]
+                    .stddev_exec_time
+                    .partial_cmp(&snap.stat_statements[b].stddev_exec_time)
+                    .unwrap_or(std::cmp::Ordering::Equal);
+                if asc { cmp } else { cmp.reverse() }
+            }),
             StatementSortColumn::Calls => indices.sort_by(|&a, &b| {
                 let cmp = snap.stat_statements[a]
                     .calls
@@ -544,21 +560,34 @@ impl App {
                     .cmp(&snap.stat_statements[b].rows);
                 if asc { cmp } else { cmp.reverse() }
             }),
-            StatementSortColumn::RowsPerCall => indices.sort_by(|&a, &b| {
-                let rpc = |s: &crate::db::models::StatStatement| {
-                    if s.calls > 0 { s.rows as f64 / s.calls as f64 } else { 0.0 }
-                };
-                let cmp = rpc(&snap.stat_statements[a])
-                    .partial_cmp(&rpc(&snap.stat_statements[b]))
+            StatementSortColumn::HitRatio => indices.sort_by(|&a, &b| {
+                let cmp = snap.stat_statements[a]
+                    .hit_ratio
+                    .partial_cmp(&snap.stat_statements[b].hit_ratio)
                     .unwrap_or(std::cmp::Ordering::Equal);
                 if asc { cmp } else { cmp.reverse() }
             }),
-            StatementSortColumn::Buffers => indices.sort_by(|&a, &b| {
-                let bufs = |s: &crate::db::models::StatStatement| {
-                    s.shared_blks_hit + s.shared_blks_read
+            StatementSortColumn::SharedReads => indices.sort_by(|&a, &b| {
+                let cmp = snap.stat_statements[a]
+                    .shared_blks_read
+                    .cmp(&snap.stat_statements[b].shared_blks_read);
+                if asc { cmp } else { cmp.reverse() }
+            }),
+            StatementSortColumn::IoTime => indices.sort_by(|&a, &b| {
+                let io = |s: &crate::db::models::StatStatement| {
+                    s.blk_read_time + s.blk_write_time
                 };
-                let cmp = bufs(&snap.stat_statements[a])
-                    .cmp(&bufs(&snap.stat_statements[b]));
+                let cmp = io(&snap.stat_statements[a])
+                    .partial_cmp(&io(&snap.stat_statements[b]))
+                    .unwrap_or(std::cmp::Ordering::Equal);
+                if asc { cmp } else { cmp.reverse() }
+            }),
+            StatementSortColumn::Temp => indices.sort_by(|&a, &b| {
+                let temp = |s: &crate::db::models::StatStatement| {
+                    s.temp_blks_read + s.temp_blks_written
+                };
+                let cmp = temp(&snap.stat_statements[a])
+                    .cmp(&temp(&snap.stat_statements[b]));
                 if asc { cmp } else { cmp.reverse() }
             }),
         }

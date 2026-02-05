@@ -5,10 +5,10 @@ use ratatui::widgets::{Block, BorderType, Borders, Cell, Paragraph, Row, Table};
 use ratatui::Frame;
 
 use crate::app::{App, BottomPanel, IndexSortColumn, StatementSortColumn, TableStatSortColumn, ViewMode};
+use super::overlay::highlight_sql_inline;
 use super::theme::Theme;
 use super::util::{
-    collapse_whitespace, format_bytes, format_lag, format_number, format_time_ms, lag_color,
-    truncate,
+    format_bytes, format_lag, format_number, format_time_ms, lag_color, truncate,
 };
 
 fn panel_block(title: &str) -> Block<'_> {
@@ -618,29 +618,41 @@ pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
             sort_indicator(StatementSortColumn::MaxTime)
         )),
         Cell::from(format!(
+            "Stddev{}",
+            sort_indicator(StatementSortColumn::Stddev)
+        )),
+        Cell::from(format!(
             "Rows{}",
             sort_indicator(StatementSortColumn::Rows)
         )),
         Cell::from(format!(
-            "Rows/Call{}",
-            sort_indicator(StatementSortColumn::RowsPerCall)
+            "Hit%{}",
+            sort_indicator(StatementSortColumn::HitRatio)
         )),
         Cell::from(format!(
-            "Buffers{}",
-            sort_indicator(StatementSortColumn::Buffers)
+            "Reads{}",
+            sort_indicator(StatementSortColumn::SharedReads)
         )),
-        Cell::from("Hit %"),
-        Cell::from("Stddev"),
-        Cell::from("Temp Blks"),
+        Cell::from(format!(
+            "I/O{}",
+            sort_indicator(StatementSortColumn::IoTime)
+        )),
+        Cell::from(format!(
+            "Temp{}",
+            sort_indicator(StatementSortColumn::Temp)
+        )),
     ])
     .style(Theme::title_style())
     .bottom_margin(0);
+
+    // Calculate query column width: area width - borders - highlight symbol - fixed columns
+    // Fixed columns: 7+9+9+9+8+7+5+7+9+7 = 77
+    let query_width = (area.width as usize).saturating_sub(2 + 2 + 77).max(20);
 
     let rows: Vec<Row> = indices
         .iter()
         .map(|&i| {
             let stmt = &snap.stat_statements[i];
-            let query_display = collapse_whitespace(&stmt.query);
             let hit_color = if stmt.hit_ratio >= 0.99 {
                 Theme::border_ok()
             } else if stmt.hit_ratio >= 0.90 {
@@ -648,47 +660,62 @@ pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
             } else {
                 Theme::border_danger()
             };
-            let temp_color = if stmt.temp_blks_written > 0 {
+            // Max time: orange if >2x mean (indicates spiky query)
+            let max_color = if stmt.max_exec_time > stmt.mean_exec_time * 2.0 {
                 Theme::border_warn()
             } else {
                 Theme::fg()
             };
-            let rows_per_call = if stmt.calls > 0 {
-                format!("{:.1}", stmt.rows as f64 / stmt.calls as f64)
+            let reads_color = if stmt.shared_blks_read > 1000 {
+                Theme::border_warn()
             } else {
-                "-".into()
+                Theme::fg()
             };
-            let total_bufs = stmt.shared_blks_hit + stmt.shared_blks_read;
+            let io_time = stmt.blk_read_time + stmt.blk_write_time;
+            let io_color = if io_time > 1000.0 {
+                Theme::border_warn()
+            } else {
+                Theme::fg()
+            };
+            let temp_total = stmt.temp_blks_read + stmt.temp_blks_written;
+            let temp_color = if temp_total > 0 {
+                Theme::border_warn()
+            } else {
+                Theme::fg()
+            };
             Row::new(vec![
-                Cell::from(truncate(&query_display, 50).to_string()),
-                Cell::from(stmt.calls.to_string()),
+                Cell::from(Line::from(highlight_sql_inline(&stmt.query, query_width))),
+                Cell::from(format_number(stmt.calls)),
                 Cell::from(format_time_ms(stmt.total_exec_time)),
                 Cell::from(format_time_ms(stmt.mean_exec_time)),
-                Cell::from(format_time_ms(stmt.max_exec_time)),
-                Cell::from(stmt.rows.to_string()),
-                Cell::from(rows_per_call),
-                Cell::from(format_number(total_bufs)),
-                Cell::from(format!("{:.1}%", stmt.hit_ratio * 100.0))
-                    .style(Style::default().fg(hit_color)),
+                Cell::from(format_time_ms(stmt.max_exec_time))
+                    .style(Style::default().fg(max_color)),
                 Cell::from(format_time_ms(stmt.stddev_exec_time)),
-                Cell::from(stmt.temp_blks_written.to_string())
+                Cell::from(format_number(stmt.rows)),
+                Cell::from(format!("{:.0}%", stmt.hit_ratio * 100.0))
+                    .style(Style::default().fg(hit_color)),
+                Cell::from(format_number(stmt.shared_blks_read))
+                    .style(Style::default().fg(reads_color)),
+                Cell::from(format_time_ms(io_time))
+                    .style(Style::default().fg(io_color)),
+                Cell::from(format_number(temp_total))
                     .style(Style::default().fg(temp_color)),
             ])
         })
         .collect();
 
     let widths = [
-        Constraint::Min(20),
+        Constraint::Fill(1),
+        Constraint::Length(7),
         Constraint::Length(9),
-        Constraint::Length(11),
-        Constraint::Length(11),
-        Constraint::Length(11),
         Constraint::Length(9),
-        Constraint::Length(10),
+        Constraint::Length(9),
+        Constraint::Length(8),
+        Constraint::Length(7),
+        Constraint::Length(5),
+        Constraint::Length(7),
         Constraint::Length(9),
         Constraint::Length(7),
-        Constraint::Length(11),
-        Constraint::Length(10),
     ];
 
     let table = Table::new(rows, widths)
