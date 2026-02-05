@@ -49,6 +49,7 @@ pub enum ViewMode {
     Inspect,
     IndexInspect,
     StatementInspect,
+    ReplicationInspect,
     ConfirmCancel(i32),
     ConfirmKill(i32),
     Config,
@@ -211,6 +212,7 @@ pub struct App {
     pub table_stat_table_state: TableState,
     pub table_stat_sort_column: TableStatSortColumn,
     pub table_stat_sort_ascending: bool,
+    pub replication_table_state: TableState,
 
     pub connection_history: RingBuffer<u64>,
     pub avg_query_time_history: RingBuffer<u64>,
@@ -274,6 +276,7 @@ impl App {
             table_stat_table_state: TableState::default(),
             table_stat_sort_column: TableStatSortColumn::DeadTuples,
             table_stat_sort_ascending: false,
+            replication_table_state: TableState::default(),
             connection_history: RingBuffer::new(history_len),
             avg_query_time_history: RingBuffer::new(history_len),
             hit_ratio_history: RingBuffer::new(history_len),
@@ -710,6 +713,7 @@ impl App {
             BottomPanel::Indexes => self.index_table_state.select(Some(0)),
             BottomPanel::Statements => self.stmt_table_state.select(Some(0)),
             BottomPanel::TableStats => self.table_stat_table_state.select(Some(0)),
+            BottomPanel::Replication => self.replication_table_state.select(Some(0)),
             _ => {}
         }
     }
@@ -877,12 +881,42 @@ impl App {
         }
     }
 
+    fn handle_replication_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                let i = self.replication_table_state.selected().unwrap_or(0);
+                self.replication_table_state.select(Some(i.saturating_sub(1)));
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let max = self
+                    .snapshot
+                    .as_ref()
+                    .map(|s| s.replication.len())
+                    .unwrap_or(0)
+                    .saturating_sub(1);
+                let i = self.replication_table_state.selected().unwrap_or(0);
+                self.replication_table_state.select(Some((i + 1).min(max)));
+            }
+            KeyCode::Enter => {
+                if self.snapshot.as_ref().is_some_and(|s| !s.replication.is_empty()) {
+                    if self.replication_table_state.selected().is_none() {
+                        self.replication_table_state.select(Some(0));
+                    }
+                    self.overlay_scroll = 0;
+                    self.view_mode = ViewMode::ReplicationInspect;
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn handle_panel_key(&mut self, key: KeyEvent) {
         match self.bottom_panel {
             BottomPanel::Queries => self.handle_queries_key(key),
             BottomPanel::Indexes => self.handle_indexes_key(key),
             BottomPanel::Statements => self.handle_statements_key(key),
             BottomPanel::TableStats => self.handle_table_stats_key(key),
+            BottomPanel::Replication => self.handle_replication_key(key),
             _ => {} // Static panels have no panel-specific keys
         }
     }
@@ -1011,6 +1045,28 @@ impl App {
                                 self.copy_to_clipboard(&text);
                             }
                         }
+                    }
+                    _ => {}
+                }
+                return;
+            }
+            ViewMode::ReplicationInspect => {
+                match key.code {
+                    KeyCode::Esc | KeyCode::Char('q') => {
+                        self.overlay_scroll = 0;
+                        self.view_mode = ViewMode::Normal;
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        self.overlay_scroll = self.overlay_scroll.saturating_sub(1);
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        self.overlay_scroll = self.overlay_scroll.saturating_add(1);
+                    }
+                    KeyCode::Char('g') => {
+                        self.overlay_scroll = 0;
+                    }
+                    KeyCode::Char('G') => {
+                        self.overlay_scroll = u16::MAX;
                     }
                     _ => {}
                 }

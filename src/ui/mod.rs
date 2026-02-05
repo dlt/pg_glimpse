@@ -88,6 +88,9 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         ViewMode::StatementInspect => {
             overlay::render_statement_inspect(frame, app, frame.area())
         }
+        ViewMode::ReplicationInspect => {
+            overlay::render_replication_inspect(frame, app, frame.area())
+        }
         ViewMode::ConfirmCancel(pid) => {
             overlay::render_confirm_cancel(frame, *pid, frame.area())
         }

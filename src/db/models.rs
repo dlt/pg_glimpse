@@ -92,14 +92,25 @@ pub struct TableStat {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReplicationInfo {
     pub pid: i32,
+    pub usesysid: Option<i64>,
     pub usename: Option<String>,
     pub application_name: Option<String>,
     pub client_addr: Option<String>,
+    pub client_hostname: Option<String>,
+    pub client_port: Option<i32>,
+    pub backend_start: Option<chrono::DateTime<chrono::Utc>>,
+    pub backend_xmin: Option<String>,
     pub state: Option<String>,
+    pub sent_lsn: Option<String>,
+    pub write_lsn: Option<String>,
+    pub flush_lsn: Option<String>,
+    pub replay_lsn: Option<String>,
     pub write_lag_secs: Option<f64>,
     pub flush_lag_secs: Option<f64>,
     pub replay_lag_secs: Option<f64>,
+    pub sync_priority: Option<i32>,
     pub sync_state: Option<String>,
+    pub reply_time: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

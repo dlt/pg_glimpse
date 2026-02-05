@@ -88,12 +88,26 @@ FROM pg_stat_user_tables ORDER BY n_dead_tup DESC LIMIT 30
 ";
 
 const REPLICATION_SQL: &str = "
-SELECT pid, usename, application_name, client_addr::text,
-    state,
+SELECT pid,
+    usesysid::bigint AS usesysid,
+    usename,
+    application_name,
+    host(client_addr) AS client_addr,
+    client_hostname,
+    client_port,
+    backend_start,
+    backend_xmin::text AS backend_xmin,
+    state::text AS state,
+    sent_lsn::text AS sent_lsn,
+    write_lsn::text AS write_lsn,
+    flush_lsn::text AS flush_lsn,
+    replay_lsn::text AS replay_lsn,
     EXTRACT(EPOCH FROM write_lag) AS write_lag_secs,
     EXTRACT(EPOCH FROM flush_lag) AS flush_lag_secs,
     EXTRACT(EPOCH FROM replay_lag) AS replay_lag_secs,
-    sync_state
+    sync_priority,
+    sync_state::text AS sync_state,
+    reply_time
 FROM pg_stat_replication ORDER BY replay_lag DESC NULLS LAST
 ";
 
@@ -349,15 +363,26 @@ pub async fn fetch_replication(client: &Client) -> Result<Vec<ReplicationInfo>> 
     let mut results = Vec::with_capacity(rows.len());
     for row in rows {
         results.push(ReplicationInfo {
-            pid: row.get("pid"),
-            usename: row.get("usename"),
-            application_name: row.get("application_name"),
-            client_addr: row.get("client_addr"),
-            state: row.get("state"),
-            write_lag_secs: row.get("write_lag_secs"),
-            flush_lag_secs: row.get("flush_lag_secs"),
-            replay_lag_secs: row.get("replay_lag_secs"),
-            sync_state: row.get("sync_state"),
+            pid: row.get(0),
+            usesysid: row.get(1),
+            usename: row.get(2),
+            application_name: row.get(3),
+            client_addr: row.get(4),
+            client_hostname: row.get(5),
+            client_port: row.get(6),
+            backend_start: row.get(7),
+            backend_xmin: row.get(8),
+            state: row.get(9),
+            sent_lsn: row.get(10),
+            write_lsn: row.get(11),
+            flush_lsn: row.get(12),
+            replay_lsn: row.get(13),
+            write_lag_secs: row.get(14),
+            flush_lag_secs: row.get(15),
+            replay_lag_secs: row.get(16),
+            sync_priority: row.get(17),
+            sync_state: row.get(18),
+            reply_time: row.get(19),
         });
     }
     Ok(results)

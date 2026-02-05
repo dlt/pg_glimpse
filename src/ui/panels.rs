@@ -231,7 +231,7 @@ pub fn render_table_stats(frame: &mut Frame, app: &mut App, area: Rect) {
     frame.render_stateful_widget(table, area, &mut app.table_stat_table_state);
 }
 
-pub fn render_replication(frame: &mut Frame, app: &App, area: Rect) {
+pub fn render_replication(frame: &mut Frame, app: &mut App, area: Rect) {
     let block = panel_block("Replication Lag");
 
     let Some(snap) = &app.snapshot else {
@@ -252,7 +252,8 @@ pub fn render_replication(frame: &mut Frame, app: &App, area: Rect) {
     }
 
     let header = Row::new(vec![
-        "App Name", "Client", "State", "Write Lag", "Flush Lag", "Replay Lag",
+        "PID", "User", "App Name", "Client", "State", "Sent LSN", "Replay LSN",
+        "Write Lag", "Flush Lag", "Replay Lag", "Sync",
     ])
     .style(Theme::title_style())
     .bottom_margin(0);
@@ -262,28 +263,47 @@ pub fn render_replication(frame: &mut Frame, app: &App, area: Rect) {
         .iter()
         .map(|r| {
             Row::new(vec![
+                Cell::from(r.pid.to_string()),
+                Cell::from(r.usename.clone().unwrap_or_else(|| "-".into())),
                 Cell::from(r.application_name.clone().unwrap_or_else(|| "-".into())),
                 Cell::from(r.client_addr.clone().unwrap_or_else(|| "-".into())),
                 Cell::from(r.state.clone().unwrap_or_else(|| "-".into())),
+                Cell::from(r.sent_lsn.clone().unwrap_or_else(|| "-".into())),
+                Cell::from(r.replay_lsn.clone().unwrap_or_else(|| "-".into())),
                 Cell::from(format_lag(r.write_lag_secs)),
                 Cell::from(format_lag(r.flush_lag_secs)),
                 Cell::from(format_lag(r.replay_lag_secs))
                     .style(Style::default().fg(lag_color(r.replay_lag_secs))),
+                Cell::from(r.sync_state.clone().unwrap_or_else(|| "-".into())),
             ])
         })
         .collect();
 
     let widths = [
-        Constraint::Min(14),
-        Constraint::Length(16),
-        Constraint::Length(12),
-        Constraint::Length(10),
-        Constraint::Length(10),
-        Constraint::Length(11),
+        Constraint::Length(7),   // PID
+        Constraint::Length(12),  // User
+        Constraint::Length(14),  // App Name
+        Constraint::Length(16),  // Client
+        Constraint::Length(10),  // State
+        Constraint::Length(12),  // Sent LSN
+        Constraint::Length(12),  // Replay LSN
+        Constraint::Length(10),  // Write Lag
+        Constraint::Length(10),  // Flush Lag
+        Constraint::Length(10),  // Replay Lag
+        Constraint::Length(8),   // Sync
     ];
 
-    let table = Table::new(rows, widths).header(header).block(block);
-    frame.render_widget(table, area);
+    let table = Table::new(rows, widths)
+        .header(header)
+        .block(block)
+        .row_highlight_style(
+            Style::default()
+                .bg(Theme::highlight_bg())
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("\u{25ba} ");
+
+    frame.render_stateful_widget(table, area, &mut app.replication_table_state);
 }
 
 pub fn render_vacuum_progress(frame: &mut Frame, app: &App, area: Rect) {

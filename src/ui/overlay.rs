@@ -7,7 +7,7 @@ use ratatui::Frame;
 use crate::app::App;
 use crate::config::ConfigItem;
 use super::theme::Theme;
-use super::util::{format_bytes, format_time_ms};
+use super::util::{format_bytes, format_lag, format_time_ms, lag_color};
 
 fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
     let v = Layout::default()
@@ -309,6 +309,153 @@ pub fn render_confirm_kill(frame: &mut Frame, pid: i32, area: Rect) {
     let paragraph = Paragraph::new(lines)
         .block(block)
         .alignment(Alignment::Left);
+    frame.render_widget(paragraph, popup);
+}
+
+pub fn render_replication_inspect(frame: &mut Frame, app: &App, area: Rect) {
+    let popup = centered_rect(70, 70, area);
+    frame.render_widget(Clear, popup);
+
+    let block = overlay_block("Replication Details  [j/k] scroll  [Esc] back", Theme::border_active());
+
+    let Some(snap) = &app.snapshot else {
+        frame.render_widget(Paragraph::new("No data").block(block), popup);
+        return;
+    };
+
+    let sel = app.replication_table_state.selected().unwrap_or(0);
+    let Some(r) = snap.replication.get(sel) else {
+        frame.render_widget(
+            Paragraph::new("No replication slot selected").block(block),
+            popup,
+        );
+        return;
+    };
+
+    let label = |s: &'static str| Span::styled(s, Style::default().fg(Color::DarkGray));
+    let val = |s: String| Span::styled(s, Style::default().fg(Theme::fg()));
+    let val_opt = |o: &Option<String>| {
+        Span::styled(
+            o.clone().unwrap_or_else(|| "-".into()),
+            Style::default().fg(Theme::fg()),
+        )
+    };
+    let section = |s: &'static str| {
+        Line::from(Span::styled(
+            s,
+            Style::default()
+                .fg(Theme::border_active())
+                .add_modifier(Modifier::BOLD),
+        ))
+    };
+
+    let format_timestamp = |ts: &Option<chrono::DateTime<chrono::Utc>>| -> String {
+        ts.map(|t| t.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+            .unwrap_or_else(|| "-".into())
+    };
+
+    let state_color = match r.state.as_deref() {
+        Some("streaming") => Theme::border_ok(),
+        Some("catchup") => Theme::border_warn(),
+        _ => Theme::fg(),
+    };
+
+    let lines = vec![
+        Line::from(""),
+        section("  Connection"),
+        Line::from(vec![
+            label("  PID:             "),
+            val(r.pid.to_string()),
+        ]),
+        Line::from(vec![
+            label("  User:            "),
+            val_opt(&r.usename),
+            label("      User SysID:    "),
+            val(r.usesysid.map(|id| id.to_string()).unwrap_or_else(|| "-".into())),
+        ]),
+        Line::from(vec![
+            label("  Application:     "),
+            val_opt(&r.application_name),
+        ]),
+        Line::from(vec![
+            label("  Client Addr:     "),
+            val_opt(&r.client_addr),
+            label("      Port:          "),
+            val(r.client_port.map(|p| p.to_string()).unwrap_or_else(|| "-".into())),
+        ]),
+        Line::from(vec![
+            label("  Client Hostname: "),
+            val_opt(&r.client_hostname),
+        ]),
+        Line::from(vec![
+            label("  Backend Start:   "),
+            val(format_timestamp(&r.backend_start)),
+        ]),
+        Line::from(""),
+        section("  Replication State"),
+        Line::from(vec![
+            label("  State:           "),
+            Span::styled(
+                r.state.clone().unwrap_or_else(|| "-".into()),
+                Style::default().fg(state_color).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(vec![
+            label("  Sync State:      "),
+            val_opt(&r.sync_state),
+            label("      Sync Priority: "),
+            val(r.sync_priority.map(|p| p.to_string()).unwrap_or_else(|| "-".into())),
+        ]),
+        Line::from(vec![
+            label("  Backend Xmin:    "),
+            val_opt(&r.backend_xmin),
+        ]),
+        Line::from(""),
+        section("  WAL Positions"),
+        Line::from(vec![
+            label("  Sent LSN:        "),
+            val_opt(&r.sent_lsn),
+        ]),
+        Line::from(vec![
+            label("  Write LSN:       "),
+            val_opt(&r.write_lsn),
+        ]),
+        Line::from(vec![
+            label("  Flush LSN:       "),
+            val_opt(&r.flush_lsn),
+        ]),
+        Line::from(vec![
+            label("  Replay LSN:      "),
+            val_opt(&r.replay_lsn),
+        ]),
+        Line::from(""),
+        section("  Replication Lag"),
+        Line::from(vec![
+            label("  Write Lag:       "),
+            val(format_lag(r.write_lag_secs)),
+        ]),
+        Line::from(vec![
+            label("  Flush Lag:       "),
+            val(format_lag(r.flush_lag_secs)),
+        ]),
+        Line::from(vec![
+            label("  Replay Lag:      "),
+            Span::styled(
+                format_lag(r.replay_lag_secs),
+                Style::default().fg(lag_color(r.replay_lag_secs)).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            label("  Reply Time:      "),
+            val(format_timestamp(&r.reply_time)),
+        ]),
+    ];
+
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false })
+        .scroll((app.overlay_scroll, 0));
     frame.render_widget(paragraph, popup);
 }
 
