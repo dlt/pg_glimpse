@@ -46,7 +46,7 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(70, 70, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Query Details  [y] copy  [Esc] close", Theme::border_active());
+    let block = overlay_block("Query Details  [j/k] scroll  [y] copy  [Esc] close", Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(
@@ -70,7 +70,7 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let duration_color = Theme::duration_color(q.duration_secs);
     let state_color = Theme::state_color(q.state.as_deref());
 
-    let lines = vec![
+    let mut lines = vec![
         Line::from(vec![
             Span::styled("  PID:       ", Style::default().fg(Color::DarkGray)),
             Span::styled(q.pid.to_string(), Style::default().fg(Theme::fg()).add_modifier(Modifier::BOLD)),
@@ -132,18 +132,21 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
                 .fg(Color::DarkGray)
                 .add_modifier(Modifier::BOLD),
         )),
-        Line::from(highlight_sql(
-            q.query.as_deref().unwrap_or("<no query>"),
-            "  ",
-        )),
-        Line::from(""),
-        Line::from(Span::styled(
-            "  Actions:  C cancel query  K terminate backend",
-            Style::default().fg(Color::DarkGray),
-        )),
     ];
+    lines.extend(highlight_sql(
+        q.query.as_deref().unwrap_or("<no query>"),
+        "  ",
+    ));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  Actions:  C cancel query  K terminate backend",
+        Style::default().fg(Color::DarkGray),
+    )));
 
-    let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false })
+        .scroll((app.overlay_scroll, 0));
     frame.render_widget(paragraph, popup);
 }
 
@@ -151,7 +154,7 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(75, 55, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Index Details  [y] copy  [Esc] back", Theme::border_active());
+    let block = overlay_block("Index Details  [j/k] scroll  [y] copy  [Esc] back", Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -175,7 +178,7 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
         Theme::border_ok()
     };
 
-    let lines = vec![
+    let mut lines = vec![
         Line::from(vec![
             Span::styled("  Schema:      ", Style::default().fg(Color::DarkGray)),
             Span::styled(&idx.schemaname, Style::default().fg(Theme::fg())),
@@ -231,12 +234,13 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
                 .fg(Color::DarkGray)
                 .add_modifier(Modifier::BOLD),
         )),
-        Line::from(highlight_sql(&idx.index_definition, "  ")),
     ];
+    lines.extend(highlight_sql(&idx.index_definition, "  "));
 
     let paragraph = Paragraph::new(lines)
         .block(block)
-        .wrap(Wrap { trim: false });
+        .wrap(Wrap { trim: false })
+        .scroll((app.overlay_scroll, 0));
     frame.render_widget(paragraph, popup);
 }
 
@@ -312,7 +316,7 @@ pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(80, 80, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Statement Details  [y] copy  [Esc] back", Theme::border_active());
+    let block = overlay_block("Statement Details  [j/k] scroll  [y] copy  [Esc] back", Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -369,14 +373,16 @@ pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
         Theme::fg()
     };
 
-    let lines = vec![
+    let mut lines = vec![
         Line::from(vec![
             label("  Query ID:        "),
             val(stmt.queryid.to_string()),
         ]),
         Line::from(""),
         section("  Query"),
-        Line::from(highlight_sql(&stmt.query, "  ")),
+    ];
+    lines.extend(highlight_sql(&stmt.query, "  "));
+    lines.extend(vec![
         Line::from(""),
         section("  Execution"),
         Line::from(vec![
@@ -466,11 +472,12 @@ pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
                 Style::default().fg(io_time_color),
             ),
         ]),
-    ];
+    ]);
 
     let paragraph = Paragraph::new(lines)
         .block(block)
-        .wrap(Wrap { trim: false });
+        .wrap(Wrap { trim: false })
+        .scroll((app.overlay_scroll, 0));
     frame.render_widget(paragraph, popup);
 }
 
@@ -534,11 +541,11 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, popup);
 }
 
-pub fn render_help(frame: &mut Frame, area: Rect) {
+pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(70, 80, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Keybindings  [Esc] close", Theme::border_active());
+    let block = overlay_block("Keybindings  [j/k] scroll  [Esc] close", Theme::border_active());
 
     let key_style = Style::default()
         .fg(Theme::border_active())
@@ -600,9 +607,13 @@ pub fn render_help(frame: &mut Frame, area: Rect) {
         Line::from(""),
         section("Overlay Controls"),
         entry("Esc / q", "Close overlay"),
+        entry("\u{2191}/\u{2193} or j/k", "Scroll"),
+        entry("g / G", "Top / bottom"),
     ];
 
-    let paragraph = Paragraph::new(lines).block(block);
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .scroll((app.overlay_scroll, 0));
     frame.render_widget(paragraph, popup);
 }
 
@@ -641,15 +652,141 @@ const SQL_KEYWORDS: &[&str] = &[
     "EXECUTE", "PREPARE", "DEALLOCATE",
 ];
 
+/// Highlight SQL syntax for inline display (single line, for table cells)
+/// Collapses whitespace and truncates to max_len
+pub fn highlight_sql_inline(text: &str, max_len: usize) -> Vec<Span<'static>> {
+    let keyword_style = Style::default().fg(Theme::sql_keyword());
+    let string_style = Style::default().fg(Theme::sql_string());
+    let number_style = Style::default().fg(Theme::sql_number());
+    let default_style = Style::default().fg(Theme::fg());
+
+    // Collapse whitespace and truncate
+    let collapsed: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let display = if collapsed.len() > max_len {
+        &collapsed[..max_len]
+    } else {
+        &collapsed[..]
+    };
+
+    let mut spans: Vec<Span<'static>> = Vec::new();
+    let chars: Vec<char> = display.chars().collect();
+    let len = chars.len();
+    let mut i = 0;
+
+    while i < len {
+        let c = chars[i];
+
+        // Check for string literal
+        if c == '\'' {
+            let start = i;
+            i += 1;
+            while i < len {
+                if chars[i] == '\'' {
+                    if i + 1 < len && chars[i + 1] == '\'' {
+                        i += 2;
+                    } else {
+                        i += 1;
+                        break;
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+            let s: String = chars[start..i].iter().collect();
+            spans.push(Span::styled(s, string_style));
+            continue;
+        }
+
+        // Check for positional parameter $N
+        if c == '$' && i + 1 < len && chars[i + 1].is_ascii_digit() {
+            let start = i;
+            i += 1;
+            while i < len && chars[i].is_ascii_digit() {
+                i += 1;
+            }
+            let s: String = chars[start..i].iter().collect();
+            spans.push(Span::styled(s, default_style));
+            continue;
+        }
+
+        // Check for number
+        if c.is_ascii_digit() || (c == '.' && i + 1 < len && chars[i + 1].is_ascii_digit()) {
+            let start = i;
+            while i < len && (chars[i].is_ascii_digit() || chars[i] == '.') {
+                i += 1;
+            }
+            let num: String = chars[start..i].iter().collect();
+            spans.push(Span::styled(num, number_style));
+            continue;
+        }
+
+        // Check for identifier/keyword
+        if c.is_alphabetic() || c == '_' {
+            let start = i;
+            while i < len && (chars[i].is_alphanumeric() || chars[i] == '_') {
+                i += 1;
+            }
+            let word: String = chars[start..i].iter().collect();
+            let upper = word.to_uppercase();
+            let style = if SQL_KEYWORDS.contains(&upper.as_str()) {
+                keyword_style
+            } else {
+                default_style
+            };
+            spans.push(Span::styled(word, style));
+            continue;
+        }
+
+        // Any other characters (whitespace, operators, punctuation)
+        let start = i;
+        while i < len {
+            let ch = chars[i];
+            if ch.is_alphabetic()
+                || ch == '_'
+                || ch.is_ascii_digit()
+                || ch == '\''
+                || ch == '$'
+            {
+                break;
+            }
+            i += 1;
+        }
+        if i == start {
+            i += 1;
+        }
+        let other: String = chars[start..i].iter().collect();
+        spans.push(Span::styled(other, default_style));
+    }
+
+    spans
+}
+
 /// Highlight SQL syntax in the given text, returning styled spans
-fn highlight_sql(text: &str, indent: &str) -> Vec<Span<'static>> {
+fn highlight_sql(text: &str, indent: &str) -> Vec<Line<'static>> {
     let keyword_style = Style::default().fg(Theme::sql_keyword());
     let string_style = Style::default().fg(Theme::sql_string());
     let number_style = Style::default().fg(Theme::sql_number());
     let comment_style = Style::default().fg(Theme::sql_comment());
     let default_style = Style::default().fg(Theme::fg());
 
-    let mut spans: Vec<Span<'static>> = vec![Span::styled(indent.to_string(), default_style)];
+    let mut lines: Vec<Line<'static>> = Vec::new();
+    let mut current_spans: Vec<Span<'static>> = vec![Span::styled(indent.to_string(), default_style)];
+
+    // Helper to push a styled string, splitting on newlines
+    let push_styled = |s: String, style: Style, spans: &mut Vec<Span<'static>>, lines: &mut Vec<Line<'static>>, indent: &str, default_style: Style| {
+        let parts: Vec<&str> = s.split('\n').collect();
+        for (idx, part) in parts.iter().enumerate() {
+            if !part.is_empty() {
+                spans.push(Span::styled(part.to_string(), style));
+            }
+            if idx < parts.len() - 1 {
+                // There's a newline after this part
+                lines.push(Line::from(std::mem::take(spans)));
+                spans.push(Span::styled(indent.to_string(), default_style));
+            }
+        }
+    };
+
     let chars: Vec<char> = text.chars().collect();
     let len = chars.len();
     let mut i = 0;
@@ -664,7 +801,7 @@ fn highlight_sql(text: &str, indent: &str) -> Vec<Span<'static>> {
                 i += 1;
             }
             let comment: String = chars[start..i].iter().collect();
-            spans.push(Span::styled(comment, comment_style));
+            push_styled(comment, comment_style, &mut current_spans, &mut lines, indent, default_style);
             continue;
         }
 
@@ -679,7 +816,7 @@ fn highlight_sql(text: &str, indent: &str) -> Vec<Span<'static>> {
                 i += 2; // skip */
             }
             let comment: String = chars[start..i].iter().collect();
-            spans.push(Span::styled(comment, comment_style));
+            push_styled(comment, comment_style, &mut current_spans, &mut lines, indent, default_style);
             continue;
         }
 
@@ -700,7 +837,7 @@ fn highlight_sql(text: &str, indent: &str) -> Vec<Span<'static>> {
                 }
             }
             let s: String = chars[start..i].iter().collect();
-            spans.push(Span::styled(s, string_style));
+            push_styled(s, string_style, &mut current_spans, &mut lines, indent, default_style);
             continue;
         }
 
@@ -732,10 +869,17 @@ fn highlight_sql(text: &str, indent: &str) -> Vec<Span<'static>> {
                     i += 1;
                 }
                 let s: String = chars[tag_start..i].iter().collect();
-                spans.push(Span::styled(s, string_style));
+                push_styled(s, string_style, &mut current_spans, &mut lines, indent, default_style);
                 continue;
             } else {
-                // Not a dollar-quoted string, just a $
+                // Check if it's a positional parameter like $1, $23
+                let scanned: String = chars[tag_start..i].iter().collect();
+                if scanned.len() > 1 && scanned[1..].chars().all(|ch| ch.is_ascii_digit()) {
+                    // It's a positional parameter - treat as default style
+                    push_styled(scanned, default_style, &mut current_spans, &mut lines, indent, default_style);
+                    continue;
+                }
+                // Not a dollar-quoted string or parameter, just a $
                 i = tag_start;
             }
         }
@@ -754,7 +898,7 @@ fn highlight_sql(text: &str, indent: &str) -> Vec<Span<'static>> {
                 i += 1;
             }
             let num: String = chars[start..i].iter().collect();
-            spans.push(Span::styled(num, number_style));
+            push_styled(num, number_style, &mut current_spans, &mut lines, indent, default_style);
             continue;
         }
 
@@ -766,18 +910,50 @@ fn highlight_sql(text: &str, indent: &str) -> Vec<Span<'static>> {
             }
             let word: String = chars[start..i].iter().collect();
             let upper = word.to_uppercase();
-            if SQL_KEYWORDS.contains(&upper.as_str()) {
-                spans.push(Span::styled(word, keyword_style));
+            let style = if SQL_KEYWORDS.contains(&upper.as_str()) {
+                keyword_style
             } else {
-                spans.push(Span::styled(word, default_style));
-            }
+                default_style
+            };
+            push_styled(word, style, &mut current_spans, &mut lines, indent, default_style);
             continue;
         }
 
-        // Any other character
-        spans.push(Span::styled(c.to_string(), default_style));
-        i += 1;
+        // Any other characters (whitespace, operators, punctuation)
+        let start = i;
+        while i < len {
+            let ch = chars[i];
+            // Stop if we hit something that needs special handling (including newline)
+            if ch == '\n'
+                || ch.is_alphabetic()
+                || ch == '_'
+                || ch.is_ascii_digit()
+                || ch == '\''
+                || (ch == '-' && i + 1 < len && chars[i + 1] == '-')
+                || (ch == '/' && i + 1 < len && chars[i + 1] == '*')
+                || (ch == '.' && i + 1 < len && chars[i + 1].is_ascii_digit())
+            {
+                break;
+            }
+            i += 1;
+        }
+        // Always make progress - if nothing matched, take at least one char
+        // (handles edge cases like standalone $ that isn't a dollar-quote)
+        if i == start {
+            i += 1;
+        }
+        let other: String = chars[start..i].iter().collect();
+        push_styled(other, default_style, &mut current_spans, &mut lines, indent, default_style);
     }
 
-    spans
+    // Push any remaining spans as the final line
+    if !current_spans.is_empty() {
+        lines.push(Line::from(current_spans));
+    }
+
+    if lines.is_empty() {
+        lines.push(Line::from(Span::styled(indent.to_string(), default_style)));
+    }
+
+    lines
 }

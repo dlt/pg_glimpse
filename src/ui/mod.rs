@@ -95,7 +95,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
             overlay::render_confirm_kill(frame, *pid, frame.area())
         }
         ViewMode::Config => overlay::render_config(frame, app, frame.area()),
-        ViewMode::Help => overlay::render_help(frame, frame.area()),
+        ViewMode::Help => overlay::render_help(frame, app, frame.area()),
         ViewMode::Normal | ViewMode::Filter => {}
     }
 }

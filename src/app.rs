@@ -241,6 +241,7 @@ pub struct App {
     pub replay_total: usize,
     pub replay_speed: f64,
     pub replay_playing: bool,
+    pub overlay_scroll: u16,
 }
 
 impl App {
@@ -297,6 +298,7 @@ impl App {
             replay_total: 0,
             replay_speed: 1.0,
             replay_playing: false,
+            overlay_scroll: 0,
         }
     }
 
@@ -727,6 +729,7 @@ impl App {
             }
             KeyCode::Enter | KeyCode::Char('i') => {
                 if self.selected_query_pid().is_some() {
+                    self.overlay_scroll = 0;
                     self.view_mode = ViewMode::Inspect;
                 }
             }
@@ -777,6 +780,7 @@ impl App {
                     if self.index_table_state.selected().is_none() {
                         self.index_table_state.select(Some(0));
                     }
+                    self.overlay_scroll = 0;
                     self.view_mode = ViewMode::IndexInspect;
                 }
             }
@@ -819,6 +823,7 @@ impl App {
                     if self.stmt_table_state.selected().is_none() {
                         self.stmt_table_state.select(Some(0));
                     }
+                    self.overlay_scroll = 0;
                     self.view_mode = ViewMode::StatementInspect;
                 }
             }
@@ -916,7 +921,20 @@ impl App {
             ViewMode::Inspect => {
                 match key.code {
                     KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
+                        self.overlay_scroll = 0;
                         self.view_mode = ViewMode::Normal;
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        self.overlay_scroll = self.overlay_scroll.saturating_sub(1);
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        self.overlay_scroll = self.overlay_scroll.saturating_add(1);
+                    }
+                    KeyCode::Char('g') => {
+                        self.overlay_scroll = 0;
+                    }
+                    KeyCode::Char('G') => {
+                        self.overlay_scroll = u16::MAX;
                     }
                     KeyCode::Char('y') => {
                         if let Some(snap) = &self.snapshot {
@@ -937,7 +955,20 @@ impl App {
             ViewMode::IndexInspect => {
                 match key.code {
                     KeyCode::Esc | KeyCode::Char('q') => {
+                        self.overlay_scroll = 0;
                         self.view_mode = ViewMode::Normal;
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        self.overlay_scroll = self.overlay_scroll.saturating_sub(1);
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        self.overlay_scroll = self.overlay_scroll.saturating_add(1);
+                    }
+                    KeyCode::Char('g') => {
+                        self.overlay_scroll = 0;
+                    }
+                    KeyCode::Char('G') => {
+                        self.overlay_scroll = u16::MAX;
                     }
                     KeyCode::Char('y') => {
                         if let Some(snap) = &self.snapshot {
@@ -956,7 +987,20 @@ impl App {
             ViewMode::StatementInspect => {
                 match key.code {
                     KeyCode::Esc | KeyCode::Char('q') => {
+                        self.overlay_scroll = 0;
                         self.view_mode = ViewMode::Normal;
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        self.overlay_scroll = self.overlay_scroll.saturating_sub(1);
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        self.overlay_scroll = self.overlay_scroll.saturating_add(1);
+                    }
+                    KeyCode::Char('g') => {
+                        self.overlay_scroll = 0;
+                    }
+                    KeyCode::Char('G') => {
+                        self.overlay_scroll = u16::MAX;
                     }
                     KeyCode::Char('y') => {
                         if let Some(snap) = &self.snapshot {
@@ -1001,7 +1045,20 @@ impl App {
             ViewMode::Help => {
                 match key.code {
                     KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
+                        self.overlay_scroll = 0;
                         self.view_mode = ViewMode::Normal;
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        self.overlay_scroll = self.overlay_scroll.saturating_sub(1);
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        self.overlay_scroll = self.overlay_scroll.saturating_add(1);
+                    }
+                    KeyCode::Char('g') => {
+                        self.overlay_scroll = 0;
+                    }
+                    KeyCode::Char('G') => {
+                        self.overlay_scroll = u16::MAX;
                     }
                     _ => {}
                 }
@@ -1063,6 +1120,7 @@ impl App {
                 return;
             }
             KeyCode::Char('?') => {
+                self.overlay_scroll = 0;
                 self.view_mode = ViewMode::Help;
                 return;
             }
