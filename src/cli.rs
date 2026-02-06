@@ -35,6 +35,10 @@ pub struct Cli {
     #[arg(short = 'W', long, env = "PGPASSWORD")]
     pub password: Option<String>,
 
+    /// Enable SSL/TLS connection (required for most cloud databases like AWS RDS)
+    #[arg(short = 's', long, env = "PGSSLMODE")]
+    pub ssl: bool,
+
     /// Refresh interval in seconds (overrides config file)
     #[arg(short = 'r', long)]
     pub refresh: Option<u64>,

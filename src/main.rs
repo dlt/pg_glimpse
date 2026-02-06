@@ -49,26 +49,60 @@ async fn run(cli: Cli) -> Result<()> {
             std::process::exit(1);
         }
     };
-    let (client, connection) = match pg_config.connect(tokio_postgres::NoTls).await {
-        Ok(c) => c,
-        Err(e) => {
-            let info = cli.connection_info();
-            eprintln!("Error: could not connect to PostgreSQL: {e}\n");
-            eprintln!(
-                "Connection: {}:{}/{}",
-                info.host, info.port, info.dbname
-            );
-            eprintln!("\nTry: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword");
-            eprintln!("See: pg_glimpse --help");
-            std::process::exit(1);
+    let client = if cli.ssl {
+        let tls_config = rustls::ClientConfig::builder()
+            .with_root_certificates(rustls::RootCertStore::from_iter(
+                webpki_roots::TLS_SERVER_ROOTS.iter().cloned(),
+            ))
+            .with_no_client_auth();
+        let tls = tokio_postgres_rustls::MakeRustlsConnect::new(tls_config);
+        match pg_config.connect(tls).await {
+            Ok((client, connection)) => {
+                tokio::spawn(async move {
+                    if let Err(e) = connection.await {
+                        eprintln!("PostgreSQL connection error: {}", e);
+                    }
+                });
+                client
+            }
+            Err(e) => {
+                let info = cli.connection_info();
+                eprintln!("Error: could not connect to PostgreSQL (SSL): {:?}\n", e);
+                eprintln!(
+                    "Connection: {}:{}/{}",
+                    info.host, info.port, info.dbname
+                );
+                eprintln!("\nTry: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword --ssl");
+                eprintln!("See: pg_glimpse --help");
+                std::process::exit(1);
+            }
+        }
+    } else {
+        match pg_config.connect(tokio_postgres::NoTls).await {
+            Ok((client, connection)) => {
+                tokio::spawn(async move {
+                    if let Err(e) = connection.await {
+                        eprintln!("PostgreSQL connection error: {}", e);
+                    }
+                });
+                client
+            }
+            Err(e) => {
+                let info = cli.connection_info();
+                eprintln!("Error: could not connect to PostgreSQL: {:?}\n", e);
+                eprintln!(
+                    "Connection: {}:{}/{}",
+                    info.host, info.port, info.dbname
+                );
+                if format!("{:?}", e).contains("no encryption") {
+                    eprintln!("\nHint: This server may require SSL. Try adding --ssl");
+                }
+                eprintln!("\nTry: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword");
+                eprintln!("See: pg_glimpse --help");
+                std::process::exit(1);
+            }
         }
     };
-
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            eprintln!("PostgreSQL connection error: {}", e);
-        }
-    });
 
     let config = AppConfig::load();
 
