@@ -111,13 +111,15 @@ SELECT pid,
 FROM pg_stat_replication ORDER BY replay_lag DESC NULLS LAST
 ";
 
+/// Vacuum progress query - uses 0 for num_dead_tuples for compatibility
+/// (column name varies across PG versions and cloud providers)
 const VACUUM_PROGRESS_SQL: &str = "
 SELECT p.pid, a.datname,
     COALESCE(n.nspname || '.' || c.relname, p.relid::text) AS table_name,
     p.phase,
     p.heap_blks_total, p.heap_blks_vacuumed,
     (CASE WHEN p.heap_blks_total > 0 THEN (100.0 * p.heap_blks_vacuumed / p.heap_blks_total) ELSE 0 END)::float8 AS progress_pct,
-    p.num_dead_tuples
+    0::bigint AS num_dead_tuples
 FROM pg_stat_progress_vacuum p
 JOIN pg_stat_activity a ON a.pid = p.pid
 LEFT JOIN pg_class c ON c.oid = p.relid
@@ -509,7 +511,7 @@ pub async fn fetch_replication(client: &Client) -> Result<Vec<ReplicationInfo>> 
     Ok(results)
 }
 
-pub async fn fetch_vacuum_progress(client: &Client) -> Result<Vec<VacuumProgress>> {
+pub async fn fetch_vacuum_progress(client: &Client, _version: u32) -> Result<Vec<VacuumProgress>> {
     let rows = client.query(VACUUM_PROGRESS_SQL, &[]).await?;
     let mut results = Vec::with_capacity(rows.len());
     for row in rows {
@@ -570,11 +572,7 @@ pub async fn fetch_stat_statements(
     let sql = stat_statements_sql(ext_version);
     let rows = match client.query(sql, &[]).await {
         Ok(rows) => rows,
-        Err(e) => {
-            eprintln!("pg_stat_statements query failed (ext version {:?}): {:?}", ext_version, e);
-            eprintln!("SQL: {}", sql);
-            return (vec![], false);
-        }
+        Err(_) => return (vec![], false),
     };
     let mut results = Vec::with_capacity(rows.len());
     for row in rows {
@@ -635,7 +633,7 @@ pub async fn fetch_snapshot(
             fetch_activity_summary(client),
             fetch_table_stats(client),
             fetch_replication(client),
-            fetch_vacuum_progress(client),
+            fetch_vacuum_progress(client, version),
             fetch_wraparound(client),
             fetch_indexes(client),
             async { Ok(fetch_stat_statements(client, &ext).await) },

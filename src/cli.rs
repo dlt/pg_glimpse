@@ -39,6 +39,10 @@ pub struct Cli {
     #[arg(short = 's', long, env = "PGSSLMODE")]
     pub ssl: bool,
 
+    /// Skip SSL certificate verification (use with --ssl for self-signed or cloud certs)
+    #[arg(long)]
+    pub ssl_insecure: bool,
+
     /// Refresh interval in seconds (overrides config file)
     #[arg(short = 'r', long)]
     pub refresh: Option<u64>,
