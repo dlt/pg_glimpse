@@ -103,6 +103,7 @@ async fn run(cli: Cli) -> Result<()> {
     );
 
     let extensions = app.server_info.extensions;
+    let pg_major_version = app.server_info.major_version();
 
     // Channel for DB commands and results
     enum DbCommand {
@@ -128,7 +129,7 @@ async fn run(cli: Cli) -> Result<()> {
             let result = match cmd {
                 DbCommand::FetchSnapshot => {
                     DbResult::Snapshot(
-                        db::queries::fetch_snapshot(&db_client, &extensions)
+                        db::queries::fetch_snapshot(&db_client, &extensions, pg_major_version)
                             .await
                             .map_err(|e| e.to_string()),
                     )

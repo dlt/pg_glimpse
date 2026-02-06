@@ -148,7 +148,41 @@ FROM pg_stat_user_indexes s
 ORDER BY pg_relation_size(s.indexrelid) DESC
 ";
 
-const STAT_STATEMENTS_SQL: &str = "
+/// pg_stat_statements query for PG11-12: uses total_time, blk_read_time
+const STAT_STATEMENTS_SQL_V11: &str = "
+SELECT
+    COALESCE(queryid, 0) AS queryid,
+    query,
+    COALESCE(calls, 0) AS calls,
+    COALESCE(total_time, 0) AS total_exec_time,
+    COALESCE(min_time, 0) AS min_exec_time,
+    COALESCE(mean_time, 0) AS mean_exec_time,
+    COALESCE(max_time, 0) AS max_exec_time,
+    COALESCE(stddev_time, 0) AS stddev_exec_time,
+    COALESCE(rows, 0) AS rows,
+    COALESCE(shared_blks_hit, 0) AS shared_blks_hit,
+    COALESCE(shared_blks_read, 0) AS shared_blks_read,
+    COALESCE(shared_blks_dirtied, 0) AS shared_blks_dirtied,
+    COALESCE(shared_blks_written, 0) AS shared_blks_written,
+    COALESCE(local_blks_hit, 0) AS local_blks_hit,
+    COALESCE(local_blks_read, 0) AS local_blks_read,
+    COALESCE(local_blks_dirtied, 0) AS local_blks_dirtied,
+    COALESCE(local_blks_written, 0) AS local_blks_written,
+    COALESCE(temp_blks_read, 0) AS temp_blks_read,
+    COALESCE(temp_blks_written, 0) AS temp_blks_written,
+    COALESCE(blk_read_time, 0) AS blk_read_time,
+    COALESCE(blk_write_time, 0) AS blk_write_time,
+    CASE
+        WHEN COALESCE(shared_blks_hit, 0) + COALESCE(shared_blks_read, 0) = 0 THEN 1.0
+        ELSE COALESCE(shared_blks_hit, 0)::float / (COALESCE(shared_blks_hit, 0) + COALESCE(shared_blks_read, 0))
+    END AS hit_ratio
+FROM pg_stat_statements
+ORDER BY total_time DESC
+LIMIT 100
+";
+
+/// pg_stat_statements query for PG13-14: uses total_exec_time, blk_read_time
+const STAT_STATEMENTS_SQL_V13: &str = "
 SELECT
     COALESCE(queryid, 0) AS queryid,
     query,
@@ -180,6 +214,49 @@ ORDER BY total_exec_time DESC
 LIMIT 100
 ";
 
+/// pg_stat_statements query for PG15+: uses total_exec_time, shared_blk_read_time
+const STAT_STATEMENTS_SQL_V15: &str = "
+SELECT
+    COALESCE(queryid, 0) AS queryid,
+    query,
+    COALESCE(calls, 0) AS calls,
+    COALESCE(total_exec_time, 0) AS total_exec_time,
+    COALESCE(min_exec_time, 0) AS min_exec_time,
+    COALESCE(mean_exec_time, 0) AS mean_exec_time,
+    COALESCE(max_exec_time, 0) AS max_exec_time,
+    COALESCE(stddev_exec_time, 0) AS stddev_exec_time,
+    COALESCE(rows, 0) AS rows,
+    COALESCE(shared_blks_hit, 0) AS shared_blks_hit,
+    COALESCE(shared_blks_read, 0) AS shared_blks_read,
+    COALESCE(shared_blks_dirtied, 0) AS shared_blks_dirtied,
+    COALESCE(shared_blks_written, 0) AS shared_blks_written,
+    COALESCE(local_blks_hit, 0) AS local_blks_hit,
+    COALESCE(local_blks_read, 0) AS local_blks_read,
+    COALESCE(local_blks_dirtied, 0) AS local_blks_dirtied,
+    COALESCE(local_blks_written, 0) AS local_blks_written,
+    COALESCE(temp_blks_read, 0) AS temp_blks_read,
+    COALESCE(temp_blks_written, 0) AS temp_blks_written,
+    COALESCE(shared_blk_read_time, 0) AS blk_read_time,
+    COALESCE(shared_blk_write_time, 0) AS blk_write_time,
+    CASE
+        WHEN COALESCE(shared_blks_hit, 0) + COALESCE(shared_blks_read, 0) = 0 THEN 1.0
+        ELSE COALESCE(shared_blks_hit, 0)::float / (COALESCE(shared_blks_hit, 0) + COALESCE(shared_blks_read, 0))
+    END AS hit_ratio
+FROM pg_stat_statements
+ORDER BY total_exec_time DESC
+LIMIT 100
+";
+
+fn stat_statements_sql(version: u32) -> &'static str {
+    if version < 13 {
+        STAT_STATEMENTS_SQL_V11
+    } else if version < 15 {
+        STAT_STATEMENTS_SQL_V13
+    } else {
+        STAT_STATEMENTS_SQL_V15
+    }
+}
+
 const ACTIVITY_SUMMARY_SQL: &str = "
 SELECT
     COUNT(*) FILTER (WHERE state = 'active' AND pid <> pg_backend_pid()) AS active_query_count,
@@ -207,7 +284,8 @@ const DB_SIZE_SQL: &str = "
 SELECT pg_database_size(current_database()) AS db_size
 ";
 
-const CHECKPOINT_STATS_SQL: &str = "
+/// Checkpoint stats query for PG11-16: uses pg_stat_bgwriter
+const CHECKPOINT_STATS_SQL_V11: &str = "
 SELECT
     COALESCE(checkpoints_timed, 0) AS checkpoints_timed,
     COALESCE(checkpoints_req, 0) AS checkpoints_req,
@@ -217,6 +295,26 @@ SELECT
     COALESCE(buffers_backend, 0) AS buffers_backend
 FROM pg_stat_bgwriter
 ";
+
+/// Checkpoint stats query for PG17+: uses pg_stat_checkpointer (columns moved from pg_stat_bgwriter)
+const CHECKPOINT_STATS_SQL_V17: &str = "
+SELECT
+    COALESCE(num_timed, 0) AS checkpoints_timed,
+    COALESCE(num_requested, 0) AS checkpoints_req,
+    COALESCE(write_time, 0) AS checkpoint_write_time,
+    COALESCE(sync_time, 0) AS checkpoint_sync_time,
+    COALESCE(buffers_written, 0) AS buffers_checkpoint,
+    0::bigint AS buffers_backend
+FROM pg_stat_checkpointer
+";
+
+fn checkpoint_stats_sql(version: u32) -> &'static str {
+    if version < 17 {
+        CHECKPOINT_STATS_SQL_V11
+    } else {
+        CHECKPOINT_STATS_SQL_V17
+    }
+}
 
 pub async fn detect_extensions(client: &Client) -> DetectedExtensions {
     let rows = match client.query(EXTENSIONS_SQL, &[]).await {
@@ -256,8 +354,9 @@ pub async fn fetch_db_size(client: &Client) -> Result<i64> {
     Ok(row.get("db_size"))
 }
 
-pub async fn fetch_checkpoint_stats(client: &Client) -> Result<CheckpointStats> {
-    let row = client.query_one(CHECKPOINT_STATS_SQL, &[]).await?;
+pub async fn fetch_checkpoint_stats(client: &Client, version: u32) -> Result<CheckpointStats> {
+    let sql = checkpoint_stats_sql(version);
+    let row = client.query_one(sql, &[]).await?;
     Ok(CheckpointStats {
         checkpoints_timed: row.get("checkpoints_timed"),
         checkpoints_req: row.get("checkpoints_req"),
@@ -441,11 +540,13 @@ pub async fn fetch_indexes(client: &Client) -> Result<Vec<IndexInfo>> {
 pub async fn fetch_stat_statements(
     client: &Client,
     extensions: &DetectedExtensions,
+    version: u32,
 ) -> (Vec<StatStatement>, bool) {
     if !extensions.pg_stat_statements {
         return (vec![], false);
     }
-    let rows = match client.query(STAT_STATEMENTS_SQL, &[]).await {
+    let sql = stat_statements_sql(version);
+    let rows = match client.query(sql, &[]).await {
         Ok(rows) => rows,
         Err(_) => return (vec![], false),
     };
@@ -496,6 +597,7 @@ pub async fn terminate_backend(client: &Client, pid: i32) -> Result<bool> {
 pub async fn fetch_snapshot(
     client: &Client,
     extensions: &DetectedExtensions,
+    version: u32,
 ) -> Result<PgSnapshot> {
     let ext = *extensions;
     let (active, waits, blocks, cache, summary, tables, repl, vacuum, wrap, indexes, ss, db_size, chkpt) =
@@ -510,9 +612,9 @@ pub async fn fetch_snapshot(
             fetch_vacuum_progress(client),
             fetch_wraparound(client),
             fetch_indexes(client),
-            async { Ok(fetch_stat_statements(client, &ext).await) },
+            async { Ok(fetch_stat_statements(client, &ext, version).await) },
             fetch_db_size(client),
-            async { Ok(fetch_checkpoint_stats(client).await.ok()) },
+            async { Ok(fetch_checkpoint_stats(client, version).await.ok()) },
         )?;
     let (stat_statements, ss_available) = ss;
     let mut snap_extensions = ext;

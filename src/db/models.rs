@@ -17,6 +17,18 @@ pub struct ServerInfo {
     pub extensions: DetectedExtensions,
 }
 
+impl ServerInfo {
+    /// Extract the major PostgreSQL version number (e.g., 14 from "PostgreSQL 14.5 on ...")
+    pub fn major_version(&self) -> u32 {
+        self.version
+            .split_whitespace()
+            .nth(1)
+            .and_then(|v| v.split('.').next())
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(11)
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct CheckpointStats {
     pub checkpoints_timed: i64,

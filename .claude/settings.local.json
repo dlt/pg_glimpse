@@ -6,7 +6,21 @@
       "Bash(cargo clippy:*)",
       "Bash(wc:*)",
       "WebFetch(domain:docs.rs)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(ls:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo package:*)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(git push:*)",
+      "Bash(cargo run:*)",
+      "Bash(git commit:*)",
+      "Bash(unset:*)",
+      "Bash(cargo tree:*)",
+      "Bash(cargo search:*)",
+      "Bash(cargo update:*)",
+      "Bash(curl:*)",
+      "Bash(shasum:*)"
     ]
   }
 }
