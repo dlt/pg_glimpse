@@ -255,23 +255,61 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             }
         }
 
-        // Line 8: Checkpoint stats
+        // Line 8: Checkpoint stats (counts with forced percentage)
         if let Some(ref chkpt) = snap.checkpoint_stats {
+            let total = chkpt.checkpoints_timed + chkpt.checkpoints_req;
+            let forced_pct = if total > 0 {
+                chkpt.checkpoints_req as f64 / total as f64 * 100.0
+            } else {
+                0.0
+            };
+            let forced_color = if forced_pct > 20.0 {
+                Theme::border_danger()
+            } else if forced_pct > 5.0 {
+                Theme::border_warn()
+            } else {
+                Theme::border_ok()
+            };
+
             lines.push(Line::from(vec![
                 Span::styled("Chkpt: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(format!("{}", total), Style::default().fg(Theme::fg())),
+                Span::styled(" (", Style::default().fg(Theme::border_dim())),
                 Span::styled(
-                    format!("{} timed", chkpt.checkpoints_timed),
+                    format!("{:.1}% forced", forced_pct),
+                    Style::default().fg(forced_color),
+                ),
+                Span::styled(")", Style::default().fg(Theme::border_dim())),
+            ]));
+
+            // Line 9: Buffer writes
+            let backend_pct = if chkpt.buffers_checkpoint > 0 {
+                chkpt.buffers_backend as f64 / chkpt.buffers_checkpoint as f64 * 100.0
+            } else if chkpt.buffers_backend > 0 {
+                100.0
+            } else {
+                0.0
+            };
+            let backend_color = if backend_pct > 10.0 {
+                Theme::border_danger()
+            } else if backend_pct > 5.0 {
+                Theme::border_warn()
+            } else {
+                Theme::border_ok()
+            };
+
+            lines.push(Line::from(vec![
+                Span::styled("BufW: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format_compact(chkpt.buffers_checkpoint),
                     Style::default().fg(Theme::fg()),
                 ),
-                Span::styled(" + ", Style::default().fg(Theme::border_dim())),
+                Span::styled(" ckpt / ", Style::default().fg(Theme::border_dim())),
                 Span::styled(
-                    format!("{} req", chkpt.checkpoints_req),
-                    Style::default().fg(if chkpt.checkpoints_req > 0 {
-                        Theme::border_warn()
-                    } else {
-                        Theme::fg()
-                    }),
+                    format_compact(chkpt.buffers_backend),
+                    Style::default().fg(backend_color),
                 ),
+                Span::styled(" backend", Style::default().fg(backend_color)),
             ]));
         }
     } else {
@@ -356,5 +394,15 @@ fn format_duration_short(secs: f64) -> String {
         format!("{:.0}m{:.0}s", secs / 60.0, secs % 60.0)
     } else {
         format!("{:.0}h{:.0}m", secs / 3600.0, (secs % 3600.0) / 60.0)
+    }
+}
+
+fn format_compact(n: i64) -> String {
+    if n >= 1_000_000 {
+        format!("{:.1}M", n as f64 / 1_000_000.0)
+    } else if n >= 1_000 {
+        format!("{:.1}K", n as f64 / 1_000.0)
+    } else {
+        format!("{}", n)
     }
 }

@@ -20,7 +20,8 @@
       "Bash(cargo search:*)",
       "Bash(cargo update:*)",
       "Bash(curl:*)",
-      "Bash(shasum:*)"
+      "Bash(shasum:*)",
+      "Bash(gh release view:*)"
     ]
   }
 }

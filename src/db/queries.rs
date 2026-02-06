@@ -616,9 +616,7 @@ pub async fn fetch_snapshot(
             fetch_db_size(client),
             async { Ok(fetch_checkpoint_stats(client, version).await.ok()) },
         )?;
-    let (stat_statements, ss_available) = ss;
-    let mut snap_extensions = ext;
-    snap_extensions.pg_stat_statements = ss_available;
+    let (stat_statements, _) = ss;
     Ok(PgSnapshot {
         timestamp: chrono::Utc::now(),
         active_queries: active,
@@ -632,7 +630,7 @@ pub async fn fetch_snapshot(
         wraparound: wrap,
         indexes,
         stat_statements,
-        extensions: snap_extensions,
+        extensions: ext,
         db_size,
         checkpoint_stats: chkpt,
     })
