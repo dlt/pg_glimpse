@@ -13,6 +13,8 @@
 
 ---
 
+> **Note:** This project is under active development. You may encounter bugs or unexpected behavior. If you find any issues, please [open an issue](https://github.com/dlt/pg_glimpse/issues).
+
 A blazing-fast TUI for PostgreSQL. Monitor active queries, connections, locks, cache performance, replication lag, vacuum progress, and more — all from your terminal.
 
 ## Install
