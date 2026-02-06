@@ -2,7 +2,7 @@ class PgGlimpse < Formula
   desc "Terminal-based PostgreSQL monitoring tool with live TUI"
   homepage "https://github.com/dlt/pg_glimpse"
   license "MIT"
-  version "0.2.3"
+  version "0.2.4"
 
   on_macos do
     on_arm do
