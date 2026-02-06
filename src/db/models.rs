@@ -1,9 +1,10 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DetectedExtensions {
     pub pg_stat_statements: bool,
+    pub pg_stat_statements_version: Option<String>,
     pub pg_stat_kcache: bool,
     pub pg_wait_sampling: bool,
     pub pg_buffercache: bool,

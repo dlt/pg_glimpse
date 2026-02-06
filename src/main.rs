@@ -102,7 +102,7 @@ async fn run(cli: Cli) -> Result<()> {
         server_info,
     );
 
-    let extensions = app.server_info.extensions;
+    let extensions = app.server_info.extensions.clone();
     let pg_major_version = app.server_info.major_version();
 
     // Channel for DB commands and results

@@ -82,7 +82,7 @@ SELECT schemaname, relname,
     COALESCE(idx_scan, 0) AS idx_scan,
     COALESCE(n_live_tup, 0) AS n_live_tup,
     COALESCE(n_dead_tup, 0) AS n_dead_tup,
-    (CASE WHEN n_live_tup > 0 THEN (100.0 * n_dead_tup / n_live_tup) ELSE 0 END)::float8 AS dead_ratio,
+    COALESCE((CASE WHEN n_live_tup > 0 THEN (100.0 * n_dead_tup / n_live_tup) ELSE 0 END)::float8, 0) AS dead_ratio,
     last_autovacuum
 FROM pg_stat_user_tables ORDER BY n_dead_tup DESC LIMIT 30
 ";
@@ -247,13 +247,31 @@ ORDER BY total_exec_time DESC
 LIMIT 100
 ";
 
-fn stat_statements_sql(version: u32) -> &'static str {
-    if version < 13 {
-        STAT_STATEMENTS_SQL_V11
-    } else if version < 15 {
-        STAT_STATEMENTS_SQL_V13
+/// Parse extension version like "1.8" or "1.10" and return (major, minor)
+fn parse_ext_version(v: &str) -> Option<(u32, u32)> {
+    let parts: Vec<&str> = v.split('.').collect();
+    if parts.len() >= 2 {
+        let major = parts[0].parse().ok()?;
+        let minor = parts[1].parse().ok()?;
+        Some((major, minor))
     } else {
-        STAT_STATEMENTS_SQL_V15
+        None
+    }
+}
+
+fn stat_statements_sql(ext_version: Option<&str>) -> &'static str {
+    // pg_stat_statements 1.9+ (PG15+) renamed blk_read_time -> shared_blk_read_time
+    // pg_stat_statements 1.8 (PG13-14) uses total_exec_time, blk_read_time
+    // pg_stat_statements < 1.8 (PG11-12) uses total_time, blk_read_time
+    let version = ext_version.and_then(parse_ext_version);
+    match version {
+        Some((major, minor)) if major > 1 || (major == 1 && minor >= 9) => {
+            STAT_STATEMENTS_SQL_V15
+        }
+        Some((major, minor)) if major == 1 && minor >= 8 => {
+            STAT_STATEMENTS_SQL_V13
+        }
+        _ => STAT_STATEMENTS_SQL_V11,
     }
 }
 
@@ -269,7 +287,7 @@ WHERE backend_type = 'client backend'
 ";
 
 const EXTENSIONS_SQL: &str = "
-SELECT extname FROM pg_extension
+SELECT extname, extversion FROM pg_extension
 WHERE extname IN ('pg_stat_statements', 'pg_stat_kcache', 'pg_wait_sampling', 'pg_buffercache')
 ";
 
@@ -324,8 +342,12 @@ pub async fn detect_extensions(client: &Client) -> DetectedExtensions {
     let mut ext = DetectedExtensions::default();
     for row in rows {
         let name: String = row.get("extname");
+        let version: String = row.get("extversion");
         match name.as_str() {
-            "pg_stat_statements" => ext.pg_stat_statements = true,
+            "pg_stat_statements" => {
+                ext.pg_stat_statements = true;
+                ext.pg_stat_statements_version = Some(version);
+            }
             "pg_stat_kcache" => ext.pg_stat_kcache = true,
             "pg_wait_sampling" => ext.pg_wait_sampling = true,
             "pg_buffercache" => ext.pg_buffercache = true,
@@ -540,15 +562,19 @@ pub async fn fetch_indexes(client: &Client) -> Result<Vec<IndexInfo>> {
 pub async fn fetch_stat_statements(
     client: &Client,
     extensions: &DetectedExtensions,
-    version: u32,
 ) -> (Vec<StatStatement>, bool) {
     if !extensions.pg_stat_statements {
         return (vec![], false);
     }
-    let sql = stat_statements_sql(version);
+    let ext_version = extensions.pg_stat_statements_version.as_deref();
+    let sql = stat_statements_sql(ext_version);
     let rows = match client.query(sql, &[]).await {
         Ok(rows) => rows,
-        Err(_) => return (vec![], false),
+        Err(e) => {
+            eprintln!("pg_stat_statements query failed (ext version {:?}): {:?}", ext_version, e);
+            eprintln!("SQL: {}", sql);
+            return (vec![], false);
+        }
     };
     let mut results = Vec::with_capacity(rows.len());
     for row in rows {
@@ -599,7 +625,7 @@ pub async fn fetch_snapshot(
     extensions: &DetectedExtensions,
     version: u32,
 ) -> Result<PgSnapshot> {
-    let ext = *extensions;
+    let ext = extensions.clone();
     let (active, waits, blocks, cache, summary, tables, repl, vacuum, wrap, indexes, ss, db_size, chkpt) =
         tokio::try_join!(
             fetch_active_queries(client),
@@ -612,7 +638,7 @@ pub async fn fetch_snapshot(
             fetch_vacuum_progress(client),
             fetch_wraparound(client),
             fetch_indexes(client),
-            async { Ok(fetch_stat_statements(client, &ext, version).await) },
+            async { Ok(fetch_stat_statements(client, &ext).await) },
             fetch_db_size(client),
             async { Ok(fetch_checkpoint_stats(client, version).await.ok()) },
         )?;
