@@ -72,39 +72,39 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
 
     let mut lines = vec![
         Line::from(vec![
-            Span::styled("  PID:       ", Style::default().fg(Color::DarkGray)),
+            Span::styled("  PID:       ", Style::default().fg(Theme::fg_dim())),
             Span::styled(q.pid.to_string(), Style::default().fg(Theme::fg()).add_modifier(Modifier::BOLD)),
         ]),
         Line::from(vec![
-            Span::styled("  User:      ", Style::default().fg(Color::DarkGray)),
+            Span::styled("  User:      ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
                 q.usename.clone().unwrap_or_else(|| "-".into()),
                 Style::default().fg(Theme::fg()),
             ),
         ]),
         Line::from(vec![
-            Span::styled("  Database:  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("  Database:  ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
                 q.datname.clone().unwrap_or_else(|| "-".into()),
                 Style::default().fg(Theme::fg()),
             ),
         ]),
         Line::from(vec![
-            Span::styled("  State:     ", Style::default().fg(Color::DarkGray)),
+            Span::styled("  State:     ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
                 q.state.clone().unwrap_or_else(|| "-".into()),
                 Style::default().fg(state_color),
             ),
         ]),
         Line::from(vec![
-            Span::styled("  Duration:  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("  Duration:  ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
                 format_duration(q.duration_secs),
                 Style::default().fg(duration_color).add_modifier(Modifier::BOLD),
             ),
         ]),
         Line::from(vec![
-            Span::styled("  Wait:      ", Style::default().fg(Color::DarkGray)),
+            Span::styled("  Wait:      ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
                 format!(
                     "{} / {}",
@@ -119,7 +119,7 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
             ),
         ]),
         Line::from(vec![
-            Span::styled("  Backend:   ", Style::default().fg(Color::DarkGray)),
+            Span::styled("  Backend:   ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
                 q.backend_type.clone().unwrap_or_else(|| "-".into()),
                 Style::default().fg(Theme::fg()),
@@ -129,7 +129,7 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
         Line::from(Span::styled(
             "  Query:",
             Style::default()
-                .fg(Color::DarkGray)
+                .fg(Theme::fg_dim())
                 .add_modifier(Modifier::BOLD),
         )),
     ];
@@ -140,7 +140,7 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "  Actions:  C cancel query  K terminate backend",
-        Style::default().fg(Color::DarkGray),
+        Style::default().fg(Theme::fg_dim()),
     )));
 
     let paragraph = Paragraph::new(lines)
@@ -180,15 +180,15 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
 
     let mut lines = vec![
         Line::from(vec![
-            Span::styled("  Schema:      ", Style::default().fg(Color::DarkGray)),
+            Span::styled("  Schema:      ", Style::default().fg(Theme::fg_dim())),
             Span::styled(&idx.schemaname, Style::default().fg(Theme::fg())),
         ]),
         Line::from(vec![
-            Span::styled("  Table:       ", Style::default().fg(Color::DarkGray)),
+            Span::styled("  Table:       ", Style::default().fg(Theme::fg_dim())),
             Span::styled(&idx.table_name, Style::default().fg(Theme::fg())),
         ]),
         Line::from(vec![
-            Span::styled("  Index:       ", Style::default().fg(Color::DarkGray)),
+            Span::styled("  Index:       ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
                 &idx.index_name,
                 Style::default()
@@ -197,7 +197,7 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
             ),
         ]),
         Line::from(vec![
-            Span::styled("  Size:        ", Style::default().fg(Color::DarkGray)),
+            Span::styled("  Size:        ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
                 format_bytes(idx.index_size_bytes),
                 Style::default().fg(Theme::fg()),
@@ -205,7 +205,7 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Scans:       ", Style::default().fg(Color::DarkGray)),
+            Span::styled("  Scans:       ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
                 idx.idx_scan.to_string(),
                 Style::default()
@@ -214,14 +214,14 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
             ),
         ]),
         Line::from(vec![
-            Span::styled("  Tup Read:    ", Style::default().fg(Color::DarkGray)),
+            Span::styled("  Tup Read:    ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
                 idx.idx_tup_read.to_string(),
                 Style::default().fg(Theme::fg()),
             ),
         ]),
         Line::from(vec![
-            Span::styled("  Tup Fetch:   ", Style::default().fg(Color::DarkGray)),
+            Span::styled("  Tup Fetch:   ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
                 idx.idx_tup_fetch.to_string(),
                 Style::default().fg(Theme::fg()),
@@ -231,7 +231,7 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
         Line::from(Span::styled(
             "  Definition:",
             Style::default()
-                .fg(Color::DarkGray)
+                .fg(Theme::fg_dim())
                 .add_modifier(Modifier::BOLD),
         )),
     ];
@@ -261,7 +261,7 @@ pub fn render_confirm_cancel(frame: &mut Frame, pid: i32, area: Rect) {
         Line::from(""),
         Line::from(Span::styled(
             "  The current query will be interrupted.",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(Theme::fg_dim()),
         )),
         Line::from(""),
         Line::from(vec![
@@ -295,7 +295,7 @@ pub fn render_confirm_kill(frame: &mut Frame, pid: i32, area: Rect) {
         Line::from(""),
         Line::from(Span::styled(
             "  This will kill the connection entirely.",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(Theme::fg_dim()),
         )),
         Line::from(""),
         Line::from(vec![
@@ -332,7 +332,7 @@ pub fn render_replication_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let label = |s: &'static str| Span::styled(s, Style::default().fg(Color::DarkGray));
+    let label = |s: &'static str| Span::styled(s, Style::default().fg(Theme::fg_dim()));
     let val = |s: String| Span::styled(s, Style::default().fg(Theme::fg()));
     let val_opt = |o: &Option<String>| {
         Span::styled(
@@ -489,7 +489,7 @@ pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
         Theme::border_danger()
     };
 
-    let label = |s: &'static str| Span::styled(s, Style::default().fg(Color::DarkGray));
+    let label = |s: &'static str| Span::styled(s, Style::default().fg(Theme::fg_dim()));
     let val = |s: String| Span::styled(s, Style::default().fg(Theme::fg()));
     let val_bold =
         |s: String| Span::styled(s, Style::default().fg(Theme::fg()).add_modifier(Modifier::BOLD));
@@ -683,7 +683,7 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
                 .fg(Theme::border_active())
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(Color::DarkGray)
+            Style::default().fg(Theme::fg_dim())
         };
 
         lines.push(Line::from(vec![
@@ -696,7 +696,7 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
     }
 
     // About section
-    let label_style = Style::default().fg(Color::DarkGray);
+    let label_style = Style::default().fg(Theme::fg_dim());
     let value_style = Style::default().fg(Theme::fg());
     let link_style = Style::default().fg(Theme::border_active());
     let section_style = Style::default().fg(Theme::border_warn()).add_modifier(Modifier::BOLD);

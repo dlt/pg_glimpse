@@ -1,5 +1,5 @@
 use ratatui::layout::{Constraint, Rect};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Cell, Paragraph, Row, Table};
 use ratatui::Frame;
@@ -19,6 +19,7 @@ fn panel_block(title: &str) -> Block<'_> {
         .border_type(BorderType::Rounded)
         .border_style(Theme::border_style(Theme::border_active()))
 }
+
 
 pub fn render_blocking(frame: &mut Frame, app: &App, area: Rect) {
     let block = panel_block("Blocking Chains");
@@ -114,7 +115,7 @@ pub fn render_wait_events(frame: &mut Frame, app: &App, area: Rect) {
             let count_str = format!(" {}", w.count);
 
             Line::from(vec![
-                Span::styled(label, Style::default().fg(Color::DarkGray)),
+                Span::styled(label, Style::default().fg(Theme::fg_dim())),
                 Span::raw(" "),
                 Span::styled(bar, Style::default().fg(color)),
                 Span::styled(
@@ -569,7 +570,7 @@ pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
             Line::from(""),
             Line::from(Span::styled(
                 "  1. Add to postgresql.conf:",
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(Theme::fg_dim()),
             )),
             Line::from(Span::styled(
                 "     shared_preload_libraries = 'pg_stat_statements'",
@@ -578,12 +579,12 @@ pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
             Line::from(""),
             Line::from(Span::styled(
                 "  2. Restart PostgreSQL",
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(Theme::fg_dim()),
             )),
             Line::from(""),
             Line::from(Span::styled(
                 "  3. Create the extension:",
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(Theme::fg_dim()),
             )),
             Line::from(Span::styled(
                 "     CREATE EXTENSION pg_stat_statements;",

@@ -1,6 +1,6 @@
 use chrono::Utc;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
 use ratatui::Frame;
@@ -42,6 +42,10 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     if let Some(snap) = &app.snapshot {
         let inner_width = block.inner(area).width as usize;
         let sparkline_width = inner_width.saturating_sub(20).min(10);
+        let sep_line = Line::from(Span::styled(
+            "─".repeat(inner_width.saturating_sub(2)),
+            Style::default().fg(Theme::border_dim()),
+        ));
 
         // Line 2: DB size + connections
         let db_size = format_bytes(snap.db_size);
@@ -71,6 +75,9 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             ),
         ]));
 
+        // Separator before activity section
+        lines.push(sep_line.clone());
+
         // Line 3: Activity summary
         let active = snap.summary.active_query_count;
         let idle_txn = snap.summary.idle_in_transaction_count;
@@ -87,7 +94,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         };
         let active_spark = render_sparkline(&app.active_query_history.as_vec(), sparkline_width);
         lines.push(Line::from(vec![
-            Span::styled("Active: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Active: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
                 format!("{}", active),
                 Style::default()
@@ -98,12 +105,12 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                 format!(" {}", active_spark),
                 Style::default().fg(Theme::state_active()),
             ),
-            Span::styled("  Idle/Txn: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("  Idle/Txn: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
                 format!("{}", idle_txn),
                 Style::default().fg(idle_txn_color),
             ),
-            Span::styled("  Wait: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("  Wait: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
                 format!("{}", waiting),
                 Style::default().fg(waiting_color),
@@ -126,7 +133,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         let longest_color = Theme::duration_color(longest);
         let lock_spark = render_sparkline(&app.lock_count_history.as_vec(), sparkline_width);
         lines.push(Line::from(vec![
-            Span::styled("Locks: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Locks: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
                 format!("{}", locks),
                 Style::default()
@@ -138,7 +145,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                 Style::default().fg(lock_color),
             ),
             Span::styled(" · ", Style::default().fg(Theme::border_dim())),
-            Span::styled("Longest: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Longest: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
                 format_duration_short(longest),
                 Style::default().fg(longest_color),
@@ -166,7 +173,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                 Theme::border_ok()
             };
             vec![
-                Span::styled("  Dead: ", Style::default().fg(Color::DarkGray)),
+                Span::styled("  Dead: ", Style::default().fg(Theme::fg_dim())),
                 Span::styled(
                     format!("{:.1}%", t.dead_ratio),
                     Style::default().fg(dead_color),
@@ -177,7 +184,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         };
         let cache_spark = render_sparkline(&app.hit_ratio_history.as_vec(), sparkline_width);
         let mut cache_line = vec![
-            Span::styled("Cache: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Cache: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
                 format!("{:.1}%", cache_pct),
                 Style::default()
@@ -191,6 +198,9 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         ];
         cache_line.extend(dead_spans);
         lines.push(Line::from(cache_line));
+
+        // Separator before health section
+        lines.push(sep_line.clone());
 
         // Line 6: Wraparound
         let worst_wrap = snap
@@ -210,14 +220,14 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                 Theme::border_ok()
             };
             lines.push(Line::from(vec![
-                Span::styled("XID: ", Style::default().fg(Color::DarkGray)),
+                Span::styled("XID: ", Style::default().fg(Theme::fg_dim())),
                 Span::styled(
                     format!("{:.1}%", w.pct_towards_wraparound),
                     Style::default().fg(wrap_color),
                 ),
                 Span::styled(
                     format!(" ({})", w.datname),
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(Theme::fg_dim()),
                 ),
             ]));
         }
@@ -240,7 +250,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                     Theme::border_ok()
                 };
                 lines.push(Line::from(vec![
-                    Span::styled("Repl lag: ", Style::default().fg(Color::DarkGray)),
+                    Span::styled("Repl lag: ", Style::default().fg(Theme::fg_dim())),
                     Span::styled(
                         format!("{:.2}s", lag),
                         Style::default().fg(lag_color),
@@ -250,7 +260,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             None => {
                 lines.push(Line::from(Span::styled(
                     "No replicas",
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(Theme::fg_dim()),
                 )));
             }
         }
@@ -272,7 +282,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             };
 
             lines.push(Line::from(vec![
-                Span::styled("Chkpt: ", Style::default().fg(Color::DarkGray)),
+                Span::styled("Chkpt: ", Style::default().fg(Theme::fg_dim())),
                 Span::styled(format!("{}", total), Style::default().fg(Theme::fg())),
                 Span::styled(" (", Style::default().fg(Theme::border_dim())),
                 Span::styled(
@@ -299,7 +309,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             };
 
             lines.push(Line::from(vec![
-                Span::styled("BufW: ", Style::default().fg(Color::DarkGray)),
+                Span::styled("BufW: ", Style::default().fg(Theme::fg_dim())),
                 Span::styled(
                     format_compact(chkpt.buffers_checkpoint),
                     Style::default().fg(Theme::fg()),
@@ -312,10 +322,12 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                 Span::styled(" backend", Style::default().fg(backend_color)),
             ]));
         }
+        // Separator before extensions
+        lines.push(sep_line.clone());
     } else {
         lines.push(Line::from(Span::styled(
             "Waiting for data...",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(Theme::fg_dim()),
         )));
     }
 
@@ -323,7 +335,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     let ext = &app.server_info.extensions;
     let mut ext_spans: Vec<Span> = vec![Span::styled(
         "Ext: ",
-        Style::default().fg(Color::DarkGray),
+        Style::default().fg(Theme::fg_dim()),
     )];
     let ext_list = [
         ("ss", ext.pg_stat_statements),
@@ -347,7 +359,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         }
     }
     if !any_ext {
-        ext_spans.push(Span::styled("none", Style::default().fg(Color::DarkGray)));
+        ext_spans.push(Span::styled("none", Style::default().fg(Theme::fg_dim())));
     }
     lines.push(Line::from(ext_spans));
 

@@ -76,7 +76,7 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
                     Cell::from(q.pid.to_string()),
                     Cell::from(q.usename.clone().unwrap_or_else(|| "-".into())),
                     Cell::from(q.datname.clone().unwrap_or_else(|| "-".into()))
-                        .style(Style::default().fg(Color::DarkGray)),
+                        .style(Style::default().fg(Theme::fg_dim())),
                     Cell::from(format_duration(q.duration_secs))
                         .style(Style::default().fg(dur_color)),
                     Cell::from(short_state(q.state.as_deref()))
@@ -85,7 +85,7 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
                         .style(Style::default().fg(if q.wait_event.is_some() {
                             Color::Yellow
                         } else {
-                            Color::DarkGray
+                            Theme::fg_dim()
                         })),
                     Cell::from(Line::from(highlight_sql_inline(query_text, query_width))),
                 ])

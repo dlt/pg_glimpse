@@ -25,6 +25,10 @@ impl Theme {
         ACTIVE_THEME.read().unwrap().fg
     }
 
+    pub fn fg_dim() -> Color {
+        ACTIVE_THEME.read().unwrap().fg_dim
+    }
+
     pub fn border_active() -> Color {
         ACTIVE_THEME.read().unwrap().border_active
     }

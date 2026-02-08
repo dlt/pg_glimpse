@@ -22,65 +22,83 @@ fn render_live(frame: &mut Frame, app: &App, area: Rect) {
         .snapshot
         .as_ref()
         .map_or(0, |s| s.summary.total_backends);
+    let max_conns = app.server_info.max_connections;
+
+    let brand_style = Style::default()
+        .fg(Theme::header_bg())
+        .bg(Theme::border_active())
+        .add_modifier(Modifier::BOLD);
+    let dim_style = Style::default().fg(Theme::border_dim());
+    let normal_style = Style::default().fg(Theme::fg());
+    let label_style = Style::default().fg(Theme::fg_dim());
 
     let mut spans = vec![
+        Span::styled(" pg_glimpse ", brand_style),
+        Span::styled("  ", dim_style),
+        Span::styled("◆ ", Style::default().fg(Theme::border_ok())),
         Span::styled(
-            " pg_glimpse ",
-            Style::default()
-                .fg(Theme::border_active())
-                .add_modifier(Modifier::BOLD),
+            format!("{}:{}", app.host, app.port),
+            normal_style,
         ),
-        Span::styled("│ ", Style::default().fg(Theme::border_dim())),
+        Span::styled("/", dim_style),
         Span::styled(
-            format!("{}:{}/{}", app.host, app.port, app.dbname),
-            Style::default().fg(Theme::fg()),
+            &app.dbname,
+            Style::default().fg(Theme::border_active()),
         ),
-        Span::styled(" │ ", Style::default().fg(Theme::border_dim())),
+        Span::styled("  ", dim_style),
+        Span::styled("as ", label_style),
+        Span::styled(&app.user, normal_style),
+        Span::styled("  ", dim_style),
         Span::styled(
-            &app.user,
-            Style::default().fg(Theme::fg()),
+            format!("{}/{}", conns, max_conns),
+            normal_style,
         ),
-        Span::styled(" │ ", Style::default().fg(Theme::border_dim())),
-        Span::styled(
-            format!("conns: {}", conns),
-            Style::default().fg(Theme::fg()),
-        ),
-        Span::styled(" │ ", Style::default().fg(Theme::border_dim())),
+        Span::styled(" conns", label_style),
+        Span::styled("  ", dim_style),
+        Span::styled("⟳ ", label_style),
         Span::styled(
             format!("{}s", app.refresh_interval_secs),
-            Style::default().fg(Theme::fg()),
+            normal_style,
         ),
     ];
 
     if app.paused {
+        spans.push(Span::styled("  ", dim_style));
         spans.push(Span::styled(
-            " │ PAUSED",
+            " ⏸ PAUSED ",
             Style::default()
-                .fg(Theme::border_warn())
+                .fg(Theme::header_bg())
+                .bg(Theme::border_warn())
                 .add_modifier(Modifier::BOLD),
         ));
     }
 
     if let Some(ref msg) = app.status_message {
+        spans.push(Span::styled("  ", dim_style));
         spans.push(Span::styled(
-            format!(" │ {}", msg),
+            format!("● {}", msg),
             Style::default().fg(Theme::border_active()),
         ));
     }
 
     if let Some(ref err) = app.last_error {
+        spans.push(Span::styled("  ", dim_style));
         spans.push(Span::styled(
-            format!(" │ ERR: {}", truncate(err, 40)),
+            format!("⚠ {}", truncate(err, 40)),
             Style::default()
                 .fg(Theme::border_danger())
                 .add_modifier(Modifier::BOLD),
         ));
     }
 
-    spans.push(Span::styled(
-        format!(" │ {}", now),
-        Style::default().fg(Theme::border_dim()),
-    ));
+    // Right-align the time by adding padding
+    let used_width: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+    let padding = (area.width as usize).saturating_sub(used_width + now.len() + 2);
+    if padding > 0 {
+        spans.push(Span::styled(" ".repeat(padding), dim_style));
+    }
+    spans.push(Span::styled(now, dim_style));
+    spans.push(Span::styled(" ", dim_style));
 
     let paragraph =
         Paragraph::new(Line::from(spans)).style(Style::default().bg(Theme::header_bg()));
@@ -100,60 +118,73 @@ fn render_replay(frame: &mut Frame, app: &App, area: Rect) {
         .map(|s| s.timestamp.format("%H:%M:%S").to_string())
         .unwrap_or_else(|| "--:--:--".to_string());
 
-    let play_state = if app.replay_playing {
-        "PLAYING"
-    } else {
-        "PAUSED"
-    };
-
     let speed_label = format_speed(app.replay_speed);
 
+    let brand_style = Style::default()
+        .fg(Theme::header_bg())
+        .bg(Theme::border_warn())
+        .add_modifier(Modifier::BOLD);
+    let dim_style = Style::default().fg(Theme::border_dim());
+    let normal_style = Style::default().fg(Theme::fg());
+    let label_style = Style::default().fg(Theme::fg_dim());
+
     let mut spans = vec![
+        Span::styled(" ▶ REPLAY ", brand_style),
+        Span::styled("  ", dim_style),
+        Span::styled("◆ ", Style::default().fg(Theme::border_warn())),
         Span::styled(
-            " REPLAY ",
-            Style::default()
-                .fg(Theme::border_warn())
-                .add_modifier(Modifier::BOLD),
+            truncate(filename, 35),
+            normal_style,
         ),
-        Span::styled("│ ", Style::default().fg(Theme::border_dim())),
+        Span::styled("  ", dim_style),
         Span::styled(
-            truncate(filename, 40),
-            Style::default().fg(Theme::fg()),
+            format!("{}", app.replay_position),
+            Style::default().fg(Theme::border_active()).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" │ ", Style::default().fg(Theme::border_dim())),
         Span::styled(
-            format!("[{}/{}]", app.replay_position, app.replay_total),
-            Style::default().fg(Theme::border_active()),
+            format!("/{}", app.replay_total),
+            label_style,
         ),
-        Span::styled(" │ ", Style::default().fg(Theme::border_dim())),
-        Span::styled(
-            speed_label,
-            Style::default().fg(Theme::fg()),
-        ),
-        Span::styled(" │ ", Style::default().fg(Theme::border_dim())),
-        Span::styled(
-            play_state,
-            Style::default()
-                .fg(if app.replay_playing {
-                    Theme::border_ok()
-                } else {
-                    Theme::border_warn()
-                })
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(" │ ", Style::default().fg(Theme::border_dim())),
-        Span::styled(
-            snap_ts,
-            Style::default().fg(Theme::border_dim()),
-        ),
+        Span::styled("  ", dim_style),
+        Span::styled("⟳ ", label_style),
+        Span::styled(speed_label, normal_style),
+        Span::styled("  ", dim_style),
     ];
 
-    if let Some(ref msg) = app.status_message {
+    if app.replay_playing {
         spans.push(Span::styled(
-            format!(" │ {}", msg),
+            " ▶ PLAYING ",
+            Style::default()
+                .fg(Theme::header_bg())
+                .bg(Theme::border_ok())
+                .add_modifier(Modifier::BOLD),
+        ));
+    } else {
+        spans.push(Span::styled(
+            " ⏸ PAUSED ",
+            Style::default()
+                .fg(Theme::header_bg())
+                .bg(Theme::border_dim())
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
+
+    if let Some(ref msg) = app.status_message {
+        spans.push(Span::styled("  ", dim_style));
+        spans.push(Span::styled(
+            format!("● {}", msg),
             Style::default().fg(Theme::border_active()),
         ));
     }
+
+    // Right-align the timestamp
+    let used_width: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+    let padding = (area.width as usize).saturating_sub(used_width + snap_ts.len() + 2);
+    if padding > 0 {
+        spans.push(Span::styled(" ".repeat(padding), dim_style));
+    }
+    spans.push(Span::styled(snap_ts, dim_style));
+    spans.push(Span::styled(" ", dim_style));
 
     let paragraph =
         Paragraph::new(Line::from(spans)).style(Style::default().bg(Theme::header_bg()));

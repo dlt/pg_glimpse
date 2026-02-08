@@ -107,6 +107,7 @@ impl ColorTheme {
 pub struct ThemeColors {
     pub header_bg: Color,
     pub fg: Color,
+    pub fg_dim: Color,
     pub border_active: Color,
     pub border_warn: Color,
     pub border_danger: Color,
@@ -133,31 +134,33 @@ impl ThemeColors {
     pub const TOKYO_NIGHT: Self = Self {
         header_bg: Color::Rgb(36, 40, 59),
         fg: Color::Rgb(192, 202, 245),
-        border_active: Color::Cyan,
-        border_warn: Color::Yellow,
-        border_danger: Color::Red,
-        border_ok: Color::Green,
-        border_dim: Color::Rgb(68, 71, 90),
+        fg_dim: Color::Rgb(115, 121, 148),
+        border_active: Color::Rgb(125, 207, 255),   // soft cyan
+        border_warn: Color::Rgb(224, 175, 104),     // soft amber
+        border_danger: Color::Rgb(247, 118, 142),   // soft red
+        border_ok: Color::Rgb(158, 206, 106),       // soft green
+        border_dim: Color::Rgb(59, 66, 97),         // muted blue-gray
         graph_connections: Color::Rgb(97, 175, 239),
         graph_cache: Color::Rgb(86, 182, 194),
         graph_latency: Color::Rgb(152, 195, 121),
-        duration_ok: Color::Green,
-        duration_warn: Color::Yellow,
-        duration_danger: Color::Red,
-        state_active: Color::Green,
-        state_idle_txn: Color::Yellow,
+        duration_ok: Color::Rgb(158, 206, 106),     // soft green
+        duration_warn: Color::Rgb(224, 175, 104),   // soft amber
+        duration_danger: Color::Rgb(247, 118, 142), // soft red
+        state_active: Color::Rgb(158, 206, 106),    // soft green
+        state_idle_txn: Color::Rgb(224, 175, 104),  // soft amber
         overlay_bg: Color::Rgb(26, 27, 38),
         highlight_bg: Color::Rgb(40, 42, 64),
-        sql_keyword: Color::Rgb(198, 120, 221),  // purple
-        sql_string: Color::Rgb(152, 195, 121),   // green
-        sql_number: Color::Rgb(209, 154, 102),   // orange
-        sql_comment: Color::Rgb(92, 99, 112),    // gray
+        sql_keyword: Color::Rgb(198, 120, 221),     // purple
+        sql_string: Color::Rgb(152, 195, 121),      // green
+        sql_number: Color::Rgb(209, 154, 102),      // orange
+        sql_comment: Color::Rgb(92, 99, 112),       // gray
     };
 
     pub fn dracula() -> Self {
         Self {
             header_bg: Color::Rgb(40, 42, 54),
             fg: Color::Rgb(248, 248, 242),
+            fg_dim: Color::Rgb(98, 114, 164),
             border_active: Color::Rgb(139, 233, 253),
             border_warn: Color::Rgb(241, 250, 140),
             border_danger: Color::Rgb(255, 85, 85),
@@ -184,6 +187,7 @@ impl ThemeColors {
         Self {
             header_bg: Color::Rgb(46, 52, 64),
             fg: Color::Rgb(216, 222, 233),
+            fg_dim: Color::Rgb(107, 121, 142),
             border_active: Color::Rgb(136, 192, 208),
             border_warn: Color::Rgb(235, 203, 139),
             border_danger: Color::Rgb(191, 97, 106),
@@ -210,6 +214,7 @@ impl ThemeColors {
         Self {
             header_bg: Color::Rgb(0, 43, 54),
             fg: Color::Rgb(131, 148, 150),
+            fg_dim: Color::Rgb(88, 110, 117),
             border_active: Color::Rgb(38, 139, 210),
             border_warn: Color::Rgb(181, 137, 0),
             border_danger: Color::Rgb(220, 50, 47),
@@ -236,6 +241,7 @@ impl ThemeColors {
         Self {
             header_bg: Color::Rgb(238, 232, 213),    // base2
             fg: Color::Rgb(101, 123, 131),           // base00
+            fg_dim: Color::Rgb(147, 161, 161),       // base1
             border_active: Color::Rgb(38, 139, 210), // blue
             border_warn: Color::Rgb(181, 137, 0),    // yellow
             border_danger: Color::Rgb(220, 50, 47),  // red
@@ -262,6 +268,7 @@ impl ThemeColors {
         Self {
             header_bg: Color::Rgb(230, 233, 239),    // mantle
             fg: Color::Rgb(76, 79, 105),             // text
+            fg_dim: Color::Rgb(140, 143, 161),       // overlay0
             border_active: Color::Rgb(30, 102, 245), // blue
             border_warn: Color::Rgb(223, 142, 29),   // yellow
             border_danger: Color::Rgb(210, 15, 57),  // red
