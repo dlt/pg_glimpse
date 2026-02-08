@@ -33,7 +33,8 @@ fn overlay_block(title: &str, color: Color) -> Block<'_> {
         .title(format!(" {} ", title))
         .title_style(
             Style::default()
-                .fg(color)
+                .fg(Theme::overlay_bg())
+                .bg(color)
                 .add_modifier(Modifier::BOLD),
         )
         .borders(Borders::ALL)
@@ -42,11 +43,53 @@ fn overlay_block(title: &str, color: Color) -> Block<'_> {
         .style(Style::default().bg(Theme::overlay_bg()))
 }
 
+/// Create a section header line with visual styling
+fn section_header(title: &str) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(
+            format!("  {} ", title),
+            Style::default()
+                .fg(Theme::border_warn())
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            "─".repeat(40),
+            Style::default().fg(Theme::border_dim()),
+        ),
+    ])
+}
+
+/// Create a separator line
+fn separator_line() -> Line<'static> {
+    Line::from(Span::styled(
+        format!("  {}", "─".repeat(50)),
+        Style::default().fg(Theme::border_dim()),
+    ))
+}
+
+/// Create an action hint line (for bottom of overlays)
+fn action_hint(hints: Vec<(&str, &str)>) -> Line<'static> {
+    let mut spans = vec![Span::styled("  ", Style::default())];
+    let key_style = Style::default()
+        .fg(Theme::border_active())
+        .add_modifier(Modifier::BOLD);
+    let desc_style = Style::default().fg(Theme::fg_dim());
+
+    for (i, (key, desc)) in hints.iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::styled("  ·  ", Style::default().fg(Theme::border_dim())));
+        }
+        spans.push(Span::styled(key.to_string(), key_style));
+        spans.push(Span::styled(format!(" {}", desc), desc_style));
+    }
+    Line::from(spans)
+}
+
 pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(70, 70, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Query Details  [j/k] scroll  [y] copy  [Esc] close", Theme::border_active());
+    let block = overlay_block(" Query Details ", Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(
@@ -71,33 +114,38 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let state_color = Theme::state_color(q.state.as_deref());
 
     let mut lines = vec![
+        Line::from(""),
+        section_header("Connection"),
         Line::from(vec![
             Span::styled("  PID:       ", Style::default().fg(Theme::fg_dim())),
             Span::styled(q.pid.to_string(), Style::default().fg(Theme::fg()).add_modifier(Modifier::BOLD)),
-        ]),
-        Line::from(vec![
-            Span::styled("  User:      ", Style::default().fg(Theme::fg_dim())),
+            Span::styled("     User: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
                 q.usename.clone().unwrap_or_else(|| "-".into()),
                 Style::default().fg(Theme::fg()),
             ),
-        ]),
-        Line::from(vec![
-            Span::styled("  Database:  ", Style::default().fg(Theme::fg_dim())),
+            Span::styled("     DB: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
                 q.datname.clone().unwrap_or_else(|| "-".into()),
+                Style::default().fg(Theme::border_active()),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("  Backend:   ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                q.backend_type.clone().unwrap_or_else(|| "-".into()),
                 Style::default().fg(Theme::fg()),
             ),
         ]),
+        Line::from(""),
+        section_header("Status"),
         Line::from(vec![
             Span::styled("  State:     ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
-                q.state.clone().unwrap_or_else(|| "-".into()),
-                Style::default().fg(state_color),
+                format!(" {} ", q.state.clone().unwrap_or_else(|| "-".into())),
+                Style::default().fg(Theme::overlay_bg()).bg(state_color),
             ),
-        ]),
-        Line::from(vec![
-            Span::styled("  Duration:  ", Style::default().fg(Theme::fg_dim())),
+            Span::styled("     Duration: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
                 format_duration(q.duration_secs),
                 Style::default().fg(duration_color).add_modifier(Modifier::BOLD),
@@ -118,30 +166,22 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
                 }),
             ),
         ]),
-        Line::from(vec![
-            Span::styled("  Backend:   ", Style::default().fg(Theme::fg_dim())),
-            Span::styled(
-                q.backend_type.clone().unwrap_or_else(|| "-".into()),
-                Style::default().fg(Theme::fg()),
-            ),
-        ]),
         Line::from(""),
-        Line::from(Span::styled(
-            "  Query:",
-            Style::default()
-                .fg(Theme::fg_dim())
-                .add_modifier(Modifier::BOLD),
-        )),
+        section_header("Query"),
     ];
     lines.extend(highlight_sql(
         q.query.as_deref().unwrap_or("<no query>"),
         "  ",
     ));
     lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  Actions:  C cancel query  K terminate backend",
-        Style::default().fg(Theme::fg_dim()),
-    )));
+    lines.push(separator_line());
+    lines.push(action_hint(vec![
+        ("j/k", "scroll"),
+        ("y", "copy"),
+        ("C", "cancel"),
+        ("K", "kill"),
+        ("Esc", "close"),
+    ]));
 
     let paragraph = Paragraph::new(lines)
         .block(block)
@@ -151,10 +191,10 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
-    let popup = centered_rect(75, 55, area);
+    let popup = centered_rect(75, 60, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Index Details  [j/k] scroll  [y] copy  [Esc] back", Theme::border_active());
+    let block = overlay_block(" Index Details ", Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -179,12 +219,12 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
     };
 
     let mut lines = vec![
+        Line::from(""),
+        section_header("Index Info"),
         Line::from(vec![
             Span::styled("  Schema:      ", Style::default().fg(Theme::fg_dim())),
             Span::styled(&idx.schemaname, Style::default().fg(Theme::fg())),
-        ]),
-        Line::from(vec![
-            Span::styled("  Table:       ", Style::default().fg(Theme::fg_dim())),
+            Span::styled("     Table: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(&idx.table_name, Style::default().fg(Theme::fg())),
         ]),
         Line::from(vec![
@@ -192,7 +232,7 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled(
                 &idx.index_name,
                 Style::default()
-                    .fg(Theme::fg())
+                    .fg(Theme::border_active())
                     .add_modifier(Modifier::BOLD),
             ),
         ]),
@@ -204,38 +244,34 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
             ),
         ]),
         Line::from(""),
+        section_header("Usage Stats"),
         Line::from(vec![
             Span::styled("  Scans:       ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
-                idx.idx_scan.to_string(),
+                format!(" {} ", idx.idx_scan),
                 Style::default()
-                    .fg(scan_color)
+                    .fg(Theme::overlay_bg())
+                    .bg(scan_color)
                     .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                if idx.idx_scan == 0 { "  ← unused index" } else { "" },
+                Style::default().fg(Theme::border_danger()),
             ),
         ]),
         Line::from(vec![
             Span::styled("  Tup Read:    ", Style::default().fg(Theme::fg_dim())),
-            Span::styled(
-                idx.idx_tup_read.to_string(),
-                Style::default().fg(Theme::fg()),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("  Tup Fetch:   ", Style::default().fg(Theme::fg_dim())),
-            Span::styled(
-                idx.idx_tup_fetch.to_string(),
-                Style::default().fg(Theme::fg()),
-            ),
+            Span::styled(idx.idx_tup_read.to_string(), Style::default().fg(Theme::fg())),
+            Span::styled("     Tup Fetch: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(idx.idx_tup_fetch.to_string(), Style::default().fg(Theme::fg())),
         ]),
         Line::from(""),
-        Line::from(Span::styled(
-            "  Definition:",
-            Style::default()
-                .fg(Theme::fg_dim())
-                .add_modifier(Modifier::BOLD),
-        )),
+        section_header("Definition"),
     ];
     lines.extend(highlight_sql(&idx.index_definition, "  "));
+    lines.push(Line::from(""));
+    lines.push(separator_line());
+    lines.push(action_hint(vec![("j/k", "scroll"), ("y", "copy"), ("Esc", "close")]));
 
     let paragraph = Paragraph::new(lines)
         .block(block)
@@ -245,30 +281,40 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 pub fn render_confirm_cancel(frame: &mut Frame, pid: i32, area: Rect) {
-    let popup = centered_rect(45, 20, area);
+    let popup = centered_rect(50, 25, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Confirm Cancel", Theme::border_warn());
+    let block = overlay_block(" Cancel Query ", Theme::border_warn());
 
     let lines = vec![
         Line::from(""),
-        Line::from(Span::styled(
-            format!("  Cancel query on PID {}?", pid),
-            Style::default()
-                .fg(Theme::border_warn())
-                .add_modifier(Modifier::BOLD),
-        )),
+        Line::from(vec![
+            Span::styled("  Cancel query on PID ", Style::default().fg(Theme::fg())),
+            Span::styled(
+                format!("{}", pid),
+                Style::default().fg(Theme::border_warn()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("?", Style::default().fg(Theme::fg())),
+        ]),
         Line::from(""),
         Line::from(Span::styled(
             "  The current query will be interrupted.",
             Style::default().fg(Theme::fg_dim()),
         )),
         Line::from(""),
+        separator_line(),
         Line::from(vec![
-            Span::styled("  y", Style::default().fg(Theme::border_warn()).add_modifier(Modifier::BOLD)),
-            Span::styled(" confirm  ", Style::default().fg(Theme::fg())),
-            Span::styled("any key", Style::default().fg(Theme::border_ok()).add_modifier(Modifier::BOLD)),
-            Span::styled(" abort", Style::default().fg(Theme::fg())),
+            Span::styled("  ", Style::default()),
+            Span::styled(
+                " y ",
+                Style::default().fg(Theme::overlay_bg()).bg(Theme::border_warn()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" confirm    ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                " Esc ",
+                Style::default().fg(Theme::overlay_bg()).bg(Theme::border_dim()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" abort", Style::default().fg(Theme::fg_dim())),
         ]),
     ];
 
@@ -279,30 +325,40 @@ pub fn render_confirm_cancel(frame: &mut Frame, pid: i32, area: Rect) {
 }
 
 pub fn render_confirm_kill(frame: &mut Frame, pid: i32, area: Rect) {
-    let popup = centered_rect(45, 20, area);
+    let popup = centered_rect(50, 25, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Confirm Kill", Theme::border_danger());
+    let block = overlay_block(" Terminate Backend ", Theme::border_danger());
 
     let lines = vec![
         Line::from(""),
-        Line::from(Span::styled(
-            format!("  Terminate backend PID {}?", pid),
-            Style::default()
-                .fg(Theme::border_danger())
-                .add_modifier(Modifier::BOLD),
-        )),
-        Line::from(""),
-        Line::from(Span::styled(
-            "  This will kill the connection entirely.",
-            Style::default().fg(Theme::fg_dim()),
-        )),
-        Line::from(""),
         Line::from(vec![
-            Span::styled("  y", Style::default().fg(Theme::border_danger()).add_modifier(Modifier::BOLD)),
-            Span::styled(" confirm  ", Style::default().fg(Theme::fg())),
-            Span::styled("any key", Style::default().fg(Theme::border_ok()).add_modifier(Modifier::BOLD)),
-            Span::styled(" abort", Style::default().fg(Theme::fg())),
+            Span::styled("  Terminate backend PID ", Style::default().fg(Theme::fg())),
+            Span::styled(
+                format!("{}", pid),
+                Style::default().fg(Theme::border_danger()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("?", Style::default().fg(Theme::fg())),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  ⚠ This will kill the connection entirely.",
+            Style::default().fg(Theme::border_danger()),
+        )),
+        Line::from(""),
+        separator_line(),
+        Line::from(vec![
+            Span::styled("  ", Style::default()),
+            Span::styled(
+                " y ",
+                Style::default().fg(Theme::overlay_bg()).bg(Theme::border_danger()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" confirm    ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                " Esc ",
+                Style::default().fg(Theme::overlay_bg()).bg(Theme::border_dim()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" abort", Style::default().fg(Theme::fg_dim())),
         ]),
     ];
 
@@ -632,10 +688,7 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(70, 75, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block(
-        "Config  [\u{2190}\u{2192}] change  [Esc] save & close",
-        Theme::border_active(),
-    );
+    let block = overlay_block(" Configuration ", Theme::border_active());
 
     let logo_style = Style::default().fg(Theme::border_active());
     let mut lines = vec![
@@ -647,12 +700,12 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
         Line::from(Span::styled(" ██║     ╚██████╔╝   ╚██████╔╝███████╗██║██║ ╚═╝ ██║██║     ███████║███████╗", logo_style)),
         Line::from(Span::styled(" ╚═╝      ╚═════╝     ╚═════╝ ╚══════╝╚═╝╚═╝     ╚═╝╚═╝     ╚══════╝╚══════╝", logo_style)),
         Line::from(""),
-        Line::from(""),
+        section_header("Settings"),
     ];
 
     for (i, item) in ConfigItem::ALL.iter().enumerate() {
         let selected = i == app.config_selected;
-        let indicator = if selected { "\u{25ba} " } else { "  " };
+        let indicator = if selected { "▸ " } else { "  " };
 
         let value_str = match item {
             ConfigItem::GraphMarker => app.config.graph_marker.label().to_string(),
@@ -680,18 +733,24 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
 
         let value_style = if selected {
             Style::default()
-                .fg(Theme::border_active())
+                .fg(Theme::overlay_bg())
+                .bg(Theme::border_active())
                 .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Theme::fg_dim())
         };
 
+        let arrow_style = if selected {
+            Style::default().fg(Theme::border_active())
+        } else {
+            Style::default().fg(Theme::border_dim())
+        };
+
         lines.push(Line::from(vec![
-            Span::styled(
-                format!("  {}{:<20}", indicator, item.label()),
-                label_style,
-            ),
-            Span::styled(format!("\u{25c4} {} \u{25ba}", value_str), value_style),
+            Span::styled(format!("  {}{:<20}", indicator, item.label()), label_style),
+            Span::styled("◀ ", arrow_style),
+            Span::styled(format!(" {} ", value_str), value_style),
+            Span::styled(" ▶", arrow_style),
         ]));
     }
 
@@ -699,32 +758,33 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
     let label_style = Style::default().fg(Theme::fg_dim());
     let value_style = Style::default().fg(Theme::fg());
     let link_style = Style::default().fg(Theme::border_active());
-    let section_style = Style::default().fg(Theme::border_warn()).add_modifier(Modifier::BOLD);
 
     lines.push(Line::from(""));
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled("  About", section_style)));
+    lines.push(section_header("About"));
     lines.push(Line::from(vec![
-        Span::styled("  Version:    ", label_style),
+        Span::styled("    Version:    ", label_style),
         Span::styled(env!("CARGO_PKG_VERSION"), value_style),
     ]));
     lines.push(Line::from(vec![
-        Span::styled("  License:    ", label_style),
+        Span::styled("    License:    ", label_style),
         Span::styled("MIT", value_style),
     ]));
     lines.push(Line::from(vec![
-        Span::styled("  Built with: ", label_style),
+        Span::styled("    Built with: ", label_style),
         Span::styled("Rust + ratatui + tokio-postgres", value_style),
     ]));
     lines.push(Line::from(""));
     lines.push(Line::from(vec![
-        Span::styled("  GitHub:     ", label_style),
+        Span::styled("    GitHub:     ", label_style),
         Span::styled("github.com/dlt/pg_glimpse", link_style),
     ]));
     lines.push(Line::from(vec![
-        Span::styled("  Issues:     ", label_style),
+        Span::styled("    Issues:     ", label_style),
         Span::styled("github.com/dlt/pg_glimpse/issues", link_style),
     ]));
+    lines.push(Line::from(""));
+    lines.push(separator_line());
+    lines.push(action_hint(vec![("←→", "change"), ("Esc", "save & close")]));
 
     let paragraph = Paragraph::new(lines).block(block);
     frame.render_widget(paragraph, popup);
@@ -734,30 +794,23 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(70, 80, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Keybindings  [j/k] scroll  [Esc] close", Theme::border_active());
+    let block = overlay_block(" Keybindings ", Theme::border_active());
 
     let key_style = Style::default()
         .fg(Theme::border_active())
         .add_modifier(Modifier::BOLD);
     let desc_style = Style::default().fg(Theme::fg());
-    let section_style = Style::default()
-        .fg(Theme::border_warn())
-        .add_modifier(Modifier::BOLD);
 
     let entry = |key: &str, desc: &str| -> Line<'static> {
         Line::from(vec![
-            Span::styled(format!("  {:<14}", key), key_style),
+            Span::styled(format!("    {:<12}", key), key_style),
             Span::styled(desc.to_string(), desc_style),
         ])
     };
 
-    let section = |title: &str| -> Line<'static> {
-        Line::from(Span::styled(format!("  {}", title), section_style))
-    };
-
     let lines = vec![
         Line::from(""),
-        section("Navigation"),
+        section_header("Navigation"),
         entry("q", "Quit application"),
         entry("Ctrl+C", "Force quit"),
         entry("p", "Pause / resume refresh"),
@@ -765,7 +818,7 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
         entry("?", "This help screen"),
         entry(",", "Configuration"),
         Line::from(""),
-        section("Panels"),
+        section_header("Panels"),
         entry("Tab", "Blocking chains"),
         entry("w", "Wait events"),
         entry("t", "Table stats"),
@@ -775,29 +828,26 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
         entry("I", "Index stats"),
         entry("S", "pg_stat_statements"),
         Line::from(""),
-        section("Panel Controls"),
-        entry("Esc", "Back to queries (or quit from queries)"),
-        entry("\u{2191} / k", "Select previous row"),
-        entry("\u{2193} / j", "Select next row"),
+        section_header("Panel Controls"),
+        entry("Esc", "Back to queries (or quit)"),
+        entry("↑ / k", "Select previous row"),
+        entry("↓ / j", "Select next row"),
         entry("s", "Cycle sort column"),
-        entry("/", "Fuzzy filter (queries, indexes, stmts)"),
+        entry("/", "Fuzzy filter"),
         entry("Enter", "Inspect selected row"),
         Line::from(""),
-        section("Query Actions"),
-        entry("C", "Cancel query (pg_cancel_backend)"),
-        entry("K", "Kill backend (pg_terminate_backend)"),
-        entry("y", "Yank (copy to clipboard)"),
+        section_header("Query Actions"),
+        entry("C", "Cancel query"),
+        entry("K", "Terminate backend"),
+        entry("y", "Copy to clipboard"),
         Line::from(""),
-        section("Filter"),
-        entry("/", "Open fuzzy filter"),
-        entry("Enter", "Confirm filter"),
-        entry("Esc", "Clear filter and close"),
-        entry("Backspace", "Delete character"),
-        Line::from(""),
-        section("Overlay Controls"),
-        entry("Esc / q", "Close overlay"),
-        entry("\u{2191}/\u{2193} or j/k", "Scroll"),
+        section_header("Overlay"),
+        entry("Esc / q", "Close"),
+        entry("j / k", "Scroll"),
         entry("g / G", "Top / bottom"),
+        Line::from(""),
+        separator_line(),
+        action_hint(vec![("j/k", "scroll"), ("Esc", "close")]),
     ];
 
     let paragraph = Paragraph::new(lines)
