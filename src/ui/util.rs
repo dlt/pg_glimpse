@@ -1,6 +1,18 @@
-use ratatui::style::Color;
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::widgets::{Block, Paragraph};
 
 use super::theme::Theme;
+
+/// Create a styled empty state message for panels with no data
+pub fn empty_state<'a>(text: &'a str, block: Block<'a>) -> Paragraph<'a> {
+    Paragraph::new(format!("\n  {}", text))
+        .style(
+            Style::default()
+                .fg(Theme::border_ok())
+                .add_modifier(Modifier::ITALIC),
+        )
+        .block(block)
+}
 
 pub fn format_bytes(bytes: i64) -> String {
     const KB: i64 = 1024;

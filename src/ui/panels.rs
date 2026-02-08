@@ -8,7 +8,7 @@ use crate::app::{App, BottomPanel, IndexSortColumn, StatementSortColumn, TableSt
 use super::overlay::highlight_sql_inline;
 use super::theme::Theme;
 use super::util::{
-    format_bytes, format_compact, format_lag, format_time_ms, lag_color, truncate,
+    empty_state, format_bytes, format_compact, format_lag, format_time_ms, lag_color, truncate,
 };
 
 fn panel_block(title: &str) -> Block<'_> {
@@ -30,14 +30,7 @@ pub fn render_blocking(frame: &mut Frame, app: &mut App, area: Rect) {
     };
 
     if snap.blocking_info.is_empty() {
-        let msg = Paragraph::new("\n  No blocking detected")
-            .style(
-                Style::default()
-                    .fg(Theme::border_ok())
-                    .add_modifier(Modifier::ITALIC),
-            )
-            .block(block);
-        frame.render_widget(msg, area);
+        frame.render_widget(empty_state("No blocking detected", block), area);
         return;
     }
 
@@ -92,14 +85,7 @@ pub fn render_wait_events(frame: &mut Frame, app: &App, area: Rect) {
     };
 
     if snap.wait_events.is_empty() {
-        let msg = Paragraph::new("\n  No active wait events")
-            .style(
-                Style::default()
-                    .fg(Theme::border_ok())
-                    .add_modifier(Modifier::ITALIC),
-            )
-            .block(block);
-        frame.render_widget(msg, area);
+        frame.render_widget(empty_state("No active wait events", block), area);
         return;
     }
 
@@ -155,14 +141,7 @@ pub fn render_table_stats(frame: &mut Frame, app: &mut App, area: Rect) {
     };
 
     if snap.table_stats.is_empty() {
-        let msg = Paragraph::new("\n  No user tables found")
-            .style(
-                Style::default()
-                    .fg(Theme::border_ok())
-                    .add_modifier(Modifier::ITALIC),
-            )
-            .block(block);
-        frame.render_widget(msg, area);
+        frame.render_widget(empty_state("No user tables found", block), area);
         return;
     }
 
@@ -250,14 +229,7 @@ pub fn render_replication(frame: &mut Frame, app: &mut App, area: Rect) {
     };
 
     if snap.replication.is_empty() {
-        let msg = Paragraph::new("\n  No replicas connected")
-            .style(
-                Style::default()
-                    .fg(Theme::border_ok())
-                    .add_modifier(Modifier::ITALIC),
-            )
-            .block(block);
-        frame.render_widget(msg, area);
+        frame.render_widget(empty_state("No replicas connected", block), area);
         return;
     }
 
@@ -325,14 +297,7 @@ pub fn render_vacuum_progress(frame: &mut Frame, app: &mut App, area: Rect) {
     };
 
     if snap.vacuum_progress.is_empty() {
-        let msg = Paragraph::new("\n  No vacuums running")
-            .style(
-                Style::default()
-                    .fg(Theme::border_ok())
-                    .add_modifier(Modifier::ITALIC),
-            )
-            .block(block);
-        frame.render_widget(msg, area);
+        frame.render_widget(empty_state("No vacuums running", block), area);
         return;
     }
 
@@ -384,14 +349,7 @@ pub fn render_wraparound(frame: &mut Frame, app: &mut App, area: Rect) {
     };
 
     if snap.wraparound.is_empty() {
-        let msg = Paragraph::new("\n  No databases found")
-            .style(
-                Style::default()
-                    .fg(Theme::border_ok())
-                    .add_modifier(Modifier::ITALIC),
-            )
-            .block(block);
-        frame.render_widget(msg, area);
+        frame.render_widget(empty_state("No databases found", block), area);
         return;
     }
 
@@ -469,14 +427,7 @@ pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {
     };
 
     if snap.indexes.is_empty() {
-        let msg = Paragraph::new("\n  No user indexes found")
-            .style(
-                Style::default()
-                    .fg(Theme::border_ok())
-                    .add_modifier(Modifier::ITALIC),
-            )
-            .block(block);
-        frame.render_widget(msg, area);
+        frame.render_widget(empty_state("No user indexes found", block), area);
         return;
     }
 
@@ -624,14 +575,7 @@ pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
     }
 
     if snap.stat_statements.is_empty() {
-        let msg = Paragraph::new("\n  No statement data collected yet")
-            .style(
-                Style::default()
-                    .fg(Theme::border_ok())
-                    .add_modifier(Modifier::ITALIC),
-            )
-            .block(block);
-        frame.render_widget(msg, area);
+        frame.render_widget(empty_state("No statement data collected yet", block), area);
         return;
     }
 
