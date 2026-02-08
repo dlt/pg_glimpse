@@ -40,6 +40,35 @@ pub struct CheckpointStats {
     pub buffers_backend: i64,
 }
 
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub struct WalStats {
+    pub wal_records: i64,
+    pub wal_fpi: i64,
+    pub wal_bytes: i64,
+    pub wal_buffers_full: i64,
+    pub wal_write: i64,
+    pub wal_sync: i64,
+    pub wal_write_time: f64,
+    pub wal_sync_time: f64,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ArchiverStats {
+    pub archived_count: i64,
+    pub failed_count: i64,
+    pub last_archived_wal: Option<String>,
+    pub last_archived_time: Option<chrono::DateTime<chrono::Utc>>,
+    pub last_failed_wal: Option<String>,
+    pub last_failed_time: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub struct BgwriterStats {
+    pub buffers_clean: i64,
+    pub maxwritten_clean: i64,
+    pub buffers_alloc: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActiveQuery {
     pub pid: i32,
@@ -214,4 +243,7 @@ pub struct PgSnapshot {
     pub extensions: DetectedExtensions,
     pub db_size: i64,
     pub checkpoint_stats: Option<CheckpointStats>,
+    pub wal_stats: Option<WalStats>,
+    pub archiver_stats: Option<ArchiverStats>,
+    pub bgwriter_stats: Option<BgwriterStats>,
 }

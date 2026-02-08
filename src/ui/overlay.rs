@@ -1285,6 +1285,7 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
         entry("x", "Transaction wraparound"),
         entry("I", "Index stats"),
         entry("S", "pg_stat_statements"),
+        entry("A", "WAL & I/O stats"),
         Line::from(""),
         section_header("Panel Controls"),
         entry("Esc", "Back to queries (or quit)"),

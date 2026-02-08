@@ -349,6 +349,41 @@ fn checkpoint_stats_sql(version: u32) -> &'static str {
     }
 }
 
+/// WAL stats query for PG14+ (pg_stat_wal)
+const WAL_STATS_SQL: &str = "
+SELECT
+    COALESCE(wal_records, 0) AS wal_records,
+    COALESCE(wal_fpi, 0) AS wal_fpi,
+    COALESCE(wal_bytes, 0)::bigint AS wal_bytes,
+    COALESCE(wal_buffers_full, 0) AS wal_buffers_full,
+    COALESCE(wal_write, 0) AS wal_write,
+    COALESCE(wal_sync, 0) AS wal_sync,
+    COALESCE(wal_write_time, 0)::float8 AS wal_write_time,
+    COALESCE(wal_sync_time, 0)::float8 AS wal_sync_time
+FROM pg_stat_wal
+";
+
+/// Archiver stats query (all versions)
+const ARCHIVER_STATS_SQL: &str = "
+SELECT
+    COALESCE(archived_count, 0) AS archived_count,
+    COALESCE(failed_count, 0) AS failed_count,
+    last_archived_wal,
+    last_archived_time,
+    last_failed_wal,
+    last_failed_time
+FROM pg_stat_archiver
+";
+
+/// Background writer stats query (all versions)
+const BGWRITER_STATS_SQL: &str = "
+SELECT
+    COALESCE(buffers_clean, 0) AS buffers_clean,
+    COALESCE(maxwritten_clean, 0) AS maxwritten_clean,
+    COALESCE(buffers_alloc, 0) AS buffers_alloc
+FROM pg_stat_bgwriter
+";
+
 pub async fn detect_extensions(client: &Client) -> DetectedExtensions {
     let rows = match client.query(EXTENSIONS_SQL, &[]).await {
         Ok(rows) => rows,
@@ -401,6 +436,41 @@ pub async fn fetch_checkpoint_stats(client: &Client, version: u32) -> Result<Che
         checkpoint_sync_time: row.get("checkpoint_sync_time"),
         buffers_checkpoint: row.get("buffers_checkpoint"),
         buffers_backend: row.get("buffers_backend"),
+    })
+}
+
+pub async fn fetch_wal_stats(client: &Client) -> Result<WalStats> {
+    let row = client.query_one(WAL_STATS_SQL, &[]).await?;
+    Ok(WalStats {
+        wal_records: row.get("wal_records"),
+        wal_fpi: row.get("wal_fpi"),
+        wal_bytes: row.get("wal_bytes"),
+        wal_buffers_full: row.get("wal_buffers_full"),
+        wal_write: row.get("wal_write"),
+        wal_sync: row.get("wal_sync"),
+        wal_write_time: row.get("wal_write_time"),
+        wal_sync_time: row.get("wal_sync_time"),
+    })
+}
+
+pub async fn fetch_archiver_stats(client: &Client) -> Result<ArchiverStats> {
+    let row = client.query_one(ARCHIVER_STATS_SQL, &[]).await?;
+    Ok(ArchiverStats {
+        archived_count: row.get("archived_count"),
+        failed_count: row.get("failed_count"),
+        last_archived_wal: row.get("last_archived_wal"),
+        last_archived_time: row.get("last_archived_time"),
+        last_failed_wal: row.get("last_failed_wal"),
+        last_failed_time: row.get("last_failed_time"),
+    })
+}
+
+pub async fn fetch_bgwriter_stats(client: &Client) -> Result<BgwriterStats> {
+    let row = client.query_one(BGWRITER_STATS_SQL, &[]).await?;
+    Ok(BgwriterStats {
+        buffers_clean: row.get("buffers_clean"),
+        maxwritten_clean: row.get("maxwritten_clean"),
+        buffers_alloc: row.get("buffers_alloc"),
     })
 }
 
@@ -650,7 +720,7 @@ pub async fn fetch_snapshot(
     version: u32,
 ) -> Result<PgSnapshot> {
     let ext = extensions.clone();
-    let (active, waits, blocks, cache, summary, tables, repl, vacuum, wrap, indexes, ss, db_size, chkpt) =
+    let (active, waits, blocks, cache, summary, tables, repl, vacuum, wrap, indexes, ss, db_size, chkpt, wal, archiver, bgwriter) =
         tokio::try_join!(
             fetch_active_queries(client),
             fetch_wait_events(client),
@@ -665,6 +735,16 @@ pub async fn fetch_snapshot(
             async { Ok(fetch_stat_statements(client, &ext).await) },
             fetch_db_size(client),
             async { Ok(fetch_checkpoint_stats(client, version).await.ok()) },
+            async {
+                // pg_stat_wal only available in PG14+
+                if version >= 14 {
+                    Ok(fetch_wal_stats(client).await.ok())
+                } else {
+                    Ok(None)
+                }
+            },
+            async { Ok(fetch_archiver_stats(client).await.ok()) },
+            async { Ok(fetch_bgwriter_stats(client).await.ok()) },
         )?;
     let (stat_statements, _) = ss;
     Ok(PgSnapshot {
@@ -683,5 +763,8 @@ pub async fn fetch_snapshot(
         extensions: ext,
         db_size,
         checkpoint_stats: chkpt,
+        wal_stats: wal,
+        archiver_stats: archiver,
+        bgwriter_stats: bgwriter,
     })
 }

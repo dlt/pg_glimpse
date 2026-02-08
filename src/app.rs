@@ -19,6 +19,7 @@ pub enum BottomPanel {
     Wraparound,
     Indexes,
     Statements,
+    WalIo,
 }
 
 impl BottomPanel {
@@ -38,6 +39,7 @@ impl BottomPanel {
             Self::Wraparound => "Wraparound",
             Self::Indexes => "Indexes",
             Self::Statements => "Statements",
+            Self::WalIo => "WAL & I/O",
         }
     }
 }
@@ -1048,7 +1050,7 @@ impl App {
             BottomPanel::Blocking => self.handle_blocking_key(key),
             BottomPanel::VacuumProgress => self.handle_vacuum_key(key),
             BottomPanel::Wraparound => self.handle_wraparound_key(key),
-            _ => {}
+            BottomPanel::WalIo | BottomPanel::WaitEvents => {}
         }
     }
 
@@ -1489,6 +1491,10 @@ impl App {
             }
             KeyCode::Char('S') => {
                 self.switch_panel(BottomPanel::Statements);
+                return;
+            }
+            KeyCode::Char('A') => {
+                self.switch_panel(BottomPanel::WalIo);
                 return;
             }
             KeyCode::Char('/') => {

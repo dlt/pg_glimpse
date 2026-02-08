@@ -79,6 +79,7 @@ fn render_live(frame: &mut Frame, app: &App, area: Rect) {
         BottomPanel::Wraparound => "XID",
         BottomPanel::Indexes => "Indexes",
         BottomPanel::Statements => "Statements",
+        BottomPanel::WalIo => "WAL",
     };
 
     // Line 1: Panel name + contextual actions
@@ -218,7 +219,7 @@ fn render_panel_keys<'a>(
             spans.push(key("Esc"));
             spans.push(desc(" back"));
         }
-        BottomPanel::WaitEvents => {
+        BottomPanel::WaitEvents | BottomPanel::WalIo => {
             spans.push(sep());
             spans.push(key("Esc"));
             spans.push(desc(" back"));
@@ -255,4 +256,7 @@ fn render_panel_switch_keys<'a>(
     spans.push(dot());
     spans.push(key("S"));
     spans.push(desc(" stmts"));
+    spans.push(dot());
+    spans.push(key("A"));
+    spans.push(desc(" wal"));
 }
