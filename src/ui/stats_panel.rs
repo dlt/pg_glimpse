@@ -8,7 +8,7 @@ use ratatui::Frame;
 use crate::app::App;
 use super::sparkline::render_sparkline;
 use super::theme::Theme;
-use super::util::format_bytes;
+use super::util::{format_bytes, format_compact};
 
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
@@ -409,12 +409,3 @@ fn format_duration_short(secs: f64) -> String {
     }
 }
 
-fn format_compact(n: i64) -> String {
-    if n >= 1_000_000 {
-        format!("{:.1}M", n as f64 / 1_000_000.0)
-    } else if n >= 1_000 {
-        format!("{:.1}K", n as f64 / 1_000.0)
-    } else {
-        format!("{}", n)
-    }
-}

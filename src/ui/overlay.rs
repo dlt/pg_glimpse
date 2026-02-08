@@ -7,7 +7,7 @@ use ratatui::Frame;
 use crate::app::App;
 use crate::config::ConfigItem;
 use super::theme::Theme;
-use super::util::{format_bytes, format_lag, format_time_ms, lag_color};
+use super::util::{format_bytes, format_compact, format_lag, format_time_ms, lag_color};
 
 fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
     let v = Layout::default()
@@ -681,18 +681,6 @@ pub fn render_table_inspect(frame: &mut Frame, app: &App, area: Rect) {
         .wrap(Wrap { trim: false })
         .scroll((app.overlay_scroll, 0));
     frame.render_widget(paragraph, popup);
-}
-
-fn format_compact(n: i64) -> String {
-    if n >= 1_000_000_000 {
-        format!("{:.1}B", n as f64 / 1_000_000_000.0)
-    } else if n >= 1_000_000 {
-        format!("{:.1}M", n as f64 / 1_000_000.0)
-    } else if n >= 1_000 {
-        format!("{:.1}K", n as f64 / 1_000.0)
-    } else {
-        format!("{}", n)
-    }
 }
 
 pub fn render_blocking_inspect(frame: &mut Frame, app: &App, area: Rect) {

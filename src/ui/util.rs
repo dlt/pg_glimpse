@@ -32,9 +32,10 @@ pub fn lag_color(secs: Option<f64>) -> Color {
     }
 }
 
-pub fn format_number(n: i64) -> String {
+/// Format large numbers compactly (e.g., 1.5K, 2.3M, 1.0B)
+pub fn format_compact(n: i64) -> String {
     if n >= 1_000_000_000 {
-        format!("{:.2}B", n as f64 / 1_000_000_000.0)
+        format!("{:.1}B", n as f64 / 1_000_000_000.0)
     } else if n >= 1_000_000 {
         format!("{:.1}M", n as f64 / 1_000_000.0)
     } else if n >= 1_000 {

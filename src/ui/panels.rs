@@ -8,7 +8,7 @@ use crate::app::{App, BottomPanel, IndexSortColumn, StatementSortColumn, TableSt
 use super::overlay::highlight_sql_inline;
 use super::theme::Theme;
 use super::util::{
-    format_bytes, format_lag, format_number, format_time_ms, lag_color, truncate,
+    format_bytes, format_compact, format_lag, format_time_ms, lag_color, truncate,
 };
 
 fn panel_block(title: &str) -> Block<'_> {
@@ -412,8 +412,8 @@ pub fn render_wraparound(frame: &mut Frame, app: &mut App, area: Rect) {
             };
             Row::new(vec![
                 Cell::from(w.datname.clone()),
-                Cell::from(format_number(w.xid_age as i64)),
-                Cell::from(format_number(w.xids_remaining)),
+                Cell::from(format_compact(w.xid_age as i64)),
+                Cell::from(format_compact(w.xids_remaining)),
                 Cell::from(format!("{:.2}%", w.pct_towards_wraparound))
                     .style(Style::default().fg(pct_color)),
             ])
@@ -733,20 +733,20 @@ pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
             };
             Row::new(vec![
                 Cell::from(Line::from(highlight_sql_inline(&stmt.query, query_width))),
-                Cell::from(format_number(stmt.calls)),
+                Cell::from(format_compact(stmt.calls)),
                 Cell::from(format_time_ms(stmt.total_exec_time)),
                 Cell::from(format_time_ms(stmt.mean_exec_time)),
                 Cell::from(format_time_ms(stmt.max_exec_time))
                     .style(Style::default().fg(max_color)),
                 Cell::from(format_time_ms(stmt.stddev_exec_time)),
-                Cell::from(format_number(stmt.rows)),
+                Cell::from(format_compact(stmt.rows)),
                 Cell::from(format!("{:.0}%", stmt.hit_ratio * 100.0))
                     .style(Style::default().fg(hit_color)),
-                Cell::from(format_number(stmt.shared_blks_read))
+                Cell::from(format_compact(stmt.shared_blks_read))
                     .style(Style::default().fg(reads_color)),
                 Cell::from(format_time_ms(io_time))
                     .style(Style::default().fg(io_color)),
-                Cell::from(format_number(temp_total))
+                Cell::from(format_compact(temp_total))
                     .style(Style::default().fg(temp_color)),
             ])
         })
