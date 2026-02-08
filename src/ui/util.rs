@@ -1,5 +1,5 @@
 use ratatui::layout::Constraint;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::widgets::{Block, Paragraph, Row, Table};
 
 use super::theme::Theme;
@@ -55,13 +55,6 @@ pub fn format_lag(secs: Option<f64>) -> String {
     }
 }
 
-pub fn lag_color(secs: Option<f64>) -> Color {
-    match secs {
-        Some(s) if s > 10.0 => Theme::border_danger(),
-        Some(s) if s > 1.0 => Theme::border_warn(),
-        _ => Theme::fg(),
-    }
-}
 
 /// Format large numbers compactly (e.g., 1.5K, 2.3M, 1.0B)
 pub fn format_compact(n: i64) -> String {

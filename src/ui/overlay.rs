@@ -7,7 +7,7 @@ use ratatui::Frame;
 use crate::app::App;
 use crate::config::ConfigItem;
 use super::theme::Theme;
-use super::util::{format_bytes, format_compact, format_duration, format_lag, format_time_ms, lag_color};
+use super::util::{format_bytes, format_compact, format_duration, format_lag, format_time_ms};
 
 fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
     let v = Layout::default()
@@ -184,11 +184,7 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
     };
     let idx = &snap.indexes[real_idx];
 
-    let scan_color = if idx.idx_scan == 0 {
-        Theme::border_danger()
-    } else {
-        Theme::border_ok()
-    };
+    let scan_color = Theme::index_usage_color(idx.idx_scan);
 
     let mut lines = vec![
         Line::from(""),
@@ -467,7 +463,7 @@ pub fn render_replication_inspect(frame: &mut Frame, app: &App, area: Rect) {
             label("  Replay Lag:      "),
             Span::styled(
                 format_lag(r.replay_lag_secs),
-                Style::default().fg(lag_color(r.replay_lag_secs)).add_modifier(Modifier::BOLD),
+                Style::default().fg(Theme::lag_color(r.replay_lag_secs)).add_modifier(Modifier::BOLD),
             ),
         ]),
         Line::from(""),
@@ -506,13 +502,7 @@ pub fn render_table_inspect(frame: &mut Frame, app: &App, area: Rect) {
     };
     let tbl = &snap.table_stats[real_idx];
 
-    let dead_color = if tbl.dead_ratio > 20.0 {
-        Theme::border_danger()
-    } else if tbl.dead_ratio > 5.0 {
-        Theme::border_warn()
-    } else {
-        Theme::border_ok()
-    };
+    let dead_color = Theme::dead_ratio_color(tbl.dead_ratio);
 
     let seq_scan_color = if tbl.seq_scan > tbl.idx_scan && tbl.n_live_tup > 1000 {
         Theme::border_warn()
@@ -653,11 +643,7 @@ pub fn render_table_inspect(frame: &mut Frame, app: &App, area: Rect) {
         lines.push(Line::from(""));
         lines.push(section_header(&format!("Indexes ({})", related_indexes.len())));
         for idx in &related_indexes {
-            let scan_color = if idx.idx_scan == 0 {
-                Theme::border_danger()
-            } else {
-                Theme::border_ok()
-            };
+            let scan_color = Theme::index_usage_color(idx.idx_scan);
             lines.push(Line::from(vec![
                 Span::styled("  ", Style::default()),
                 Span::styled(
@@ -900,13 +886,7 @@ pub fn render_wraparound_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let pct_color = if wrap.pct_towards_wraparound > 75.0 {
-        Theme::border_danger()
-    } else if wrap.pct_towards_wraparound > 50.0 {
-        Theme::border_warn()
-    } else {
-        Theme::border_ok()
-    };
+    let pct_color = Theme::wraparound_color(wrap.pct_towards_wraparound);
 
     let urgency = if wrap.pct_towards_wraparound > 75.0 {
         ("CRITICAL", Theme::border_danger())
@@ -1024,13 +1004,7 @@ pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
     };
     let stmt = &snap.stat_statements[real_idx];
 
-    let hit_color = if stmt.hit_ratio >= 0.99 {
-        Theme::border_ok()
-    } else if stmt.hit_ratio >= 0.90 {
-        Theme::border_warn()
-    } else {
-        Theme::border_danger()
-    };
+    let hit_color = Theme::hit_ratio_color(stmt.hit_ratio);
 
     let label = |s: &'static str| Span::styled(s, Style::default().fg(Theme::fg_dim()));
     let val = |s: String| Span::styled(s, Style::default().fg(Theme::fg()));

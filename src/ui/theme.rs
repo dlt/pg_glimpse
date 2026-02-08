@@ -136,13 +136,54 @@ impl Theme {
         }
     }
 
-    pub fn hit_ratio_color(ratio_pct: f64) -> Color {
-        if ratio_pct >= 99.0 {
-            Color::Green
-        } else if ratio_pct >= 95.0 {
-            Color::Yellow
+    /// Color for buffer cache hit ratio (0.0-1.0 scale)
+    pub fn hit_ratio_color(ratio: f64) -> Color {
+        if ratio >= 0.99 {
+            Self::border_ok()
+        } else if ratio >= 0.90 {
+            Self::border_warn()
         } else {
-            Color::Red
+            Self::border_danger()
+        }
+    }
+
+    /// Color for dead tuple ratio percentage
+    pub fn dead_ratio_color(ratio: f64) -> Color {
+        if ratio > 20.0 {
+            Self::border_danger()
+        } else if ratio > 5.0 {
+            Self::border_warn()
+        } else {
+            Self::border_ok()
+        }
+    }
+
+    /// Color for transaction ID wraparound percentage
+    pub fn wraparound_color(pct: f64) -> Color {
+        if pct > 75.0 {
+            Self::border_danger()
+        } else if pct > 50.0 {
+            Self::border_warn()
+        } else {
+            Self::border_ok()
+        }
+    }
+
+    /// Color for index usage (0 scans = unused/danger)
+    pub fn index_usage_color(scan_count: i64) -> Color {
+        if scan_count == 0 {
+            Self::border_danger()
+        } else {
+            Self::border_ok()
+        }
+    }
+
+    /// Color for replication lag in seconds
+    pub fn lag_color(secs: Option<f64>) -> Color {
+        match secs {
+            Some(s) if s > 10.0 => Self::border_danger(),
+            Some(s) if s > 1.0 => Self::border_warn(),
+            _ => Self::fg(),
         }
     }
 

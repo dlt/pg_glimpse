@@ -8,7 +8,7 @@ use crate::app::{App, BottomPanel, IndexSortColumn, StatementSortColumn, TableSt
 use super::overlay::highlight_sql_inline;
 use super::theme::Theme;
 use super::util::{
-    empty_state, format_bytes, format_compact, format_lag, format_time_ms, lag_color, styled_table,
+    empty_state, format_bytes, format_compact, format_lag, format_time_ms, styled_table,
     truncate,
 };
 
@@ -165,13 +165,7 @@ pub fn render_table_stats(frame: &mut Frame, app: &mut App, area: Rect) {
         .iter()
         .map(|&i| {
             let t = &snap.table_stats[i];
-            let dead_color = if t.dead_ratio > 20.0 {
-                Theme::border_danger()
-            } else if t.dead_ratio > 5.0 {
-                Theme::border_warn()
-            } else {
-                Theme::fg()
-            };
+            let dead_color = Theme::dead_ratio_color(t.dead_ratio);
             Row::new(vec![
                 Cell::from(format!("{}.{}", t.schemaname, &t.relname)),
                 Cell::from(format_bytes(t.total_size_bytes)),
@@ -238,7 +232,7 @@ pub fn render_replication(frame: &mut Frame, app: &mut App, area: Rect) {
                 Cell::from(format_lag(r.write_lag_secs)),
                 Cell::from(format_lag(r.flush_lag_secs)),
                 Cell::from(format_lag(r.replay_lag_secs))
-                    .style(Style::default().fg(lag_color(r.replay_lag_secs))),
+                    .style(Style::default().fg(Theme::lag_color(r.replay_lag_secs))),
                 Cell::from(r.sync_state.clone().unwrap_or_else(|| "-".into())),
             ])
         })
@@ -326,13 +320,7 @@ pub fn render_wraparound(frame: &mut Frame, app: &mut App, area: Rect) {
         .wraparound
         .iter()
         .map(|w| {
-            let pct_color = if w.pct_towards_wraparound > 75.0 {
-                Theme::border_danger()
-            } else if w.pct_towards_wraparound > 50.0 {
-                Theme::border_warn()
-            } else {
-                Theme::border_ok()
-            };
+            let pct_color = Theme::wraparound_color(w.pct_towards_wraparound);
             Row::new(vec![
                 Cell::from(w.datname.clone()),
                 Cell::from(format_compact(w.xid_age as i64)),
@@ -420,11 +408,7 @@ pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {
         .iter()
         .map(|&i| {
             let idx = &snap.indexes[i];
-            let scan_color = if idx.idx_scan == 0 {
-                Theme::border_danger()
-            } else {
-                Theme::fg()
-            };
+            let scan_color = Theme::index_usage_color(idx.idx_scan);
             Row::new(vec![
                 Cell::from(format!("{}.{}", idx.schemaname, idx.table_name)),
                 Cell::from(idx.index_name.clone()),
@@ -592,13 +576,7 @@ pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
         .iter()
         .map(|&i| {
             let stmt = &snap.stat_statements[i];
-            let hit_color = if stmt.hit_ratio >= 0.99 {
-                Theme::border_ok()
-            } else if stmt.hit_ratio >= 0.90 {
-                Theme::border_warn()
-            } else {
-                Theme::border_danger()
-            };
+            let hit_color = Theme::hit_ratio_color(stmt.hit_ratio);
             // Max time: orange if >2x mean (indicates spiky query)
             let max_color = if stmt.max_exec_time > stmt.mean_exec_time * 2.0 {
                 Theme::border_warn()

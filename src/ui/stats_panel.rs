@@ -165,13 +165,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                     .unwrap_or(std::cmp::Ordering::Equal)
             });
         let dead_spans = if let Some(t) = worst_dead {
-            let dead_color = if t.dead_ratio > 20.0 {
-                Theme::border_danger()
-            } else if t.dead_ratio > 5.0 {
-                Theme::border_warn()
-            } else {
-                Theme::border_ok()
-            };
+            let dead_color = Theme::dead_ratio_color(t.dead_ratio);
             vec![
                 Span::styled("  Dead: ", Style::default().fg(Theme::fg_dim())),
                 Span::styled(
@@ -212,13 +206,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                     .unwrap_or(std::cmp::Ordering::Equal)
             });
         if let Some(w) = worst_wrap {
-            let wrap_color = if w.pct_towards_wraparound > 75.0 {
-                Theme::border_danger()
-            } else if w.pct_towards_wraparound > 50.0 {
-                Theme::border_warn()
-            } else {
-                Theme::border_ok()
-            };
+            let wrap_color = Theme::wraparound_color(w.pct_towards_wraparound);
             lines.push(Line::from(vec![
                 Span::styled("XID: ", Style::default().fg(Theme::fg_dim())),
                 Span::styled(
@@ -242,13 +230,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             });
         match max_replay {
             Some(lag) => {
-                let lag_color = if lag > 10.0 {
-                    Theme::border_danger()
-                } else if lag > 1.0 {
-                    Theme::border_warn()
-                } else {
-                    Theme::border_ok()
-                };
+                let lag_color = Theme::lag_color(Some(lag));
                 lines.push(Line::from(vec![
                     Span::styled("Repl lag: ", Style::default().fg(Theme::fg_dim())),
                     Span::styled(
