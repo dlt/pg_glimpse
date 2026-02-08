@@ -7,7 +7,7 @@ use ratatui::Frame;
 use crate::app::App;
 use crate::config::ConfigItem;
 use super::theme::Theme;
-use super::util::{format_bytes, format_compact, format_lag, format_time_ms, lag_color};
+use super::util::{format_bytes, format_compact, format_duration, format_lag, format_time_ms, lag_color};
 
 fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
     let v = Layout::default()
@@ -1335,16 +1335,6 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
         .block(block)
         .scroll((app.overlay_scroll, 0));
     frame.render_widget(paragraph, popup);
-}
-
-fn format_duration(secs: f64) -> String {
-    if secs < 60.0 {
-        format!("{:.1}s", secs)
-    } else if secs < 3600.0 {
-        format!("{:.0}m {:.0}s", secs / 60.0, secs % 60.0)
-    } else {
-        format!("{:.0}h {:.0}m", secs / 3600.0, (secs % 3600.0) / 60.0)
-    }
 }
 
 /// SQL keywords to highlight

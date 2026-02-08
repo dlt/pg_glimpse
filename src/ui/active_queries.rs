@@ -7,6 +7,7 @@ use ratatui::Frame;
 use crate::app::{App, BottomPanel, SortColumn};
 use super::overlay::highlight_sql_inline;
 use super::theme::Theme;
+use super::util::format_duration;
 
 pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
     let total_count = app
@@ -117,15 +118,6 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
     frame.render_stateful_widget(table, area, &mut app.query_table_state);
 }
 
-fn format_duration(secs: f64) -> String {
-    if secs < 60.0 {
-        format!("{:.1}s", secs)
-    } else if secs < 3600.0 {
-        format!("{:.0}m{:.0}s", secs / 60.0, secs % 60.0)
-    } else {
-        format!("{:.0}h{:.0}m", secs / 3600.0, (secs % 3600.0) / 60.0)
-    }
-}
 
 fn short_state(state: Option<&str>) -> String {
     match state {

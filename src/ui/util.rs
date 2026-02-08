@@ -68,6 +68,22 @@ pub fn truncate(s: &str, max: usize) -> String {
     }
 }
 
+/// Format duration in seconds to human-readable compact form (e.g., "1.5s", "2m30s", "1h15m")
+pub fn format_duration(secs: f64) -> String {
+    if secs < 0.001 {
+        "0s".into()
+    } else if secs < 1.0 {
+        format!("{:.0}ms", secs * 1000.0)
+    } else if secs < 60.0 {
+        format!("{:.1}s", secs)
+    } else if secs < 3600.0 {
+        format!("{:.0}m{:.0}s", secs / 60.0, secs % 60.0)
+    } else {
+        format!("{:.0}h{:.0}m", secs / 3600.0, (secs % 3600.0) / 60.0)
+    }
+}
+
+/// Format duration in milliseconds for statement stats (spaced format)
 pub fn format_time_ms(ms: f64) -> String {
     if ms < 1.0 {
         format!("{:.3} ms", ms)

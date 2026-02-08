@@ -13,6 +13,7 @@ mod util;
 use crate::app::{App, BottomPanel, ViewMode};
 use ratatui::Frame;
 use theme::Theme;
+use util::format_duration;
 
 pub fn render(frame: &mut Frame, app: &mut App) {
     let areas = layout::compute_layout(frame.area());
@@ -53,7 +54,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
 
     let avg_data = app.avg_query_time_history.as_vec();
     let avg_current = app.avg_query_time_history.last().unwrap_or(0);
-    let avg_label = format_duration_ms(avg_current);
+    let avg_label = format_duration(avg_current as f64 / 1000.0);
     graph::render_line_chart(
         frame,
         areas.graph_br,
@@ -115,13 +116,4 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     }
 }
 
-fn format_duration_ms(ms: u64) -> String {
-    if ms < 1000 {
-        format!("{}ms", ms)
-    } else if ms < 60_000 {
-        format!("{:.1}s", ms as f64 / 1000.0)
-    } else {
-        format!("{:.0}m{:.0}s", ms / 60_000, (ms % 60_000) / 1000)
-    }
-}
 

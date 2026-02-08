@@ -8,7 +8,7 @@ use ratatui::Frame;
 use crate::app::App;
 use super::sparkline::render_sparkline;
 use super::theme::Theme;
-use super::util::{format_bytes, format_compact};
+use super::util::{format_bytes, format_compact, format_duration};
 
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
@@ -147,7 +147,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled(" · ", Style::default().fg(Theme::border_dim())),
             Span::styled("Longest: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
-                format_duration_short(longest),
+                format_duration(longest),
                 Style::default().fg(longest_color),
             ),
         ]));
@@ -395,17 +395,4 @@ fn format_uptime(start: chrono::DateTime<Utc>) -> String {
     }
 }
 
-fn format_duration_short(secs: f64) -> String {
-    if secs < 0.001 {
-        "0s".into()
-    } else if secs < 1.0 {
-        format!("{:.0}ms", secs * 1000.0)
-    } else if secs < 60.0 {
-        format!("{:.1}s", secs)
-    } else if secs < 3600.0 {
-        format!("{:.0}m{:.0}s", secs / 60.0, secs % 60.0)
-    } else {
-        format!("{:.0}h{:.0}m", secs / 3600.0, (secs % 3600.0) / 60.0)
-    }
-}
 
