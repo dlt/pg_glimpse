@@ -1519,7 +1519,7 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
         entry("Tab", "Blocking chains"),
         entry("w", "Wait events"),
         entry("t", "Table stats"),
-        entry("R", "Replication lag"),
+        entry("R", "Replication (lag, slots, subs)"),
         entry("v", "Vacuum progress"),
         entry("x", "Transaction wraparound"),
         entry("I", "Index stats"),

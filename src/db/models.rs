@@ -183,6 +183,35 @@ pub struct ReplicationInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReplicationSlot {
+    pub slot_name: String,
+    pub slot_type: String,
+    pub database: Option<String>,
+    pub active: bool,
+    pub restart_lsn: Option<String>,
+    pub confirmed_flush_lsn: Option<String>,
+    pub wal_retained_bytes: Option<i64>,
+    pub temporary: bool,
+    // PG 14+ stats from pg_stat_replication_slots
+    pub spill_txns: Option<i64>,
+    pub spill_count: Option<i64>,
+    pub spill_bytes: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Subscription {
+    pub subname: String,
+    pub pid: Option<i32>,
+    pub relcount: i64,
+    pub received_lsn: Option<String>,
+    pub last_msg_send_time: Option<chrono::DateTime<chrono::Utc>>,
+    pub last_msg_receipt_time: Option<chrono::DateTime<chrono::Utc>>,
+    pub latest_end_lsn: Option<String>,
+    pub latest_end_time: Option<chrono::DateTime<chrono::Utc>>,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VacuumProgress {
     pub pid: i32,
     pub datname: Option<String>,
@@ -255,6 +284,8 @@ pub struct PgSnapshot {
     pub summary: ActivitySummary,
     pub table_stats: Vec<TableStat>,
     pub replication: Vec<ReplicationInfo>,
+    pub replication_slots: Vec<ReplicationSlot>,
+    pub subscriptions: Vec<Subscription>,
     pub vacuum_progress: Vec<VacuumProgress>,
     pub wraparound: Vec<WraparoundInfo>,
     pub indexes: Vec<IndexInfo>,

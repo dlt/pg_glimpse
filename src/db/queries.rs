@@ -124,6 +124,58 @@ SELECT pid,
 FROM pg_stat_replication ORDER BY replay_lag DESC NULLS LAST
 ";
 
+/// Replication slots query (all PG versions with slots support)
+const REPLICATION_SLOTS_SQL: &str = "
+SELECT
+    slot_name,
+    slot_type::text AS slot_type,
+    database,
+    active,
+    restart_lsn::text AS restart_lsn,
+    confirmed_flush_lsn::text AS confirmed_flush_lsn,
+    (pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn))::bigint AS wal_retained_bytes,
+    temporary
+FROM pg_replication_slots
+ORDER BY slot_name
+";
+
+/// Replication slots query for PG 14+ (includes stats from pg_stat_replication_slots)
+const REPLICATION_SLOTS_SQL_V14: &str = "
+SELECT
+    s.slot_name,
+    s.slot_type::text AS slot_type,
+    s.database,
+    s.active,
+    s.restart_lsn::text AS restart_lsn,
+    s.confirmed_flush_lsn::text AS confirmed_flush_lsn,
+    (pg_wal_lsn_diff(pg_current_wal_lsn(), s.restart_lsn))::bigint AS wal_retained_bytes,
+    s.temporary,
+    COALESCE(st.spill_txns, 0)::bigint AS spill_txns,
+    COALESCE(st.spill_count, 0)::bigint AS spill_count,
+    COALESCE(st.spill_bytes, 0)::bigint AS spill_bytes
+FROM pg_replication_slots s
+LEFT JOIN pg_stat_replication_slots st ON s.slot_name = st.slot_name
+ORDER BY s.slot_name
+";
+
+/// Subscriptions query for PG 10+ (logical replication subscriber side)
+const SUBSCRIPTIONS_SQL: &str = "
+SELECT
+    sub.subname,
+    stat.pid,
+    (SELECT COUNT(*) FROM pg_subscription_rel WHERE srsubid = sub.oid) AS relcount,
+    stat.received_lsn::text AS received_lsn,
+    stat.last_msg_send_time,
+    stat.last_msg_receipt_time,
+    stat.latest_end_lsn::text AS latest_end_lsn,
+    stat.latest_end_time,
+    sub.subenabled AS enabled
+FROM pg_subscription sub
+LEFT JOIN pg_stat_subscription stat ON sub.oid = stat.subid
+WHERE stat.relid IS NULL
+ORDER BY sub.subname
+";
+
 /// Vacuum progress query - uses 0 for num_dead_tuples for compatibility
 /// (column name varies across PG versions and cloud providers)
 const VACUUM_PROGRESS_SQL: &str = "
@@ -667,6 +719,61 @@ pub async fn fetch_replication(client: &Client) -> Result<Vec<ReplicationInfo>> 
     Ok(results)
 }
 
+pub async fn fetch_replication_slots(client: &Client, version: u32) -> Result<Vec<ReplicationSlot>> {
+    let sql = if version >= 14 {
+        REPLICATION_SLOTS_SQL_V14
+    } else {
+        REPLICATION_SLOTS_SQL
+    };
+    let rows = match client.query(sql, &[]).await {
+        Ok(rows) => rows,
+        Err(_) => return Ok(vec![]), // Graceful fallback if query fails
+    };
+    let mut results = Vec::with_capacity(rows.len());
+    for row in rows {
+        results.push(ReplicationSlot {
+            slot_name: row.get("slot_name"),
+            slot_type: row.get("slot_type"),
+            database: row.get("database"),
+            active: row.get("active"),
+            restart_lsn: row.get("restart_lsn"),
+            confirmed_flush_lsn: row.get("confirmed_flush_lsn"),
+            wal_retained_bytes: row.get("wal_retained_bytes"),
+            temporary: row.get("temporary"),
+            spill_txns: if version >= 14 { row.get("spill_txns") } else { None },
+            spill_count: if version >= 14 { row.get("spill_count") } else { None },
+            spill_bytes: if version >= 14 { row.get("spill_bytes") } else { None },
+        });
+    }
+    Ok(results)
+}
+
+pub async fn fetch_subscriptions(client: &Client, version: u32) -> Result<Vec<Subscription>> {
+    // Logical replication subscriptions only available in PG 10+
+    if version < 10 {
+        return Ok(vec![]);
+    }
+    let rows = match client.query(SUBSCRIPTIONS_SQL, &[]).await {
+        Ok(rows) => rows,
+        Err(_) => return Ok(vec![]), // Graceful fallback if query fails
+    };
+    let mut results = Vec::with_capacity(rows.len());
+    for row in rows {
+        results.push(Subscription {
+            subname: row.get("subname"),
+            pid: row.get("pid"),
+            relcount: row.get("relcount"),
+            received_lsn: row.get("received_lsn"),
+            last_msg_send_time: row.get("last_msg_send_time"),
+            last_msg_receipt_time: row.get("last_msg_receipt_time"),
+            latest_end_lsn: row.get("latest_end_lsn"),
+            latest_end_time: row.get("latest_end_time"),
+            enabled: row.get("enabled"),
+        });
+    }
+    Ok(results)
+}
+
 pub async fn fetch_vacuum_progress(client: &Client, _version: u32) -> Result<Vec<VacuumProgress>> {
     let rows = client.query(VACUUM_PROGRESS_SQL, &[]).await?;
     let mut results = Vec::with_capacity(rows.len());
@@ -856,7 +963,7 @@ pub async fn fetch_snapshot(
     version: u32,
 ) -> Result<PgSnapshot> {
     let ext = extensions.clone();
-    let (active, waits, blocks, cache, summary, tables, repl, vacuum, wrap, indexes, ss, db_size, chkpt, wal, archiver, bgwriter, db_stats) =
+    let (active, waits, blocks, cache, summary, tables, repl, repl_slots, subs, vacuum, wrap, indexes, ss, db_size, chkpt, wal, archiver, bgwriter, db_stats) =
         tokio::try_join!(
             fetch_active_queries(client),
             fetch_wait_events(client),
@@ -865,6 +972,8 @@ pub async fn fetch_snapshot(
             fetch_activity_summary(client),
             fetch_table_stats(client),
             fetch_replication(client),
+            fetch_replication_slots(client, version),
+            fetch_subscriptions(client, version),
             fetch_vacuum_progress(client, version),
             fetch_wraparound(client),
             fetch_indexes(client),
@@ -893,6 +1002,8 @@ pub async fn fetch_snapshot(
         summary,
         table_stats: tables,
         replication: repl,
+        replication_slots: repl_slots,
+        subscriptions: subs,
         vacuum_progress: vacuum,
         wraparound: wrap,
         indexes,
