@@ -58,6 +58,10 @@ pub enum ViewMode {
     WraparoundInspect,
     ConfirmCancel(i32),
     ConfirmKill(i32),
+    ConfirmCancelChoice { selected_pid: i32, all_pids: Vec<i32> },
+    ConfirmKillChoice { selected_pid: i32, all_pids: Vec<i32> },
+    ConfirmCancelBatch(Vec<i32>),
+    ConfirmKillBatch(Vec<i32>),
     Config,
     Help,
 }
@@ -66,6 +70,8 @@ pub enum ViewMode {
 pub enum AppAction {
     CancelQuery(i32),
     TerminateBackend(i32),
+    CancelQueries(Vec<i32>),
+    TerminateBackends(Vec<i32>),
     ForceRefresh,
     SaveConfig,
     RefreshIntervalChanged,
@@ -523,6 +529,18 @@ impl App {
         Some(snap.active_queries[real_idx].pid)
     }
 
+    /// Get PIDs of all queries matching the current filter
+    pub fn get_filtered_pids(&self) -> Vec<i32> {
+        let Some(snap) = &self.snapshot else {
+            return vec![];
+        };
+        let indices = self.sorted_query_indices();
+        indices
+            .iter()
+            .map(|&i| snap.active_queries[i].pid)
+            .collect()
+    }
+
     pub fn sorted_index_indices(&self) -> Vec<usize> {
         let Some(snap) = &self.snapshot else {
             return vec![];
@@ -839,12 +857,32 @@ impl App {
             }
             KeyCode::Char('K') if !self.replay_mode => {
                 if let Some(pid) = self.selected_query_pid() {
-                    self.view_mode = ViewMode::ConfirmKill(pid);
+                    let filtered_pids = self.get_filtered_pids();
+                    if self.filter_active && filtered_pids.len() > 1 {
+                        // Multiple matches - show choice dialog
+                        self.view_mode = ViewMode::ConfirmKillChoice {
+                            selected_pid: pid,
+                            all_pids: filtered_pids,
+                        };
+                    } else {
+                        // Single query - existing behavior
+                        self.view_mode = ViewMode::ConfirmKill(pid);
+                    }
                 }
             }
             KeyCode::Char('C') if !self.replay_mode => {
                 if let Some(pid) = self.selected_query_pid() {
-                    self.view_mode = ViewMode::ConfirmCancel(pid);
+                    let filtered_pids = self.get_filtered_pids();
+                    if self.filter_active && filtered_pids.len() > 1 {
+                        // Multiple matches - show choice dialog
+                        self.view_mode = ViewMode::ConfirmCancelChoice {
+                            selected_pid: pid,
+                            all_pids: filtered_pids,
+                        };
+                    } else {
+                        // Single query - existing behavior
+                        self.view_mode = ViewMode::ConfirmCancel(pid);
+                    }
                 }
             }
             KeyCode::Char('s') => {
@@ -1147,6 +1185,76 @@ impl App {
                     _ => {
                         self.view_mode = ViewMode::Normal;
                         self.status_message = Some("Kill aborted".into());
+                    }
+                }
+                return;
+            }
+            ViewMode::ConfirmCancelChoice { selected_pid, all_pids } => {
+                let selected_pid = *selected_pid;
+                let all_pids = all_pids.clone();
+                match key.code {
+                    KeyCode::Char('1') | KeyCode::Char('o') => {
+                        // Cancel ONE (selected)
+                        self.pending_action = Some(AppAction::CancelQuery(selected_pid));
+                        self.view_mode = ViewMode::Normal;
+                    }
+                    KeyCode::Char('a') => {
+                        // Cancel ALL matching - show batch confirmation
+                        self.view_mode = ViewMode::ConfirmCancelBatch(all_pids);
+                    }
+                    KeyCode::Esc => {
+                        self.view_mode = ViewMode::Normal;
+                        self.status_message = Some("Cancel aborted".into());
+                    }
+                    _ => {}
+                }
+                return;
+            }
+            ViewMode::ConfirmKillChoice { selected_pid, all_pids } => {
+                let selected_pid = *selected_pid;
+                let all_pids = all_pids.clone();
+                match key.code {
+                    KeyCode::Char('1') | KeyCode::Char('o') => {
+                        // Kill ONE (selected)
+                        self.pending_action = Some(AppAction::TerminateBackend(selected_pid));
+                        self.view_mode = ViewMode::Normal;
+                    }
+                    KeyCode::Char('a') => {
+                        // Kill ALL matching - show batch confirmation
+                        self.view_mode = ViewMode::ConfirmKillBatch(all_pids);
+                    }
+                    KeyCode::Esc => {
+                        self.view_mode = ViewMode::Normal;
+                        self.status_message = Some("Kill aborted".into());
+                    }
+                    _ => {}
+                }
+                return;
+            }
+            ViewMode::ConfirmCancelBatch(pids) => {
+                let pids = pids.clone();
+                match key.code {
+                    KeyCode::Char('y') | KeyCode::Char('Y') => {
+                        self.pending_action = Some(AppAction::CancelQueries(pids));
+                        self.view_mode = ViewMode::Normal;
+                    }
+                    _ => {
+                        self.view_mode = ViewMode::Normal;
+                        self.status_message = Some("Batch cancel aborted".into());
+                    }
+                }
+                return;
+            }
+            ViewMode::ConfirmKillBatch(pids) => {
+                let pids = pids.clone();
+                match key.code {
+                    KeyCode::Char('y') | KeyCode::Char('Y') => {
+                        self.pending_action = Some(AppAction::TerminateBackends(pids));
+                        self.view_mode = ViewMode::Normal;
+                    }
+                    _ => {
+                        self.view_mode = ViewMode::Normal;
+                        self.status_message = Some("Batch kill aborted".into());
                     }
                 }
                 return;

@@ -204,12 +204,16 @@ async fn run(cli: Cli) -> Result<()> {
         FetchSnapshot,
         CancelQuery(i32),
         TerminateBackend(i32),
+        CancelQueries(Vec<i32>),
+        TerminateBackends(Vec<i32>),
     }
     #[allow(clippy::large_enum_variant)]
     enum DbResult {
         Snapshot(Result<PgSnapshot, String>),
         CancelQuery(i32, Result<bool, String>),
         TerminateBackend(i32, Result<bool, String>),
+        CancelQueries(Vec<(i32, bool)>),
+        TerminateBackends(Vec<(i32, bool)>),
     }
 
     let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel::<DbCommand>();
@@ -242,6 +246,16 @@ async fn run(cli: Cli) -> Result<()> {
                         db::queries::terminate_backend(&db_client, pid)
                             .await
                             .map_err(|e| e.to_string()),
+                    )
+                }
+                DbCommand::CancelQueries(pids) => {
+                    DbResult::CancelQueries(
+                        db::queries::cancel_backends(&db_client, &pids).await,
+                    )
+                }
+                DbCommand::TerminateBackends(pids) => {
+                    DbResult::TerminateBackends(
+                        db::queries::terminate_backends(&db_client, &pids).await,
                     )
                 }
             };
@@ -307,6 +321,26 @@ async fn run(cli: Cli) -> Result<()> {
                         DbResult::TerminateBackend(_, Err(e)) => {
                             app.status_message = Some(format!("Terminate failed: {}", e));
                         }
+                        DbResult::CancelQueries(results) => {
+                            let total = results.len();
+                            let succeeded = results.iter().filter(|(_, ok)| *ok).count();
+                            if succeeded == total {
+                                app.status_message = Some(format!("Cancelled {}/{} queries", succeeded, total));
+                            } else {
+                                app.status_message = Some(format!("Cancelled {}/{} queries ({} already finished)", succeeded, total, total - succeeded));
+                            }
+                            let _ = cmd_tx.send(DbCommand::FetchSnapshot);
+                        }
+                        DbResult::TerminateBackends(results) => {
+                            let total = results.len();
+                            let succeeded = results.iter().filter(|(_, ok)| *ok).count();
+                            if succeeded == total {
+                                app.status_message = Some(format!("Terminated {}/{} backends", succeeded, total));
+                            } else {
+                                app.status_message = Some(format!("Terminated {}/{} backends ({} already finished)", succeeded, total, total - succeeded));
+                            }
+                            let _ = cmd_tx.send(DbCommand::FetchSnapshot);
+                        }
                     }
                 }
             }
@@ -328,6 +362,12 @@ async fn run(cli: Cli) -> Result<()> {
                 }
                 AppAction::TerminateBackend(pid) => {
                     let _ = cmd_tx.send(DbCommand::TerminateBackend(pid));
+                }
+                AppAction::CancelQueries(pids) => {
+                    let _ = cmd_tx.send(DbCommand::CancelQueries(pids));
+                }
+                AppAction::TerminateBackends(pids) => {
+                    let _ = cmd_tx.send(DbCommand::TerminateBackends(pids));
                 }
                 AppAction::SaveConfig => {
                     app.config.save();

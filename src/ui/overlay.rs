@@ -333,6 +333,243 @@ pub fn render_confirm_kill(frame: &mut Frame, pid: i32, area: Rect) {
     frame.render_widget(paragraph, popup);
 }
 
+pub fn render_cancel_choice(
+    frame: &mut Frame,
+    selected_pid: i32,
+    all_pids: &[i32],
+    filter: &str,
+    area: Rect,
+) {
+    let popup = centered_rect(55, 35, area);
+    frame.render_widget(Clear, popup);
+
+    let block = overlay_block(" Cancel Query ", Theme::border_warn());
+
+    let count = all_pids.len();
+    let filter_display = if filter.is_empty() { "active filter" } else { filter };
+
+    let lines = vec![
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  Filter '", Style::default().fg(Theme::fg())),
+            Span::styled(
+                filter_display.to_string(),
+                Style::default().fg(Theme::border_active()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(format!("' matches {} queries", count), Style::default().fg(Theme::fg())),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  ", Style::default()),
+            Span::styled(
+                " 1 ",
+                Style::default().fg(Theme::overlay_bg()).bg(Theme::border_active()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(format!(" Cancel this query (PID {})", selected_pid), Style::default().fg(Theme::fg())),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  ", Style::default()),
+            Span::styled(
+                " a ",
+                Style::default().fg(Theme::overlay_bg()).bg(Theme::border_warn()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(format!(" Cancel ALL {} matching queries", count), Style::default().fg(Theme::fg())),
+        ]),
+        Line::from(""),
+        separator_line(),
+        Line::from(vec![
+            Span::styled("  ", Style::default()),
+            Span::styled(
+                " Esc ",
+                Style::default().fg(Theme::overlay_bg()).bg(Theme::border_dim()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" abort", Style::default().fg(Theme::fg_dim())),
+        ]),
+    ];
+
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .alignment(Alignment::Left);
+    frame.render_widget(paragraph, popup);
+}
+
+pub fn render_kill_choice(
+    frame: &mut Frame,
+    selected_pid: i32,
+    all_pids: &[i32],
+    filter: &str,
+    area: Rect,
+) {
+    let popup = centered_rect(55, 35, area);
+    frame.render_widget(Clear, popup);
+
+    let block = overlay_block(" Terminate Backend ", Theme::border_danger());
+
+    let count = all_pids.len();
+    let filter_display = if filter.is_empty() { "active filter" } else { filter };
+
+    let lines = vec![
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  Filter '", Style::default().fg(Theme::fg())),
+            Span::styled(
+                filter_display.to_string(),
+                Style::default().fg(Theme::border_active()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(format!("' matches {} queries", count), Style::default().fg(Theme::fg())),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  ", Style::default()),
+            Span::styled(
+                " 1 ",
+                Style::default().fg(Theme::overlay_bg()).bg(Theme::border_active()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(format!(" Kill this backend (PID {})", selected_pid), Style::default().fg(Theme::fg())),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  ", Style::default()),
+            Span::styled(
+                " a ",
+                Style::default().fg(Theme::overlay_bg()).bg(Theme::border_danger()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(format!(" Kill ALL {} matching backends", count), Style::default().fg(Theme::fg())),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  ⚠ This will terminate connections entirely.",
+            Style::default().fg(Theme::border_danger()),
+        )),
+        Line::from(""),
+        separator_line(),
+        Line::from(vec![
+            Span::styled("  ", Style::default()),
+            Span::styled(
+                " Esc ",
+                Style::default().fg(Theme::overlay_bg()).bg(Theme::border_dim()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" abort", Style::default().fg(Theme::fg_dim())),
+        ]),
+    ];
+
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .alignment(Alignment::Left);
+    frame.render_widget(paragraph, popup);
+}
+
+pub fn render_confirm_cancel_batch(frame: &mut Frame, pids: &[i32], area: Rect) {
+    let popup = centered_rect(55, 35, area);
+    frame.render_widget(Clear, popup);
+
+    let block = overlay_block(" Cancel Queries ", Theme::border_warn());
+
+    let count = pids.len();
+    let pids_str = if count <= 8 {
+        pids.iter()
+            .map(|p| p.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    } else {
+        let first_six: Vec<_> = pids.iter().take(6).map(|p| p.to_string()).collect();
+        format!("{}, ... (+{} more)", first_six.join(", "), count - 6)
+    };
+
+    let lines = vec![
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(format!("  Cancel {} queries?", count), Style::default().fg(Theme::fg())),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  PIDs: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(pids_str, Style::default().fg(Theme::border_warn())),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  The current queries will be interrupted.",
+            Style::default().fg(Theme::fg_dim()),
+        )),
+        Line::from(""),
+        separator_line(),
+        Line::from(vec![
+            Span::styled("  ", Style::default()),
+            Span::styled(
+                " y ",
+                Style::default().fg(Theme::overlay_bg()).bg(Theme::border_warn()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" confirm    ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                " Esc ",
+                Style::default().fg(Theme::overlay_bg()).bg(Theme::border_dim()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" abort", Style::default().fg(Theme::fg_dim())),
+        ]),
+    ];
+
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .alignment(Alignment::Left);
+    frame.render_widget(paragraph, popup);
+}
+
+pub fn render_confirm_kill_batch(frame: &mut Frame, pids: &[i32], area: Rect) {
+    let popup = centered_rect(55, 40, area);
+    frame.render_widget(Clear, popup);
+
+    let block = overlay_block(" Terminate Backends ", Theme::border_danger());
+
+    let count = pids.len();
+    let pids_str = if count <= 8 {
+        pids.iter()
+            .map(|p| p.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    } else {
+        let first_six: Vec<_> = pids.iter().take(6).map(|p| p.to_string()).collect();
+        format!("{}, ... (+{} more)", first_six.join(", "), count - 6)
+    };
+
+    let lines = vec![
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(format!("  Terminate {} backends?", count), Style::default().fg(Theme::fg())),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  PIDs: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(pids_str, Style::default().fg(Theme::border_danger())),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  ⚠ This will kill the connections entirely.",
+            Style::default().fg(Theme::border_danger()),
+        )),
+        Line::from(""),
+        separator_line(),
+        Line::from(vec![
+            Span::styled("  ", Style::default()),
+            Span::styled(
+                " y ",
+                Style::default().fg(Theme::overlay_bg()).bg(Theme::border_danger()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" confirm    ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                " Esc ",
+                Style::default().fg(Theme::overlay_bg()).bg(Theme::border_dim()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" abort", Style::default().fg(Theme::fg_dim())),
+        ]),
+    ];
+
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .alignment(Alignment::Left);
+    frame.render_widget(paragraph, popup);
+}
+
 pub fn render_replication_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(70, 70, area);
     frame.render_widget(Clear, popup);
@@ -1296,8 +1533,8 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
         entry("Enter", "Inspect selected row"),
         Line::from(""),
         section_header("Query Actions"),
-        entry("C", "Cancel query"),
-        entry("K", "Terminate backend"),
+        entry("C", "Cancel query (batch if filter)"),
+        entry("K", "Terminate backend (batch if filter)"),
         entry("y", "Copy to clipboard"),
         Line::from(""),
         section_header("Overlay"),

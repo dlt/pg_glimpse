@@ -111,6 +111,18 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         ViewMode::ConfirmKill(pid) => {
             overlay::render_confirm_kill(frame, *pid, frame.area())
         }
+        ViewMode::ConfirmCancelChoice { selected_pid, all_pids } => {
+            overlay::render_cancel_choice(frame, *selected_pid, all_pids, &app.filter_text, frame.area())
+        }
+        ViewMode::ConfirmKillChoice { selected_pid, all_pids } => {
+            overlay::render_kill_choice(frame, *selected_pid, all_pids, &app.filter_text, frame.area())
+        }
+        ViewMode::ConfirmCancelBatch(pids) => {
+            overlay::render_confirm_cancel_batch(frame, pids, frame.area())
+        }
+        ViewMode::ConfirmKillBatch(pids) => {
+            overlay::render_confirm_kill_batch(frame, pids, frame.area())
+        }
         ViewMode::Config => overlay::render_config(frame, app, frame.area()),
         ViewMode::Help => overlay::render_help(frame, app, frame.area()),
         ViewMode::Normal | ViewMode::Filter => {}

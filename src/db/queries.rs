@@ -733,6 +733,26 @@ pub async fn terminate_backend(client: &Client, pid: i32) -> Result<bool> {
     Ok(row.get(0))
 }
 
+/// Cancel multiple backends. Returns (pid, success) for each.
+pub async fn cancel_backends(client: &Client, pids: &[i32]) -> Vec<(i32, bool)> {
+    let mut results = Vec::with_capacity(pids.len());
+    for &pid in pids {
+        let ok = cancel_backend(client, pid).await.unwrap_or(false);
+        results.push((pid, ok));
+    }
+    results
+}
+
+/// Terminate multiple backends. Returns (pid, success) for each.
+pub async fn terminate_backends(client: &Client, pids: &[i32]) -> Vec<(i32, bool)> {
+    let mut results = Vec::with_capacity(pids.len());
+    for &pid in pids {
+        let ok = terminate_backend(client, pid).await.unwrap_or(false);
+        results.push((pid, ok));
+    }
+    results
+}
+
 pub async fn fetch_snapshot(
     client: &Client,
     extensions: &DetectedExtensions,
