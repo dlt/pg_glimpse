@@ -47,12 +47,12 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
 
     let header = Row::new(vec![
         Cell::from(format!("PID{}", sort_indicator(SortColumn::Pid))),
+        Cell::from("Query"),
         Cell::from(format!("User{}", sort_indicator(SortColumn::User))),
         Cell::from("Database"),
         Cell::from(format!("Duration{}", sort_indicator(SortColumn::Duration))),
         Cell::from(format!("State{}", sort_indicator(SortColumn::State))),
         Cell::from("Wait"),
-        Cell::from("Query"),
     ])
     .style(
         Style::default()
@@ -109,6 +109,7 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
 
                 Row::new(vec![
                     Cell::from(q.pid.to_string()),
+                    query_cell,
                     Cell::from(usename),
                     Cell::from(datname).style(Style::default().fg(Theme::fg_dim())),
                     Cell::from(format_duration(q.duration_secs))
@@ -121,7 +122,6 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
                         } else {
                             Theme::fg_dim()
                         })),
-                    query_cell,
                 ])
             })
             .collect(),
@@ -130,12 +130,12 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
 
     let widths = [
         Constraint::Fill(1), // PID
+        Constraint::Fill(6), // Query (gets most space)
         Constraint::Fill(2), // User
         Constraint::Fill(2), // Database
         Constraint::Fill(1), // Duration
         Constraint::Fill(2), // State
         Constraint::Fill(2), // Wait
-        Constraint::Fill(6), // Query (gets most space)
     ];
 
     let table = styled_table(rows, widths, header, block);
