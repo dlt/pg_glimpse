@@ -297,7 +297,8 @@ SELECT
     COUNT(*) AS total_backends,
     (SELECT COUNT(*) FROM pg_locks WHERE NOT granted) AS lock_count,
     COUNT(*) FILTER (WHERE wait_event_type = 'Lock') AS waiting_count,
-    MAX(EXTRACT(EPOCH FROM (clock_timestamp() - xact_start)))::float8 AS oldest_xact_secs
+    MAX(EXTRACT(EPOCH FROM (clock_timestamp() - xact_start)))::float8 AS oldest_xact_secs,
+    (SELECT COUNT(*) FROM pg_stat_activity WHERE backend_type = 'autovacuum worker') AS autovacuum_count
 FROM pg_stat_activity
 WHERE backend_type = 'client backend'
 ";
@@ -563,6 +564,7 @@ pub async fn fetch_activity_summary(client: &Client) -> Result<ActivitySummary> 
         lock_count: row.get("lock_count"),
         waiting_count: row.get("waiting_count"),
         oldest_xact_secs: row.get("oldest_xact_secs"),
+        autovacuum_count: row.get("autovacuum_count"),
     })
 }
 

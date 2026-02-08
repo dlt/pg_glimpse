@@ -82,6 +82,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         let active = snap.summary.active_query_count;
         let idle_txn = snap.summary.idle_in_transaction_count;
         let waiting = snap.summary.waiting_count;
+        let autovac = snap.summary.autovacuum_count;
         let idle_txn_color = if idle_txn > 0 {
             Theme::state_idle_txn()
         } else {
@@ -91,6 +92,11 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             Theme::border_warn()
         } else {
             Theme::fg()
+        };
+        let autovac_color = if autovac > 0 {
+            Theme::border_ok()
+        } else {
+            Theme::fg_dim()
         };
         let active_spark = render_sparkline(&app.active_query_history.as_vec(), sparkline_width);
         lines.push(Line::from(vec![
@@ -114,6 +120,11 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled(
                 format!("{}", waiting),
                 Style::default().fg(waiting_color),
+            ),
+            Span::styled("  AV: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                format!("{}", autovac),
+                Style::default().fg(autovac_color),
             ),
         ]));
 
