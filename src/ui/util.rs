@@ -57,11 +57,14 @@ pub fn format_compact(n: i64) -> String {
     }
 }
 
-pub fn truncate(s: &str, max: usize) -> &str {
+/// Truncate string to max length, adding ellipsis if truncated
+pub fn truncate(s: &str, max: usize) -> String {
     if s.len() <= max {
-        s
+        s.to_string()
+    } else if max <= 1 {
+        "…".to_string()
     } else {
-        &s[..max]
+        format!("{}…", &s[..max - 1])
     }
 }
 

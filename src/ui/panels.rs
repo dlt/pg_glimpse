@@ -311,8 +311,8 @@ pub fn render_vacuum_progress(frame: &mut Frame, app: &mut App, area: Rect) {
         .map(|v| {
             Row::new(vec![
                 Cell::from(v.pid.to_string()),
-                Cell::from(truncate(&v.table_name, 30).to_string()),
-                Cell::from(truncate(&v.phase, 20).to_string()),
+                Cell::from(truncate(&v.table_name, 30)),
+                Cell::from(truncate(&v.phase, 20)),
                 Cell::from(format!("{:.1}%", v.progress_pct)),
                 Cell::from(v.num_dead_tuples.to_string()),
             ])

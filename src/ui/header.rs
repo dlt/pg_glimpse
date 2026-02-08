@@ -6,6 +6,7 @@ use ratatui::Frame;
 
 use crate::app::App;
 use super::theme::Theme;
+use super::util::truncate;
 
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     if app.replay_mode {
@@ -200,10 +201,3 @@ fn format_speed(speed: f64) -> String {
     }
 }
 
-fn truncate(s: &str, max: usize) -> &str {
-    if s.len() <= max {
-        s
-    } else {
-        &s[..max]
-    }
-}
