@@ -1199,11 +1199,20 @@ impl App {
                     KeyCode::Char('G') => {
                         self.overlay_scroll = u16::MAX;
                     }
+                    KeyCode::Char('y') => {
+                        if let Some(snap) = &self.snapshot {
+                            let sel = self.replication_table_state.selected().unwrap_or(0);
+                            if let Some(r) = snap.replication.get(sel) {
+                                let text = r.application_name.clone().unwrap_or_default();
+                                self.copy_to_clipboard(&text);
+                            }
+                        }
+                    }
                     _ => {}
                 }
                 return;
             }
-            ViewMode::TableInspect | ViewMode::BlockingInspect | ViewMode::VacuumInspect | ViewMode::WraparoundInspect => {
+            ViewMode::TableInspect => {
                 match key.code {
                     KeyCode::Esc | KeyCode::Char('q') => {
                         self.overlay_scroll = 0;
@@ -1220,6 +1229,110 @@ impl App {
                     }
                     KeyCode::Char('G') => {
                         self.overlay_scroll = u16::MAX;
+                    }
+                    KeyCode::Char('y') => {
+                        if let Some(snap) = &self.snapshot {
+                            let sel = self.table_stat_table_state.selected().unwrap_or(0);
+                            let indices = self.sorted_table_stat_indices();
+                            if let Some(&real_idx) = indices.get(sel) {
+                                let t = &snap.table_stats[real_idx];
+                                let text = format!("{}.{}", t.schemaname, t.relname);
+                                self.copy_to_clipboard(&text);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                return;
+            }
+            ViewMode::BlockingInspect => {
+                match key.code {
+                    KeyCode::Esc | KeyCode::Char('q') => {
+                        self.overlay_scroll = 0;
+                        self.view_mode = ViewMode::Normal;
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        self.overlay_scroll = self.overlay_scroll.saturating_sub(1);
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        self.overlay_scroll = self.overlay_scroll.saturating_add(1);
+                    }
+                    KeyCode::Char('g') => {
+                        self.overlay_scroll = 0;
+                    }
+                    KeyCode::Char('G') => {
+                        self.overlay_scroll = u16::MAX;
+                    }
+                    KeyCode::Char('y') => {
+                        if let Some(snap) = &self.snapshot {
+                            let sel = self.blocking_table_state.selected().unwrap_or(0);
+                            if let Some(info) = snap.blocking_info.get(sel) {
+                                let text = info.blocked_query.clone().unwrap_or_default();
+                                self.copy_to_clipboard(&text);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                return;
+            }
+            ViewMode::VacuumInspect => {
+                match key.code {
+                    KeyCode::Esc | KeyCode::Char('q') => {
+                        self.overlay_scroll = 0;
+                        self.view_mode = ViewMode::Normal;
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        self.overlay_scroll = self.overlay_scroll.saturating_sub(1);
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        self.overlay_scroll = self.overlay_scroll.saturating_add(1);
+                    }
+                    KeyCode::Char('g') => {
+                        self.overlay_scroll = 0;
+                    }
+                    KeyCode::Char('G') => {
+                        self.overlay_scroll = u16::MAX;
+                    }
+                    KeyCode::Char('y') => {
+                        if let Some(snap) = &self.snapshot {
+                            let sel = self.vacuum_table_state.selected().unwrap_or(0);
+                            if let Some(vac) = snap.vacuum_progress.get(sel) {
+                                let text = vac.table_name.clone();
+                                self.copy_to_clipboard(&text);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                return;
+            }
+            ViewMode::WraparoundInspect => {
+                match key.code {
+                    KeyCode::Esc | KeyCode::Char('q') => {
+                        self.overlay_scroll = 0;
+                        self.view_mode = ViewMode::Normal;
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        self.overlay_scroll = self.overlay_scroll.saturating_sub(1);
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        self.overlay_scroll = self.overlay_scroll.saturating_add(1);
+                    }
+                    KeyCode::Char('g') => {
+                        self.overlay_scroll = 0;
+                    }
+                    KeyCode::Char('G') => {
+                        self.overlay_scroll = u16::MAX;
+                    }
+                    KeyCode::Char('y') => {
+                        if let Some(snap) = &self.snapshot {
+                            let sel = self.wraparound_table_state.selected().unwrap_or(0);
+                            if let Some(wrap) = snap.wraparound.get(sel) {
+                                let text = wrap.datname.clone();
+                                self.copy_to_clipboard(&text);
+                            }
+                        }
                     }
                     _ => {}
                 }
