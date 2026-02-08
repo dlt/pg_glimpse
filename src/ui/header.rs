@@ -76,8 +76,14 @@ fn render_live(frame: &mut Frame, app: &App, area: Rect) {
 
     if let Some(ref msg) = app.status_message {
         spans.push(Span::styled("  ", dim_style));
+        let indicator = if app.bloat_loading {
+            const SPINNER: &[char] = &['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+            SPINNER[app.spinner_frame as usize % SPINNER.len()]
+        } else {
+            '●'
+        };
         spans.push(Span::styled(
-            format!("● {}", msg),
+            format!("{} {}", indicator, msg),
             Style::default().fg(Theme::border_active()),
         ));
     }

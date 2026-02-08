@@ -261,6 +261,8 @@ pub struct App {
     pub last_error: Option<String>,
     pub status_message: Option<String>,
     pub pending_action: Option<AppAction>,
+    pub bloat_loading: bool,
+    pub spinner_frame: u8,
 
     pub config: AppConfig,
     pub config_selected: usize,
@@ -331,6 +333,8 @@ impl App {
             last_error: None,
             status_message: None,
             pending_action: None,
+            bloat_loading: false,
+            spinner_frame: 0,
             config,
             config_selected: 0,
             filter_text: String::new(),
@@ -1012,6 +1016,7 @@ impl App {
             KeyCode::Char('b') if !self.replay_mode => {
                 self.pending_action = Some(AppAction::RefreshBloat);
                 self.status_message = Some("Refreshing bloat estimates...".to_string());
+                self.bloat_loading = true;
             }
             _ => {}
         }
@@ -1102,6 +1107,7 @@ impl App {
             KeyCode::Char('b') if !self.replay_mode => {
                 self.pending_action = Some(AppAction::RefreshBloat);
                 self.status_message = Some("Refreshing bloat estimates...".to_string());
+                self.bloat_loading = true;
             }
             _ => {}
         }

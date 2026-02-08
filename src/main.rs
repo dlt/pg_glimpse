@@ -288,6 +288,7 @@ async fn run(cli: Cli) -> Result<()> {
     let mut terminal = ratatui::init();
     let mut events = event::EventHandler::new(Duration::from_millis(10));
     let mut tick_interval = tokio::time::interval(Duration::from_secs(refresh));
+    let mut spinner_interval = tokio::time::interval(Duration::from_millis(80));
     let mut refresh_interval_secs = refresh;
 
     while app.running {
@@ -359,6 +360,7 @@ async fn run(cli: Cli) -> Result<()> {
                             let _ = cmd_tx.send(DbCommand::FetchSnapshot);
                         }
                         DbResult::BloatData(Ok((table_bloat, index_bloat))) => {
+                            app.bloat_loading = false;
                             app.apply_bloat_data(&table_bloat, &index_bloat);
                             let table_count = table_bloat.len();
                             let index_count = index_bloat.len();
@@ -368,6 +370,7 @@ async fn run(cli: Cli) -> Result<()> {
                             ));
                         }
                         DbResult::BloatData(Err(e)) => {
+                            app.bloat_loading = false;
                             app.status_message = Some(format!("Bloat estimation failed: {}", e));
                         }
                     }
@@ -376,6 +379,11 @@ async fn run(cli: Cli) -> Result<()> {
             _ = tick_interval.tick() => {
                 if !app.paused {
                     let _ = cmd_tx.send(DbCommand::FetchSnapshot);
+                }
+            }
+            _ = spinner_interval.tick() => {
+                if app.bloat_loading {
+                    app.spinner_frame = app.spinner_frame.wrapping_add(1);
                 }
             }
         }
