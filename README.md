@@ -46,6 +46,7 @@ cargo install pg_glimpse
 | `x` | **Wraparound** | XID age and wraparound risk |
 | `I` | **Indexes** | Scan counts, tuple reads, sizes |
 | `S` | **Statements** | pg_stat_statements metrics |
+| `A` | **WAL & I/O** | WAL rate, checkpoints, archiver stats (PG14+) |
 
 ### Live Graphs
 
@@ -55,15 +56,17 @@ Sparkline graphs tracking:
 - Cache hit ratio
 - Active queries
 - Lock count
+- TPS (transactions per second)
+- WAL write rate
 
 ### Stats Overview
 
-Server version, uptime, database size, connection usage, cache hit ratio, dead tuples, wraparound status, replication lag, checkpoint stats.
+Server version, uptime, database size, connection usage, cache hit ratio, dead tuples, wraparound status, replication lag, checkpoint stats, TPS, WAL rate, blocks read/sec, oldest transaction age, autovacuum workers.
 
 ### More
 
 - **Inspect overlay** — press `Enter` to see full query details, index definitions, or statement stats
-- **Fuzzy filter** — press `/` to filter queries, indexes, or statements
+- **Fuzzy filter** — press `/` to filter with match highlighting
 - **Clipboard** — press `y` to yank SQL to clipboard
 - **SQL highlighting** — syntax-highlighted queries everywhere
 - **Themes** — Tokyo Night, Dracula, Nord, Solarized, Catppuccin
@@ -96,6 +99,8 @@ pg_glimpse -r 1 --history-length 240
 | `-W`, `--password` | Database password | — |
 | `-r`, `--refresh` | Refresh interval (seconds) | `2` |
 | `--history-length` | Sparkline data points | `120` |
+| `--ssl` | Enable SSL/TLS connection | — |
+| `--ssl-insecure` | SSL without cert verification (RDS/Aurora) | — |
 | `--replay` | Replay a recorded session | — |
 
 ### Environment Variables
@@ -125,8 +130,9 @@ pg_glimpse -r 1 --history-length 240
 | `↓` / `j` | Next row |
 | `Enter` | Inspect |
 | `s` | Cycle sort column |
-| `C` | Cancel query |
-| `K` | Terminate backend |
+| `b` | Refresh bloat estimates |
+| `C` | Cancel query (batch if filtered) |
+| `K` | Terminate backend (batch if filtered) |
 
 ## Recording & Replay
 
