@@ -6,7 +6,7 @@ use ratatui::widgets::TableState;
 use std::collections::HashMap;
 
 use crate::config::{AppConfig, ConfigItem};
-use crate::db::models::{ActiveQuery, IndexInfo, PgSnapshot, ServerInfo, StatStatement, TableStat};
+use crate::db::models::{ActiveQuery, IndexInfo, PgSetting, PgSnapshot, ServerInfo, StatStatement, TableStat};
 use crate::db::queries::{IndexBloat, TableBloat};
 use crate::history::RingBuffer;
 use crate::ui::theme;
@@ -23,11 +23,12 @@ pub enum BottomPanel {
     Indexes,
     Statements,
     WalIo,
+    Settings,
 }
 
 impl BottomPanel {
     pub fn supports_filter(self) -> bool {
-        matches!(self, Self::Queries | Self::Indexes | Self::Statements | Self::TableStats)
+        matches!(self, Self::Queries | Self::Indexes | Self::Statements | Self::TableStats | Self::Settings)
     }
 
     #[allow(dead_code)]
@@ -43,6 +44,7 @@ impl BottomPanel {
             Self::Indexes => "Indexes",
             Self::Statements => "Statements",
             Self::WalIo => "WAL & I/O",
+            Self::Settings => "Settings",
         }
     }
 }
@@ -232,6 +234,7 @@ pub struct App {
     pub blocking_table_state: TableState,
     pub vacuum_table_state: TableState,
     pub wraparound_table_state: TableState,
+    pub settings_table_state: TableState,
 
     pub connection_history: RingBuffer<u64>,
     pub avg_query_time_history: RingBuffer<u64>,
@@ -312,6 +315,7 @@ impl App {
             blocking_table_state: TableState::default(),
             vacuum_table_state: TableState::default(),
             wraparound_table_state: TableState::default(),
+            settings_table_state: TableState::default(),
             connection_history: RingBuffer::new(history_len),
             avg_query_time_history: RingBuffer::new(history_len),
             hit_ratio_history: RingBuffer::new(history_len),
@@ -539,6 +543,10 @@ impl App {
 
     fn table_stat_to_filter_string(t: &TableStat) -> String {
         format!("{} {}", t.schemaname, t.relname)
+    }
+
+    fn setting_to_filter_string(s: &PgSetting) -> String {
+        format!("{} {} {}", s.name, s.category, s.short_desc)
     }
 
     pub fn sorted_query_indices(&self) -> Vec<usize> {
@@ -841,6 +849,31 @@ impl App {
         indices
     }
 
+    pub fn sorted_settings_indices(&self) -> Vec<usize> {
+        let mut indices: Vec<usize> = (0..self.server_info.settings.len()).collect();
+
+        // Apply fuzzy filter only when on the Settings panel
+        let filter_text = &self.filter_text;
+        if self.bottom_panel == BottomPanel::Settings
+            && !filter_text.is_empty()
+            && (self.filter_active || self.view_mode == ViewMode::Filter)
+        {
+            let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
+            let pattern =
+                Pattern::parse(filter_text, CaseMatching::Ignore, Normalization::Smart);
+            indices.retain(|&i| {
+                let haystack = Self::setting_to_filter_string(&self.server_info.settings[i]);
+                let mut buf = Vec::new();
+                pattern
+                    .score(nucleo_matcher::Utf32Str::new(&haystack, &mut buf), &mut matcher)
+                    .is_some()
+            });
+        }
+
+        // Settings are already sorted by category, name from the query
+        indices
+    }
+
     fn copy_to_clipboard(&mut self, text: &str) {
         match arboard::Clipboard::new().and_then(|mut cb| cb.set_text(text)) {
             Ok(()) => {
@@ -907,6 +940,7 @@ impl App {
             BottomPanel::Statements => self.stmt_table_state.select(Some(0)),
             BottomPanel::TableStats => self.table_stat_table_state.select(Some(0)),
             BottomPanel::Replication => self.replication_table_state.select(Some(0)),
+            BottomPanel::Settings => self.settings_table_state.select(Some(0)),
             _ => {}
         }
     }
@@ -1229,6 +1263,21 @@ impl App {
         }
     }
 
+    fn handle_settings_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                let i = self.settings_table_state.selected().unwrap_or(0);
+                self.settings_table_state.select(Some(i.saturating_sub(1)));
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let max = self.sorted_settings_indices().len().saturating_sub(1);
+                let i = self.settings_table_state.selected().unwrap_or(0);
+                self.settings_table_state.select(Some((i + 1).min(max)));
+            }
+            _ => {}
+        }
+    }
+
     fn handle_panel_key(&mut self, key: KeyEvent) {
         match self.bottom_panel {
             BottomPanel::Queries => self.handle_queries_key(key),
@@ -1239,6 +1288,7 @@ impl App {
             BottomPanel::Blocking => self.handle_blocking_key(key),
             BottomPanel::VacuumProgress => self.handle_vacuum_key(key),
             BottomPanel::Wraparound => self.handle_wraparound_key(key),
+            BottomPanel::Settings => self.handle_settings_key(key),
             BottomPanel::WalIo | BottomPanel::WaitEvents => {}
         }
     }
@@ -1754,6 +1804,10 @@ impl App {
             }
             KeyCode::Char('A') => {
                 self.switch_panel(BottomPanel::WalIo);
+                return;
+            }
+            KeyCode::Char('P') => {
+                self.switch_panel(BottomPanel::Settings);
                 return;
             }
             KeyCode::Char('/') => {

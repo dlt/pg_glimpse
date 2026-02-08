@@ -2,7 +2,12 @@ use chrono::{DateTime, Utc};
 use color_eyre::Result;
 use tokio_postgres::Client;
 
-use super::models::*;
+use super::models::{
+    ActiveQuery, ActivitySummary, ArchiverStats, BgwriterStats, BlockingInfo,
+    BufferCacheStats, CheckpointStats, DatabaseStats, DetectedExtensions, IndexInfo,
+    PgSetting, PgSnapshot, ReplicationInfo, ReplicationSlot, ServerInfo, StatStatement,
+    Subscription, TableStat, VacuumProgress, WaitEventCount, WalStats, WraparoundInfo,
+};
 
 const ACTIVE_QUERIES_SQL: &str = "
 SELECT
@@ -367,6 +372,20 @@ SELECT
     (SELECT setting::bigint FROM pg_settings WHERE name = 'max_connections') AS max_connections
 ";
 
+const PG_SETTINGS_SQL: &str = "
+SELECT
+    name,
+    setting,
+    unit,
+    category,
+    short_desc,
+    context,
+    source,
+    COALESCE(pending_restart, false) AS pending_restart
+FROM pg_settings
+ORDER BY category, name
+";
+
 const DB_SIZE_SQL: &str = "
 SELECT pg_database_size(current_database()) AS db_size
 ";
@@ -506,8 +525,27 @@ pub async fn detect_extensions(client: &Client) -> DetectedExtensions {
     ext
 }
 
+pub async fn fetch_pg_settings(client: &Client) -> Result<Vec<PgSetting>> {
+    let rows = client.query(PG_SETTINGS_SQL, &[]).await?;
+    let mut results = Vec::with_capacity(rows.len());
+    for row in rows {
+        results.push(PgSetting {
+            name: row.get("name"),
+            setting: row.get("setting"),
+            unit: row.get("unit"),
+            category: row.get("category"),
+            short_desc: row.get("short_desc"),
+            context: row.get("context"),
+            source: row.get("source"),
+            pending_restart: row.get("pending_restart"),
+        });
+    }
+    Ok(results)
+}
+
 pub async fn fetch_server_info(client: &Client) -> Result<ServerInfo> {
     let extensions = detect_extensions(client).await;
+    let settings = fetch_pg_settings(client).await.unwrap_or_default();
     let row = client.query_one(SERVER_INFO_SQL, &[]).await?;
     let version: String = row.get(0);
     let start_time: DateTime<Utc> = row.get(1);
@@ -517,6 +555,7 @@ pub async fn fetch_server_info(client: &Client) -> Result<ServerInfo> {
         start_time,
         max_connections,
         extensions,
+        settings,
     })
 }
 

@@ -11,11 +11,25 @@ pub struct DetectedExtensions {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PgSetting {
+    pub name: String,
+    pub setting: String,
+    pub unit: Option<String>,
+    pub category: String,
+    pub short_desc: String,
+    pub context: String,        // postmaster, sighup, superuser, user
+    pub source: String,         // default, configuration file, etc.
+    pub pending_restart: bool,  // PG 9.5+
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerInfo {
     pub version: String,
     pub start_time: DateTime<Utc>,
     pub max_connections: i64,
     pub extensions: DetectedExtensions,
+    #[serde(default)]
+    pub settings: Vec<PgSetting>,
 }
 
 impl ServerInfo {

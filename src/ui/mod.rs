@@ -79,6 +79,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         BottomPanel::Indexes => panels::render_indexes(frame, app, areas.queries),
         BottomPanel::Statements => panels::render_statements(frame, app, areas.queries),
         BottomPanel::WalIo => panels::render_wal_io(frame, app, areas.queries),
+        BottomPanel::Settings => panels::render_settings(frame, app, areas.queries),
     }
 
     footer::render(frame, app, areas.footer);
