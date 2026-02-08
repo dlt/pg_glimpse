@@ -190,7 +190,7 @@ fn render_panel_keys<'a>(
                 spans.push(desc(" cancel/kill"));
             }
         }
-        BottomPanel::TableStats => {
+        BottomPanel::TableStats | BottomPanel::Indexes | BottomPanel::Statements => {
             spans.push(sep());
             spans.push(key("↑↓"));
             spans.push(desc(" nav"));
@@ -207,57 +207,7 @@ fn render_panel_keys<'a>(
             spans.push(key("Esc"));
             spans.push(desc(" back"));
         }
-        BottomPanel::Replication => {
-            spans.push(sep());
-            spans.push(key("↑↓"));
-            spans.push(desc(" nav"));
-            spans.push(dot());
-            spans.push(key("⏎"));
-            spans.push(desc(" inspect"));
-            spans.push(dot());
-            spans.push(key("Esc"));
-            spans.push(desc(" back"));
-        }
-        BottomPanel::Indexes | BottomPanel::Statements => {
-            spans.push(sep());
-            spans.push(key("↑↓"));
-            spans.push(desc(" nav"));
-            spans.push(dot());
-            spans.push(key("⏎"));
-            spans.push(desc(" inspect"));
-            spans.push(dot());
-            spans.push(key("s"));
-            spans.push(desc(" sort"));
-            spans.push(dot());
-            spans.push(key("/"));
-            spans.push(desc(" filter"));
-            spans.push(dot());
-            spans.push(key("Esc"));
-            spans.push(desc(" back"));
-        }
-        BottomPanel::Blocking => {
-            spans.push(sep());
-            spans.push(key("↑↓"));
-            spans.push(desc(" nav"));
-            spans.push(dot());
-            spans.push(key("⏎"));
-            spans.push(desc(" inspect"));
-            spans.push(dot());
-            spans.push(key("Esc"));
-            spans.push(desc(" back"));
-        }
-        BottomPanel::VacuumProgress => {
-            spans.push(sep());
-            spans.push(key("↑↓"));
-            spans.push(desc(" nav"));
-            spans.push(dot());
-            spans.push(key("⏎"));
-            spans.push(desc(" inspect"));
-            spans.push(dot());
-            spans.push(key("Esc"));
-            spans.push(desc(" back"));
-        }
-        BottomPanel::Wraparound => {
+        BottomPanel::Blocking | BottomPanel::VacuumProgress | BottomPanel::Wraparound | BottomPanel::Replication => {
             spans.push(sep());
             spans.push(key("↑↓"));
             spans.push(desc(" nav"));
