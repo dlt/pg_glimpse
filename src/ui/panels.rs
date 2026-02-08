@@ -9,8 +9,8 @@ use crate::db::models::{ArchiverStats, BgwriterStats, CheckpointStats, WalStats}
 use super::overlay::highlight_sql_inline;
 use super::theme::Theme;
 use super::util::{
-    compute_match_indices, empty_state, format_bytes, format_compact, format_lag, format_time_ms,
-    highlight_matches, styled_table, truncate,
+    compute_match_indices, empty_state, format_byte_rate, format_bytes, format_compact, format_lag,
+    format_time_ms, highlight_matches, styled_table, truncate,
 };
 
 fn panel_block(title: &str) -> Block<'_> {
@@ -755,7 +755,7 @@ pub fn render_wal_io(frame: &mut Frame, app: &App, area: Rect) {
         .split(sections[0]);
 
     // Render WAL Generation (PG14+ only)
-    render_wal_column(frame, snap.wal_stats.as_ref(), columns[0]);
+    render_wal_column(frame, snap.wal_stats.as_ref(), app.current_wal_rate, columns[0]);
 
     // Render Checkpoints
     render_checkpoint_column(frame, snap.checkpoint_stats.as_ref(), columns[1]);
@@ -772,7 +772,7 @@ pub fn render_wal_io(frame: &mut Frame, app: &App, area: Rect) {
     );
 }
 
-fn render_wal_column(frame: &mut Frame, wal: Option<&WalStats>, area: Rect) {
+fn render_wal_column(frame: &mut Frame, wal: Option<&WalStats>, wal_rate: Option<f64>, area: Rect) {
     let title_style = Style::default()
         .fg(Theme::fg())
         .add_modifier(Modifier::BOLD);
@@ -785,13 +785,23 @@ fn render_wal_column(frame: &mut Frame, wal: Option<&WalStats>, area: Rect) {
     ];
 
     if let Some(w) = wal {
+        // Show rate first (most important metric)
+        let rate_display = match wal_rate {
+            Some(rate) => format_byte_rate(rate),
+            None => "\u{2014}".into(),
+        };
+        lines.push(Line::from(vec![
+            Span::styled("Rate:         ", label_style),
+            Span::styled(
+                rate_display,
+                Style::default()
+                    .fg(Theme::border_active())
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]));
         lines.push(Line::from(vec![
             Span::styled("Records:      ", label_style),
             Span::styled(format_compact(w.wal_records), value_style),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("Full Pages:   ", label_style),
-            Span::styled(format_compact(w.wal_fpi), value_style),
         ]));
         lines.push(Line::from(vec![
             Span::styled("Total Size:   ", label_style),

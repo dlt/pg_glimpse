@@ -69,6 +69,12 @@ pub struct BgwriterStats {
     pub buffers_alloc: i64,
 }
 
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub struct DatabaseStats {
+    pub xact_commit: i64,
+    pub xact_rollback: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActiveQuery {
     pub pid: i32,
@@ -246,4 +252,5 @@ pub struct PgSnapshot {
     pub wal_stats: Option<WalStats>,
     pub archiver_stats: Option<ArchiverStats>,
     pub bgwriter_stats: Option<BgwriterStats>,
+    pub db_stats: Option<DatabaseStats>,
 }

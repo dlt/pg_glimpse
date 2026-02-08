@@ -8,7 +8,7 @@ use ratatui::Frame;
 use crate::app::App;
 use super::sparkline::render_sparkline;
 use super::theme::Theme;
-use super::util::{format_bytes, format_compact, format_duration};
+use super::util::{format_bytes, format_byte_rate, format_compact, format_duration, format_rate};
 
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
@@ -192,6 +192,51 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         ];
         cache_line.extend(dead_spans);
         lines.push(Line::from(cache_line));
+
+        // Separator before throughput section
+        lines.push(sep_line.clone());
+
+        // Line 6: TPS (transactions per second)
+        let tps_spark = render_sparkline(&app.tps_history.as_vec(), sparkline_width);
+        let tps_display = match app.current_tps {
+            Some(tps) => format_rate(tps),
+            None => "\u{2014}".into(), // em-dash
+        };
+        lines.push(Line::from(vec![
+            Span::styled("TPS: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                tps_display,
+                Style::default()
+                    .fg(Theme::border_active())
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!(" {}", tps_spark),
+                Style::default().fg(Theme::border_active()),
+            ),
+        ]));
+
+        // Line 7: WAL rate (bytes per second) - PG14+ only
+        if snap.wal_stats.is_some() {
+            let wal_spark = render_sparkline(&app.wal_rate_history.as_vec(), sparkline_width);
+            let wal_display = match app.current_wal_rate {
+                Some(rate) => format_byte_rate(rate),
+                None => "\u{2014}".into(),
+            };
+            lines.push(Line::from(vec![
+                Span::styled("WAL: ", Style::default().fg(Theme::fg_dim())),
+                Span::styled(
+                    wal_display,
+                    Style::default()
+                        .fg(Theme::fg())
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!(" {}", wal_spark),
+                    Style::default().fg(Theme::fg()),
+                ),
+            ]));
+        }
 
         // Separator before health section
         lines.push(sep_line.clone());

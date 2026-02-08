@@ -229,6 +229,15 @@ pub struct App {
     pub active_query_history: RingBuffer<u64>,
     pub lock_count_history: RingBuffer<u64>,
 
+    // Rate tracking
+    pub prev_snapshot: Option<PgSnapshot>,
+    pub tps_history: RingBuffer<u64>,
+    pub wal_rate_history: RingBuffer<u64>,
+
+    // Current rates (for display)
+    pub current_tps: Option<f64>,
+    pub current_wal_rate: Option<f64>,
+
     pub server_info: ServerInfo,
 
     pub host: String,
@@ -294,6 +303,11 @@ impl App {
             hit_ratio_history: RingBuffer::new(history_len),
             active_query_history: RingBuffer::new(history_len),
             lock_count_history: RingBuffer::new(history_len),
+            prev_snapshot: None,
+            tps_history: RingBuffer::new(history_len),
+            wal_rate_history: RingBuffer::new(history_len),
+            current_tps: None,
+            current_wal_rate: None,
             server_info,
             host,
             port,
@@ -359,8 +373,48 @@ impl App {
             .push(snapshot.summary.active_query_count as u64);
         self.lock_count_history
             .push(snapshot.summary.lock_count as u64);
+
+        // Calculate rates from delta
+        self.calculate_rates(&snapshot);
+
         self.snapshot = Some(snapshot);
         self.last_error = None;
+    }
+
+    fn calculate_rates(&mut self, snap: &PgSnapshot) {
+        if let Some(prev) = &self.prev_snapshot {
+            let secs = snap
+                .timestamp
+                .signed_duration_since(prev.timestamp)
+                .num_milliseconds() as f64
+                / 1000.0;
+
+            if secs > 0.0 {
+                // TPS from pg_stat_database
+                if let (Some(curr), Some(prev_db)) = (&snap.db_stats, &prev.db_stats) {
+                    let commits = curr.xact_commit - prev_db.xact_commit;
+                    let rollbacks = curr.xact_rollback - prev_db.xact_rollback;
+                    // Guard against counter reset (server restart)
+                    if commits >= 0 && rollbacks >= 0 {
+                        let tps = (commits + rollbacks) as f64 / secs;
+                        self.current_tps = Some(tps);
+                        self.tps_history.push(tps as u64);
+                    }
+                }
+
+                // WAL rate from pg_stat_wal
+                if let (Some(curr_wal), Some(prev_wal)) = (&snap.wal_stats, &prev.wal_stats) {
+                    let bytes = curr_wal.wal_bytes - prev_wal.wal_bytes;
+                    if bytes >= 0 {
+                        let rate = bytes as f64 / secs;
+                        self.current_wal_rate = Some(rate);
+                        // Store as KB/s for sparkline (fits in u64 better)
+                        self.wal_rate_history.push((rate / 1024.0) as u64);
+                    }
+                }
+            }
+        }
+        self.prev_snapshot = Some(snap.clone());
     }
 
     pub fn update_error(&mut self, err: String) {

@@ -384,6 +384,15 @@ SELECT
 FROM pg_stat_bgwriter
 ";
 
+/// Database stats query for TPS rate calculation
+const DATABASE_STATS_SQL: &str = "
+SELECT
+    COALESCE(xact_commit, 0) AS xact_commit,
+    COALESCE(xact_rollback, 0) AS xact_rollback
+FROM pg_stat_database
+WHERE datname = current_database()
+";
+
 pub async fn detect_extensions(client: &Client) -> DetectedExtensions {
     let rows = match client.query(EXTENSIONS_SQL, &[]).await {
         Ok(rows) => rows,
@@ -471,6 +480,14 @@ pub async fn fetch_bgwriter_stats(client: &Client) -> Result<BgwriterStats> {
         buffers_clean: row.get("buffers_clean"),
         maxwritten_clean: row.get("maxwritten_clean"),
         buffers_alloc: row.get("buffers_alloc"),
+    })
+}
+
+pub async fn fetch_database_stats(client: &Client) -> Result<DatabaseStats> {
+    let row = client.query_one(DATABASE_STATS_SQL, &[]).await?;
+    Ok(DatabaseStats {
+        xact_commit: row.get("xact_commit"),
+        xact_rollback: row.get("xact_rollback"),
     })
 }
 
@@ -720,7 +737,7 @@ pub async fn fetch_snapshot(
     version: u32,
 ) -> Result<PgSnapshot> {
     let ext = extensions.clone();
-    let (active, waits, blocks, cache, summary, tables, repl, vacuum, wrap, indexes, ss, db_size, chkpt, wal, archiver, bgwriter) =
+    let (active, waits, blocks, cache, summary, tables, repl, vacuum, wrap, indexes, ss, db_size, chkpt, wal, archiver, bgwriter, db_stats) =
         tokio::try_join!(
             fetch_active_queries(client),
             fetch_wait_events(client),
@@ -745,6 +762,7 @@ pub async fn fetch_snapshot(
             },
             async { Ok(fetch_archiver_stats(client).await.ok()) },
             async { Ok(fetch_bgwriter_stats(client).await.ok()) },
+            async { Ok(fetch_database_stats(client).await.ok()) },
         )?;
     let (stat_statements, _) = ss;
     Ok(PgSnapshot {
@@ -766,5 +784,6 @@ pub async fn fetch_snapshot(
         wal_stats: wal,
         archiver_stats: archiver,
         bgwriter_stats: bgwriter,
+        db_stats,
     })
 }

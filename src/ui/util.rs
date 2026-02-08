@@ -111,6 +111,39 @@ pub fn format_time_ms(ms: f64) -> String {
     }
 }
 
+/// Format a rate (per second) with appropriate unit suffix
+pub fn format_rate(rate: f64) -> String {
+    if rate >= 1_000_000.0 {
+        format!("{:.1}M/s", rate / 1_000_000.0)
+    } else if rate >= 1_000.0 {
+        format!("{:.1}K/s", rate / 1_000.0)
+    } else if rate >= 1.0 {
+        format!("{:.0}/s", rate)
+    } else if rate > 0.0 {
+        format!("{:.1}/s", rate)
+    } else {
+        "0/s".into()
+    }
+}
+
+/// Format a byte rate (bytes per second) with appropriate unit suffix
+pub fn format_byte_rate(bytes_per_sec: f64) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = 1024.0 * 1024.0;
+    const GB: f64 = 1024.0 * 1024.0 * 1024.0;
+    if bytes_per_sec >= GB {
+        format!("{:.1} GB/s", bytes_per_sec / GB)
+    } else if bytes_per_sec >= MB {
+        format!("{:.1} MB/s", bytes_per_sec / MB)
+    } else if bytes_per_sec >= KB {
+        format!("{:.0} KB/s", bytes_per_sec / KB)
+    } else if bytes_per_sec > 0.0 {
+        format!("{:.0} B/s", bytes_per_sec)
+    } else {
+        "0 B/s".into()
+    }
+}
+
 /// Highlight matching characters in a string based on fuzzy match indices.
 /// The `match_indices` are character positions from nucleo.
 /// Returns owned Spans to avoid lifetime issues.
