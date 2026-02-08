@@ -1531,6 +1531,7 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
         entry("s", "Cycle sort column"),
         entry("/", "Fuzzy filter"),
         entry("Enter", "Inspect selected row"),
+        entry("b", "Refresh bloat estimates (Tables/Indexes)"),
         Line::from(""),
         section_header("Query Actions"),
         entry("C", "Cancel query (batch if filter)"),

@@ -158,6 +158,17 @@ impl Theme {
         }
     }
 
+    /// Color for bloat percentage
+    pub fn bloat_color(pct: f64) -> Color {
+        if pct > 50.0 {
+            Self::border_danger()
+        } else if pct > 20.0 {
+            Self::border_warn()
+        } else {
+            Self::border_ok()
+        }
+    }
+
     /// Color for transaction ID wraparound percentage
     pub fn wraparound_color(pct: f64) -> Color {
         if pct > 75.0 {

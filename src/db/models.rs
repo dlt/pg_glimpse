@@ -151,6 +151,11 @@ pub struct TableStat {
     pub last_autoanalyze: Option<DateTime<Utc>>,
     pub vacuum_count: i64,
     pub autovacuum_count: i64,
+    // Bloat estimation (populated on-demand)
+    #[serde(default)]
+    pub bloat_bytes: Option<i64>,
+    #[serde(default)]
+    pub bloat_pct: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -207,6 +212,11 @@ pub struct IndexInfo {
     pub idx_tup_read: i64,
     pub idx_tup_fetch: i64,
     pub index_definition: String,
+    // Bloat estimation (populated on-demand)
+    #[serde(default)]
+    pub bloat_bytes: Option<i64>,
+    #[serde(default)]
+    pub bloat_pct: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

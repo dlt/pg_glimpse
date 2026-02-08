@@ -157,6 +157,7 @@ pub fn render_table_stats(frame: &mut Frame, app: &mut App, area: Rect) {
         Cell::from(format!("IdxScan{}", sort_indicator(TableStatSortColumn::IdxScan))),
         Cell::from(format!("Dead{}", sort_indicator(TableStatSortColumn::DeadTuples))),
         Cell::from(format!("Dead%{}", sort_indicator(TableStatSortColumn::DeadRatio))),
+        Cell::from("Bloat[b]"),
         Cell::from("Last Vacuum"),
     ])
     .style(Theme::title_style())
@@ -193,6 +194,14 @@ pub fn render_table_stats(frame: &mut Frame, app: &mut App, area: Rect) {
                 Cell::from(table_name)
             };
 
+            let bloat_cell = match t.bloat_pct {
+                Some(pct) => {
+                    let color = Theme::bloat_color(pct);
+                    Cell::from(format!("{:.1}%", pct)).style(Style::default().fg(color))
+                }
+                None => Cell::from("-"),
+            };
+
             Row::new(vec![
                 table_cell,
                 Cell::from(format_bytes(t.total_size_bytes)),
@@ -201,6 +210,7 @@ pub fn render_table_stats(frame: &mut Frame, app: &mut App, area: Rect) {
                 Cell::from(t.n_dead_tup.to_string()).style(Style::default().fg(dead_color)),
                 Cell::from(format!("{:.1}%", t.dead_ratio))
                     .style(Style::default().fg(dead_color)),
+                bloat_cell,
                 Cell::from(
                     t.last_autovacuum
                         .map(|ts| ts.format("%m-%d %H:%M").to_string())
@@ -217,6 +227,7 @@ pub fn render_table_stats(frame: &mut Frame, app: &mut App, area: Rect) {
         Constraint::Length(10),
         Constraint::Length(10),
         Constraint::Length(9),
+        Constraint::Length(8),
         Constraint::Length(13),
     ];
 
@@ -427,6 +438,7 @@ pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {
             "Tup Fetch{}",
             sort_indicator(IndexSortColumn::TupFetch)
         )),
+        Cell::from("Bloat[b]"),
     ])
     .style(Theme::title_style())
     .bottom_margin(0);
@@ -463,6 +475,14 @@ pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {
                 Cell::from(idx.index_name.clone())
             };
 
+            let bloat_cell = match idx.bloat_pct {
+                Some(pct) => {
+                    let color = Theme::bloat_color(pct);
+                    Cell::from(format!("{:.1}%", pct)).style(Style::default().fg(color))
+                }
+                None => Cell::from("-"),
+            };
+
             Row::new(vec![
                 Cell::from(table_name),
                 index_cell,
@@ -471,6 +491,7 @@ pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {
                     .style(Style::default().fg(scan_color)),
                 Cell::from(idx.idx_tup_read.to_string()),
                 Cell::from(idx.idx_tup_fetch.to_string()),
+                bloat_cell,
             ])
         })
         .collect();
@@ -482,6 +503,7 @@ pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {
         Constraint::Length(10),
         Constraint::Length(12),
         Constraint::Length(12),
+        Constraint::Length(8),
     ];
 
     let table = styled_table(rows, widths, header, block);

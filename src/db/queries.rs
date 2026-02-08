@@ -396,6 +396,41 @@ FROM pg_stat_database
 WHERE datname = current_database()
 ";
 
+/// Table bloat estimation query - simplified version
+/// Estimates bloat by comparing actual table size to expected size based on row count
+const TABLE_BLOAT_SQL: &str = "
+SELECT
+    schemaname,
+    relname,
+    GREATEST(0, pg_table_size(relid) - (n_live_tup * 100))::bigint AS bloat_bytes,
+    (CASE
+        WHEN pg_table_size(relid) > 0 AND n_live_tup > 0
+        THEN GREATEST(0.0, 100.0 * (1.0 - (n_live_tup * 100.0 / pg_table_size(relid))))
+        ELSE 0.0
+    END)::float8 AS bloat_pct
+FROM pg_stat_user_tables
+WHERE n_live_tup > 0
+ORDER BY bloat_bytes DESC
+";
+
+/// Index bloat estimation query - simplified version
+const INDEX_BLOAT_SQL: &str = "
+SELECT
+    sui.schemaname,
+    sui.relname AS table_name,
+    sui.indexrelname AS index_name,
+    GREATEST(0, pg_relation_size(sui.indexrelid) - GREATEST(c.reltuples * 50, 8192))::bigint AS bloat_bytes,
+    (CASE
+        WHEN pg_relation_size(sui.indexrelid) > 8192 AND c.reltuples > 0
+        THEN GREATEST(0.0, 100.0 * (1.0 - (c.reltuples * 50.0 / pg_relation_size(sui.indexrelid))))
+        ELSE 0.0
+    END)::float8 AS bloat_pct
+FROM pg_stat_user_indexes sui
+JOIN pg_class c ON c.oid = sui.indexrelid
+WHERE pg_relation_size(sui.indexrelid) > 0
+ORDER BY bloat_bytes DESC
+";
+
 pub async fn detect_extensions(client: &Client) -> DetectedExtensions {
     let rows = match client.query(EXTENSIONS_SQL, &[]).await {
         Ok(rows) => rows,
@@ -595,6 +630,8 @@ pub async fn fetch_table_stats(client: &Client) -> Result<Vec<TableStat>> {
             last_autoanalyze: row.get("last_autoanalyze"),
             vacuum_count: row.get("vacuum_count"),
             autovacuum_count: row.get("autovacuum_count"),
+            bloat_bytes: None,
+            bloat_pct: None,
         });
     }
     Ok(results)
@@ -675,6 +712,8 @@ pub async fn fetch_indexes(client: &Client) -> Result<Vec<IndexInfo>> {
             idx_tup_read: row.get("idx_tup_read"),
             idx_tup_fetch: row.get("idx_tup_fetch"),
             index_definition: row.get("index_definition"),
+            bloat_bytes: None,
+            bloat_pct: None,
         });
     }
     Ok(results)
@@ -721,6 +760,60 @@ pub async fn fetch_stat_statements(
         });
     }
     (results, true)
+}
+
+use std::collections::HashMap;
+
+/// Bloat estimation result for a table
+#[derive(Debug, Clone)]
+pub struct TableBloat {
+    pub bloat_bytes: i64,
+    pub bloat_pct: f64,
+}
+
+/// Bloat estimation result for an index
+#[derive(Debug, Clone)]
+pub struct IndexBloat {
+    pub bloat_bytes: i64,
+    pub bloat_pct: f64,
+}
+
+/// Fetch table bloat estimates. Returns map of "schema.table" -> bloat info.
+pub async fn fetch_table_bloat(client: &Client) -> Result<HashMap<String, TableBloat>> {
+    let rows = client.query(TABLE_BLOAT_SQL, &[]).await?;
+    let mut results = HashMap::with_capacity(rows.len());
+    for row in rows {
+        let schema: String = row.get("schemaname");
+        let table: String = row.get("relname");
+        let key = format!("{}.{}", schema, table);
+        results.insert(
+            key,
+            TableBloat {
+                bloat_bytes: row.get("bloat_bytes"),
+                bloat_pct: row.get("bloat_pct"),
+            },
+        );
+    }
+    Ok(results)
+}
+
+/// Fetch index bloat estimates. Returns map of "schema.index_name" -> bloat info.
+pub async fn fetch_index_bloat(client: &Client) -> Result<HashMap<String, IndexBloat>> {
+    let rows = client.query(INDEX_BLOAT_SQL, &[]).await?;
+    let mut results = HashMap::with_capacity(rows.len());
+    for row in rows {
+        let schema: String = row.get("schemaname");
+        let index: String = row.get("index_name");
+        let key = format!("{}.{}", schema, index);
+        results.insert(
+            key,
+            IndexBloat {
+                bloat_bytes: row.get("bloat_bytes"),
+                bloat_pct: row.get("bloat_pct"),
+            },
+        );
+    }
+    Ok(results)
 }
 
 pub async fn cancel_backend(client: &Client, pid: i32) -> Result<bool> {

@@ -206,7 +206,13 @@ async fn run(cli: Cli) -> Result<()> {
         TerminateBackend(i32),
         CancelQueries(Vec<i32>),
         TerminateBackends(Vec<i32>),
+        RefreshBloat,
     }
+    type BloatResult = (
+        std::collections::HashMap<String, db::queries::TableBloat>,
+        std::collections::HashMap<String, db::queries::IndexBloat>,
+    );
+
     #[allow(clippy::large_enum_variant)]
     enum DbResult {
         Snapshot(Result<PgSnapshot, String>),
@@ -214,6 +220,7 @@ async fn run(cli: Cli) -> Result<()> {
         TerminateBackend(i32, Result<bool, String>),
         CancelQueries(Vec<(i32, bool)>),
         TerminateBackends(Vec<(i32, bool)>),
+        BloatData(Result<BloatResult, String>),
     }
 
     let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel::<DbCommand>();
@@ -257,6 +264,16 @@ async fn run(cli: Cli) -> Result<()> {
                     DbResult::TerminateBackends(
                         db::queries::terminate_backends(&db_client, &pids).await,
                     )
+                }
+                DbCommand::RefreshBloat => {
+                    let table_bloat = db::queries::fetch_table_bloat(&db_client).await;
+                    let index_bloat = db::queries::fetch_index_bloat(&db_client).await;
+                    match (table_bloat, index_bloat) {
+                        (Ok(tb), Ok(ib)) => DbResult::BloatData(Ok((tb, ib))),
+                        (Err(e), Ok(_)) => DbResult::BloatData(Err(format!("Table bloat query failed: {}", e))),
+                        (Ok(_), Err(e)) => DbResult::BloatData(Err(format!("Index bloat query failed: {}", e))),
+                        (Err(e1), Err(_)) => DbResult::BloatData(Err(format!("Bloat queries failed: {}", e1))),
+                    }
                 }
             };
             if result_tx.send(result).is_err() {
@@ -341,6 +358,18 @@ async fn run(cli: Cli) -> Result<()> {
                             }
                             let _ = cmd_tx.send(DbCommand::FetchSnapshot);
                         }
+                        DbResult::BloatData(Ok((table_bloat, index_bloat))) => {
+                            app.apply_bloat_data(&table_bloat, &index_bloat);
+                            let table_count = table_bloat.len();
+                            let index_count = index_bloat.len();
+                            app.status_message = Some(format!(
+                                "Bloat estimates refreshed ({} tables, {} indexes)",
+                                table_count, index_count
+                            ));
+                        }
+                        DbResult::BloatData(Err(e)) => {
+                            app.status_message = Some(format!("Bloat estimation failed: {}", e));
+                        }
                     }
                 }
             }
@@ -368,6 +397,9 @@ async fn run(cli: Cli) -> Result<()> {
                 }
                 AppAction::TerminateBackends(pids) => {
                     let _ = cmd_tx.send(DbCommand::TerminateBackends(pids));
+                }
+                AppAction::RefreshBloat => {
+                    let _ = cmd_tx.send(DbCommand::RefreshBloat);
                 }
                 AppAction::SaveConfig => {
                     app.config.save();

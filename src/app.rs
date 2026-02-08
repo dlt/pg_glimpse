@@ -3,8 +3,11 @@ use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config as MatcherConfig, Matcher};
 use ratatui::widgets::TableState;
 
+use std::collections::HashMap;
+
 use crate::config::{AppConfig, ConfigItem};
 use crate::db::models::{ActiveQuery, IndexInfo, PgSnapshot, ServerInfo, StatStatement, TableStat};
+use crate::db::queries::{IndexBloat, TableBloat};
 use crate::history::RingBuffer;
 use crate::ui::theme;
 
@@ -73,6 +76,7 @@ pub enum AppAction {
     CancelQueries(Vec<i32>),
     TerminateBackends(Vec<i32>),
     ForceRefresh,
+    RefreshBloat,
     SaveConfig,
     RefreshIntervalChanged,
 }
@@ -360,7 +364,7 @@ impl App {
         app
     }
 
-    pub fn update(&mut self, snapshot: PgSnapshot) {
+    pub fn update(&mut self, mut snapshot: PgSnapshot) {
         self.connection_history
             .push(snapshot.summary.total_backends as u64);
 
@@ -386,6 +390,47 @@ impl App {
 
         // Calculate rates from delta
         self.calculate_rates(&snapshot);
+
+        // Preserve bloat data from previous snapshot
+        if let Some(ref old_snap) = self.snapshot {
+            // Build lookup maps from old snapshot's bloat data
+            let table_bloat: HashMap<String, (Option<i64>, Option<f64>)> = old_snap
+                .table_stats
+                .iter()
+                .filter(|t| t.bloat_pct.is_some())
+                .map(|t| {
+                    let key = format!("{}.{}", t.schemaname, t.relname);
+                    (key, (t.bloat_bytes, t.bloat_pct))
+                })
+                .collect();
+
+            let index_bloat: HashMap<String, (Option<i64>, Option<f64>)> = old_snap
+                .indexes
+                .iter()
+                .filter(|i| i.bloat_pct.is_some())
+                .map(|i| {
+                    let key = format!("{}.{}", i.schemaname, i.index_name);
+                    (key, (i.bloat_bytes, i.bloat_pct))
+                })
+                .collect();
+
+            // Apply to new snapshot
+            for table in &mut snapshot.table_stats {
+                let key = format!("{}.{}", table.schemaname, table.relname);
+                if let Some((bytes, pct)) = table_bloat.get(&key) {
+                    table.bloat_bytes = *bytes;
+                    table.bloat_pct = *pct;
+                }
+            }
+
+            for index in &mut snapshot.indexes {
+                let key = format!("{}.{}", index.schemaname, index.index_name);
+                if let Some((bytes, pct)) = index_bloat.get(&key) {
+                    index.bloat_bytes = *bytes;
+                    index.bloat_pct = *pct;
+                }
+            }
+        }
 
         self.snapshot = Some(snapshot);
         self.last_error = None;
@@ -437,6 +482,32 @@ impl App {
 
     pub fn update_error(&mut self, err: String) {
         self.last_error = Some(err);
+    }
+
+    /// Apply bloat estimates to current snapshot's table_stats and indexes
+    pub fn apply_bloat_data(
+        &mut self,
+        table_bloat: &HashMap<String, TableBloat>,
+        index_bloat: &HashMap<String, IndexBloat>,
+    ) {
+        if let Some(ref mut snapshot) = self.snapshot {
+            // Apply table bloat
+            for table in &mut snapshot.table_stats {
+                let key = format!("{}.{}", table.schemaname, table.relname);
+                if let Some(bloat) = table_bloat.get(&key) {
+                    table.bloat_bytes = Some(bloat.bloat_bytes);
+                    table.bloat_pct = Some(bloat.bloat_pct);
+                }
+            }
+            // Apply index bloat
+            for index in &mut snapshot.indexes {
+                let key = format!("{}.{}", index.schemaname, index.index_name);
+                if let Some(bloat) = index_bloat.get(&key) {
+                    index.bloat_bytes = Some(bloat.bloat_bytes);
+                    index.bloat_pct = Some(bloat.bloat_pct);
+                }
+            }
+        }
     }
 
     fn query_to_filter_string(q: &ActiveQuery) -> String {
@@ -938,6 +1009,10 @@ impl App {
                     );
                 }
             }
+            KeyCode::Char('b') if !self.replay_mode => {
+                self.pending_action = Some(AppAction::RefreshBloat);
+                self.status_message = Some("Refreshing bloat estimates...".to_string());
+            }
             _ => {}
         }
     }
@@ -1023,6 +1098,10 @@ impl App {
                     self.table_stat_sort_column.label(),
                     if self.table_stat_sort_ascending { "\u{2191}" } else { "\u{2193}" }
                 ));
+            }
+            KeyCode::Char('b') if !self.replay_mode => {
+                self.pending_action = Some(AppAction::RefreshBloat);
+                self.status_message = Some("Refreshing bloat estimates...".to_string());
             }
             _ => {}
         }
