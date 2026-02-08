@@ -296,7 +296,8 @@ SELECT
     COUNT(*) FILTER (WHERE state = 'idle in transaction') AS idle_in_transaction_count,
     COUNT(*) AS total_backends,
     (SELECT COUNT(*) FROM pg_locks WHERE NOT granted) AS lock_count,
-    COUNT(*) FILTER (WHERE wait_event_type = 'Lock') AS waiting_count
+    COUNT(*) FILTER (WHERE wait_event_type = 'Lock') AS waiting_count,
+    MAX(EXTRACT(EPOCH FROM (clock_timestamp() - xact_start)))::float8 AS oldest_xact_secs
 FROM pg_stat_activity
 WHERE backend_type = 'client backend'
 ";
@@ -561,6 +562,7 @@ pub async fn fetch_activity_summary(client: &Client) -> Result<ActivitySummary> 
         total_backends: row.get("total_backends"),
         lock_count: row.get("lock_count"),
         waiting_count: row.get("waiting_count"),
+        oldest_xact_secs: row.get("oldest_xact_secs"),
     })
 }
 

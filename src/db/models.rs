@@ -123,6 +123,7 @@ pub struct ActivitySummary {
     pub total_backends: i64,
     pub lock_count: i64,
     pub waiting_count: i64,
+    pub oldest_xact_secs: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

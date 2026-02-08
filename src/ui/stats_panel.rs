@@ -152,6 +152,33 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
             ),
         ]));
 
+        // Line 4b: Oldest transaction age (important for wraparound)
+        if let Some(oldest_xact) = snap.summary.oldest_xact_secs {
+            // Color thresholds: >1h warning, >6h danger
+            let xact_color = if oldest_xact > 21600.0 {
+                Theme::border_danger()
+            } else if oldest_xact > 3600.0 {
+                Theme::border_warn()
+            } else {
+                Theme::fg()
+            };
+            lines.push(Line::from(vec![
+                Span::styled("Oldest Txn: ", Style::default().fg(Theme::fg_dim())),
+                Span::styled(
+                    format_duration(oldest_xact),
+                    Style::default().fg(xact_color).add_modifier(Modifier::BOLD),
+                ),
+                if oldest_xact > 3600.0 {
+                    Span::styled(
+                        " (holding XID)",
+                        Style::default().fg(xact_color),
+                    )
+                } else {
+                    Span::styled("", Style::default())
+                },
+            ]));
+        }
+
         // Line 5: Cache hit ratio
         let cache_pct = snap.buffer_cache.hit_ratio * 100.0;
         let cache_color = Theme::hit_ratio_color(cache_pct);
