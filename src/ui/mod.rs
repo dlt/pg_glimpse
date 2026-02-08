@@ -94,6 +94,15 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         ViewMode::TableInspect => {
             overlay::render_table_inspect(frame, app, frame.area())
         }
+        ViewMode::BlockingInspect => {
+            overlay::render_blocking_inspect(frame, app, frame.area())
+        }
+        ViewMode::VacuumInspect => {
+            overlay::render_vacuum_inspect(frame, app, frame.area())
+        }
+        ViewMode::WraparoundInspect => {
+            overlay::render_wraparound_inspect(frame, app, frame.area())
+        }
         ViewMode::ConfirmCancel(pid) => {
             overlay::render_confirm_cancel(frame, *pid, frame.area())
         }

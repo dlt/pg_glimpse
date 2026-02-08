@@ -21,7 +21,7 @@ fn panel_block(title: &str) -> Block<'_> {
 }
 
 
-pub fn render_blocking(frame: &mut Frame, app: &App, area: Rect) {
+pub fn render_blocking(frame: &mut Frame, app: &mut App, area: Rect) {
     let block = panel_block("Blocking Chains");
 
     let Some(snap) = &app.snapshot else {
@@ -70,8 +70,17 @@ pub fn render_blocking(frame: &mut Frame, app: &App, area: Rect) {
         Constraint::Min(15),
     ];
 
-    let table = Table::new(rows, widths).header(header).block(block);
-    frame.render_widget(table, area);
+    let table = Table::new(rows, widths)
+        .header(header)
+        .block(block)
+        .row_highlight_style(
+            Style::default()
+                .bg(Theme::highlight_bg())
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("\u{25ba} ");
+
+    frame.render_stateful_widget(table, area, &mut app.blocking_table_state);
 }
 
 pub fn render_wait_events(frame: &mut Frame, app: &App, area: Rect) {
@@ -307,7 +316,7 @@ pub fn render_replication(frame: &mut Frame, app: &mut App, area: Rect) {
     frame.render_stateful_widget(table, area, &mut app.replication_table_state);
 }
 
-pub fn render_vacuum_progress(frame: &mut Frame, app: &App, area: Rect) {
+pub fn render_vacuum_progress(frame: &mut Frame, app: &mut App, area: Rect) {
     let block = panel_block("Vacuum Progress");
 
     let Some(snap) = &app.snapshot else {
@@ -353,11 +362,20 @@ pub fn render_vacuum_progress(frame: &mut Frame, app: &App, area: Rect) {
         Constraint::Length(12),
     ];
 
-    let table = Table::new(rows, widths).header(header).block(block);
-    frame.render_widget(table, area);
+    let table = Table::new(rows, widths)
+        .header(header)
+        .block(block)
+        .row_highlight_style(
+            Style::default()
+                .bg(Theme::highlight_bg())
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("\u{25ba} ");
+
+    frame.render_stateful_widget(table, area, &mut app.vacuum_table_state);
 }
 
-pub fn render_wraparound(frame: &mut Frame, app: &App, area: Rect) {
+pub fn render_wraparound(frame: &mut Frame, app: &mut App, area: Rect) {
     let block = panel_block("Transaction Wraparound");
 
     let Some(snap) = &app.snapshot else {
@@ -409,8 +427,17 @@ pub fn render_wraparound(frame: &mut Frame, app: &App, area: Rect) {
         Constraint::Length(10),
     ];
 
-    let table = Table::new(rows, widths).header(header).block(block);
-    frame.render_widget(table, area);
+    let table = Table::new(rows, widths)
+        .header(header)
+        .block(block)
+        .row_highlight_style(
+            Style::default()
+                .bg(Theme::highlight_bg())
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("\u{25ba} ");
+
+    frame.render_stateful_widget(table, area, &mut app.wraparound_table_state);
 }
 
 pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {

@@ -235,7 +235,40 @@ fn render_panel_keys<'a>(
             spans.push(key("Esc"));
             spans.push(desc(" back"));
         }
-        _ => {
+        BottomPanel::Blocking => {
+            spans.push(sep());
+            spans.push(key("↑↓"));
+            spans.push(desc(" nav"));
+            spans.push(dot());
+            spans.push(key("⏎"));
+            spans.push(desc(" inspect"));
+            spans.push(dot());
+            spans.push(key("Esc"));
+            spans.push(desc(" back"));
+        }
+        BottomPanel::VacuumProgress => {
+            spans.push(sep());
+            spans.push(key("↑↓"));
+            spans.push(desc(" nav"));
+            spans.push(dot());
+            spans.push(key("⏎"));
+            spans.push(desc(" inspect"));
+            spans.push(dot());
+            spans.push(key("Esc"));
+            spans.push(desc(" back"));
+        }
+        BottomPanel::Wraparound => {
+            spans.push(sep());
+            spans.push(key("↑↓"));
+            spans.push(desc(" nav"));
+            spans.push(dot());
+            spans.push(key("⏎"));
+            spans.push(desc(" inspect"));
+            spans.push(dot());
+            spans.push(key("Esc"));
+            spans.push(desc(" back"));
+        }
+        BottomPanel::WaitEvents => {
             spans.push(sep());
             spans.push(key("Esc"));
             spans.push(desc(" back"));

@@ -51,6 +51,9 @@ pub enum ViewMode {
     StatementInspect,
     ReplicationInspect,
     TableInspect,
+    BlockingInspect,
+    VacuumInspect,
+    WraparoundInspect,
     ConfirmCancel(i32),
     ConfirmKill(i32),
     Config,
@@ -214,6 +217,9 @@ pub struct App {
     pub table_stat_sort_column: TableStatSortColumn,
     pub table_stat_sort_ascending: bool,
     pub replication_table_state: TableState,
+    pub blocking_table_state: TableState,
+    pub vacuum_table_state: TableState,
+    pub wraparound_table_state: TableState,
 
     pub connection_history: RingBuffer<u64>,
     pub avg_query_time_history: RingBuffer<u64>,
@@ -278,6 +284,9 @@ impl App {
             table_stat_sort_column: TableStatSortColumn::DeadTuples,
             table_stat_sort_ascending: false,
             replication_table_state: TableState::default(),
+            blocking_table_state: TableState::default(),
+            vacuum_table_state: TableState::default(),
+            wraparound_table_state: TableState::default(),
             connection_history: RingBuffer::new(history_len),
             avg_query_time_history: RingBuffer::new(history_len),
             hit_ratio_history: RingBuffer::new(history_len),
@@ -942,6 +951,93 @@ impl App {
         }
     }
 
+    fn handle_blocking_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                let i = self.blocking_table_state.selected().unwrap_or(0);
+                self.blocking_table_state.select(Some(i.saturating_sub(1)));
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let max = self
+                    .snapshot
+                    .as_ref()
+                    .map(|s| s.blocking_info.len())
+                    .unwrap_or(0)
+                    .saturating_sub(1);
+                let i = self.blocking_table_state.selected().unwrap_or(0);
+                self.blocking_table_state.select(Some((i + 1).min(max)));
+            }
+            KeyCode::Enter => {
+                if self.snapshot.as_ref().is_some_and(|s| !s.blocking_info.is_empty()) {
+                    if self.blocking_table_state.selected().is_none() {
+                        self.blocking_table_state.select(Some(0));
+                    }
+                    self.overlay_scroll = 0;
+                    self.view_mode = ViewMode::BlockingInspect;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_vacuum_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                let i = self.vacuum_table_state.selected().unwrap_or(0);
+                self.vacuum_table_state.select(Some(i.saturating_sub(1)));
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let max = self
+                    .snapshot
+                    .as_ref()
+                    .map(|s| s.vacuum_progress.len())
+                    .unwrap_or(0)
+                    .saturating_sub(1);
+                let i = self.vacuum_table_state.selected().unwrap_or(0);
+                self.vacuum_table_state.select(Some((i + 1).min(max)));
+            }
+            KeyCode::Enter => {
+                if self.snapshot.as_ref().is_some_and(|s| !s.vacuum_progress.is_empty()) {
+                    if self.vacuum_table_state.selected().is_none() {
+                        self.vacuum_table_state.select(Some(0));
+                    }
+                    self.overlay_scroll = 0;
+                    self.view_mode = ViewMode::VacuumInspect;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_wraparound_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                let i = self.wraparound_table_state.selected().unwrap_or(0);
+                self.wraparound_table_state.select(Some(i.saturating_sub(1)));
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let max = self
+                    .snapshot
+                    .as_ref()
+                    .map(|s| s.wraparound.len())
+                    .unwrap_or(0)
+                    .saturating_sub(1);
+                let i = self.wraparound_table_state.selected().unwrap_or(0);
+                self.wraparound_table_state.select(Some((i + 1).min(max)));
+            }
+            KeyCode::Enter => {
+                if self.snapshot.as_ref().is_some_and(|s| !s.wraparound.is_empty()) {
+                    if self.wraparound_table_state.selected().is_none() {
+                        self.wraparound_table_state.select(Some(0));
+                    }
+                    self.overlay_scroll = 0;
+                    self.view_mode = ViewMode::WraparoundInspect;
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn handle_panel_key(&mut self, key: KeyEvent) {
         match self.bottom_panel {
             BottomPanel::Queries => self.handle_queries_key(key),
@@ -949,7 +1045,10 @@ impl App {
             BottomPanel::Statements => self.handle_statements_key(key),
             BottomPanel::TableStats => self.handle_table_stats_key(key),
             BottomPanel::Replication => self.handle_replication_key(key),
-            _ => {} // Static panels have no panel-specific keys
+            BottomPanel::Blocking => self.handle_blocking_key(key),
+            BottomPanel::VacuumProgress => self.handle_vacuum_key(key),
+            BottomPanel::Wraparound => self.handle_wraparound_key(key),
+            _ => {}
         }
     }
 
@@ -1104,7 +1203,7 @@ impl App {
                 }
                 return;
             }
-            ViewMode::TableInspect => {
+            ViewMode::TableInspect | ViewMode::BlockingInspect | ViewMode::VacuumInspect | ViewMode::WraparoundInspect => {
                 match key.code {
                     KeyCode::Esc | KeyCode::Char('q') => {
                         self.overlay_scroll = 0;

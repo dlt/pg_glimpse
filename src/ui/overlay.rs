@@ -730,6 +730,335 @@ fn format_compact(n: i64) -> String {
     }
 }
 
+pub fn render_blocking_inspect(frame: &mut Frame, app: &App, area: Rect) {
+    let popup = centered_rect(80, 70, area);
+    frame.render_widget(Clear, popup);
+
+    let block = overlay_block(" Lock Details ", Theme::border_danger());
+
+    let Some(snap) = &app.snapshot else {
+        frame.render_widget(Paragraph::new("No data").block(block), popup);
+        return;
+    };
+
+    let sel = app.blocking_table_state.selected().unwrap_or(0);
+    let Some(info) = snap.blocking_info.get(sel) else {
+        frame.render_widget(
+            Paragraph::new("No blocking info selected").block(block),
+            popup,
+        );
+        return;
+    };
+
+    let duration_color = Theme::duration_color(info.blocked_duration_secs);
+
+    let mut lines = vec![
+        Line::from(""),
+        section_header("Blocked Process"),
+        Line::from(vec![
+            Span::styled("  PID:           ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                info.blocked_pid.to_string(),
+                Style::default().fg(Theme::border_danger()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("     User: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                info.blocked_user.clone().unwrap_or_else(|| "-".into()),
+                Style::default().fg(Theme::fg()),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("  Waiting:       ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                format!("{:.1}s", info.blocked_duration_secs),
+                Style::default().fg(duration_color).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled("  Query:", Style::default().fg(Theme::fg_dim()))),
+    ];
+    lines.extend(highlight_sql(
+        info.blocked_query.as_deref().unwrap_or("<no query>"),
+        "  ",
+    ));
+
+    lines.push(Line::from(""));
+    lines.push(section_header("Blocking Process"));
+    lines.push(Line::from(vec![
+        Span::styled("  PID:           ", Style::default().fg(Theme::fg_dim())),
+        Span::styled(
+            info.blocker_pid.to_string(),
+            Style::default().fg(Theme::border_warn()).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled("     User: ", Style::default().fg(Theme::fg_dim())),
+        Span::styled(
+            info.blocker_user.clone().unwrap_or_else(|| "-".into()),
+            Style::default().fg(Theme::fg()),
+        ),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled("  State:         ", Style::default().fg(Theme::fg_dim())),
+        Span::styled(
+            info.blocker_state.clone().unwrap_or_else(|| "-".into()),
+            Style::default().fg(Theme::state_color(info.blocker_state.as_deref())),
+        ),
+    ]));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled("  Query:", Style::default().fg(Theme::fg_dim()))));
+    lines.extend(highlight_sql(
+        info.blocker_query.as_deref().unwrap_or("<no query>"),
+        "  ",
+    ));
+
+    lines.push(Line::from(""));
+    lines.push(separator_line());
+    lines.push(action_hint(vec![("j/k", "scroll"), ("Esc", "close")]));
+
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false })
+        .scroll((app.overlay_scroll, 0));
+    frame.render_widget(paragraph, popup);
+}
+
+pub fn render_vacuum_inspect(frame: &mut Frame, app: &App, area: Rect) {
+    let popup = centered_rect(70, 60, area);
+    frame.render_widget(Clear, popup);
+
+    let block = overlay_block(" Vacuum Progress ", Theme::border_active());
+
+    let Some(snap) = &app.snapshot else {
+        frame.render_widget(Paragraph::new("No data").block(block), popup);
+        return;
+    };
+
+    let sel = app.vacuum_table_state.selected().unwrap_or(0);
+    let Some(vac) = snap.vacuum_progress.get(sel) else {
+        frame.render_widget(
+            Paragraph::new("No vacuum in progress").block(block),
+            popup,
+        );
+        return;
+    };
+
+    let progress_color = if vac.progress_pct > 80.0 {
+        Theme::border_ok()
+    } else if vac.progress_pct > 50.0 {
+        Theme::border_warn()
+    } else {
+        Theme::border_active()
+    };
+
+    // Create a simple progress bar
+    let bar_width = 40;
+    let filled = (vac.progress_pct / 100.0 * bar_width as f64) as usize;
+    let empty = bar_width - filled;
+    let progress_bar = format!("[{}{}]", "█".repeat(filled), "░".repeat(empty));
+
+    let phase_description = match vac.phase.as_str() {
+        "initializing" => "Setting up vacuum operation",
+        "scanning heap" => "Reading table pages to find dead tuples",
+        "vacuuming indexes" => "Removing dead index entries",
+        "vacuuming heap" => "Removing dead tuples from table",
+        "cleaning up indexes" => "Finalizing index cleanup",
+        "truncating heap" => "Shrinking table file if possible",
+        "performing final cleanup" => "Finishing vacuum operation",
+        _ => "",
+    };
+
+    let lines = vec![
+        Line::from(""),
+        section_header("Vacuum Target"),
+        Line::from(vec![
+            Span::styled("  Table:         ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                &vac.table_name,
+                Style::default().fg(Theme::border_active()).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("  Database:      ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                vac.datname.clone().unwrap_or_else(|| "-".into()),
+                Style::default().fg(Theme::fg()),
+            ),
+            Span::styled("     PID: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(vac.pid.to_string(), Style::default().fg(Theme::fg())),
+        ]),
+        Line::from(""),
+        section_header("Progress"),
+        Line::from(vec![
+            Span::styled("  Phase:         ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                &vac.phase,
+                Style::default().fg(Theme::border_warn()).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("                 ", Style::default()),
+            Span::styled(phase_description, Style::default().fg(Theme::fg_dim())),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  ", Style::default()),
+            Span::styled(progress_bar, Style::default().fg(progress_color)),
+            Span::styled(
+                format!(" {:.1}%", vac.progress_pct),
+                Style::default().fg(progress_color).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  Heap Blocks:   ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                format!("{} / {}", format_compact(vac.heap_blks_vacuumed), format_compact(vac.heap_blks_total)),
+                Style::default().fg(Theme::fg()),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("  Dead Tuples:   ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                format_compact(vac.num_dead_tuples),
+                Style::default().fg(if vac.num_dead_tuples > 0 { Theme::border_warn() } else { Theme::fg() }),
+            ),
+        ]),
+        Line::from(""),
+        separator_line(),
+        action_hint(vec![("j/k", "scroll"), ("Esc", "close")]),
+    ];
+
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false })
+        .scroll((app.overlay_scroll, 0));
+    frame.render_widget(paragraph, popup);
+}
+
+pub fn render_wraparound_inspect(frame: &mut Frame, app: &App, area: Rect) {
+    let popup = centered_rect(70, 65, area);
+    frame.render_widget(Clear, popup);
+
+    let block = overlay_block(" Transaction ID Details ", Theme::border_active());
+
+    let Some(snap) = &app.snapshot else {
+        frame.render_widget(Paragraph::new("No data").block(block), popup);
+        return;
+    };
+
+    let sel = app.wraparound_table_state.selected().unwrap_or(0);
+    let Some(wrap) = snap.wraparound.get(sel) else {
+        frame.render_widget(
+            Paragraph::new("No wraparound data").block(block),
+            popup,
+        );
+        return;
+    };
+
+    let pct_color = if wrap.pct_towards_wraparound > 75.0 {
+        Theme::border_danger()
+    } else if wrap.pct_towards_wraparound > 50.0 {
+        Theme::border_warn()
+    } else {
+        Theme::border_ok()
+    };
+
+    let urgency = if wrap.pct_towards_wraparound > 75.0 {
+        ("CRITICAL", Theme::border_danger())
+    } else if wrap.pct_towards_wraparound > 50.0 {
+        ("WARNING", Theme::border_warn())
+    } else {
+        ("OK", Theme::border_ok())
+    };
+
+    // Progress bar for wraparound
+    let bar_width = 40;
+    let filled = (wrap.pct_towards_wraparound / 100.0 * bar_width as f64) as usize;
+    let empty = bar_width - filled;
+    let progress_bar = format!("[{}{}]", "█".repeat(filled), "░".repeat(empty));
+
+    let lines = vec![
+        Line::from(""),
+        section_header("Database"),
+        Line::from(vec![
+            Span::styled("  Name:          ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                &wrap.datname,
+                Style::default().fg(Theme::border_active()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("     Status: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                format!(" {} ", urgency.0),
+                Style::default().fg(Theme::overlay_bg()).bg(urgency.1).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(""),
+        section_header("Transaction ID Age"),
+        Line::from(vec![
+            Span::styled("  XID Age:       ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                format_compact(wrap.xid_age as i64),
+                Style::default().fg(pct_color).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" transactions", Style::default().fg(Theme::fg_dim())),
+        ]),
+        Line::from(vec![
+            Span::styled("  Remaining:     ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                format_compact(wrap.xids_remaining),
+                Style::default().fg(Theme::fg()),
+            ),
+            Span::styled(" until wraparound", Style::default().fg(Theme::fg_dim())),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  ", Style::default()),
+            Span::styled(progress_bar, Style::default().fg(pct_color)),
+            Span::styled(
+                format!(" {:.1}%", wrap.pct_towards_wraparound),
+                Style::default().fg(pct_color).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(""),
+        section_header("What This Means"),
+        Line::from(Span::styled(
+            "  PostgreSQL uses 32-bit transaction IDs that wrap around after",
+            Style::default().fg(Theme::fg_dim()),
+        )),
+        Line::from(Span::styled(
+            "  ~2 billion transactions. VACUUM must run to freeze old rows",
+            Style::default().fg(Theme::fg_dim()),
+        )),
+        Line::from(Span::styled(
+            "  before wraparound occurs, or the database will shut down.",
+            Style::default().fg(Theme::fg_dim()),
+        )),
+        Line::from(""),
+        if wrap.pct_towards_wraparound > 50.0 {
+            Line::from(vec![
+                Span::styled("  ⚠ ", Style::default().fg(Theme::border_warn())),
+                Span::styled(
+                    "Consider running VACUUM FREEZE on large tables",
+                    Style::default().fg(Theme::border_warn()),
+                ),
+            ])
+        } else {
+            Line::from(Span::styled(
+                "  ✓ Transaction ID age is healthy",
+                Style::default().fg(Theme::border_ok()),
+            ))
+        },
+        Line::from(""),
+        separator_line(),
+        action_hint(vec![("j/k", "scroll"), ("Esc", "close")]),
+    ];
+
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false })
+        .scroll((app.overlay_scroll, 0));
+    frame.render_widget(paragraph, popup);
+}
+
 pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(80, 80, area);
     frame.render_widget(Clear, popup);
