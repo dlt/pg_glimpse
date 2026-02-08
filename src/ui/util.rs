@@ -1,7 +1,26 @@
+use ratatui::layout::Constraint;
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::widgets::{Block, Paragraph};
+use ratatui::widgets::{Block, Paragraph, Row, Table};
 
 use super::theme::Theme;
+
+/// Create a styled table with consistent highlight behavior
+pub fn styled_table<'a>(
+    rows: Vec<Row<'a>>,
+    widths: impl IntoIterator<Item = Constraint>,
+    header: Row<'a>,
+    block: Block<'a>,
+) -> Table<'a> {
+    Table::new(rows, widths)
+        .header(header)
+        .block(block)
+        .row_highlight_style(
+            Style::default()
+                .bg(Theme::highlight_bg())
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("\u{25ba} ")
+}
 
 /// Create a styled empty state message for panels with no data
 pub fn empty_state<'a>(text: &'a str, block: Block<'a>) -> Paragraph<'a> {

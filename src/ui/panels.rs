@@ -1,14 +1,15 @@
 use ratatui::layout::{Constraint, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, Cell, Paragraph, Row, Table};
+use ratatui::widgets::{Block, BorderType, Borders, Cell, Paragraph, Row};
 use ratatui::Frame;
 
 use crate::app::{App, BottomPanel, IndexSortColumn, StatementSortColumn, TableStatSortColumn, ViewMode};
 use super::overlay::highlight_sql_inline;
 use super::theme::Theme;
 use super::util::{
-    empty_state, format_bytes, format_compact, format_lag, format_time_ms, lag_color, truncate,
+    empty_state, format_bytes, format_compact, format_lag, format_time_ms, lag_color, styled_table,
+    truncate,
 };
 
 fn panel_block(title: &str) -> Block<'_> {
@@ -63,16 +64,7 @@ pub fn render_blocking(frame: &mut Frame, app: &mut App, area: Rect) {
         Constraint::Min(15),
     ];
 
-    let table = Table::new(rows, widths)
-        .header(header)
-        .block(block)
-        .row_highlight_style(
-            Style::default()
-                .bg(Theme::highlight_bg())
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol("\u{25ba} ");
-
+    let table = styled_table(rows, widths, header, block);
     frame.render_stateful_widget(table, area, &mut app.blocking_table_state);
 }
 
@@ -207,16 +199,7 @@ pub fn render_table_stats(frame: &mut Frame, app: &mut App, area: Rect) {
         Constraint::Length(13),
     ];
 
-    let table = Table::new(rows, widths)
-        .header(header)
-        .block(block)
-        .row_highlight_style(
-            Style::default()
-                .bg(Theme::highlight_bg())
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol("\u{25ba} ");
-
+    let table = styled_table(rows, widths, header, block);
     frame.render_stateful_widget(table, area, &mut app.table_stat_table_state);
 }
 
@@ -275,16 +258,7 @@ pub fn render_replication(frame: &mut Frame, app: &mut App, area: Rect) {
         Constraint::Length(8),   // Sync
     ];
 
-    let table = Table::new(rows, widths)
-        .header(header)
-        .block(block)
-        .row_highlight_style(
-            Style::default()
-                .bg(Theme::highlight_bg())
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol("\u{25ba} ");
-
+    let table = styled_table(rows, widths, header, block);
     frame.render_stateful_widget(table, area, &mut app.replication_table_state);
 }
 
@@ -327,16 +301,7 @@ pub fn render_vacuum_progress(frame: &mut Frame, app: &mut App, area: Rect) {
         Constraint::Length(12),
     ];
 
-    let table = Table::new(rows, widths)
-        .header(header)
-        .block(block)
-        .row_highlight_style(
-            Style::default()
-                .bg(Theme::highlight_bg())
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol("\u{25ba} ");
-
+    let table = styled_table(rows, widths, header, block);
     frame.render_stateful_widget(table, area, &mut app.vacuum_table_state);
 }
 
@@ -385,16 +350,7 @@ pub fn render_wraparound(frame: &mut Frame, app: &mut App, area: Rect) {
         Constraint::Length(10),
     ];
 
-    let table = Table::new(rows, widths)
-        .header(header)
-        .block(block)
-        .row_highlight_style(
-            Style::default()
-                .bg(Theme::highlight_bg())
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol("\u{25ba} ");
-
+    let table = styled_table(rows, widths, header, block);
     frame.render_stateful_widget(table, area, &mut app.wraparound_table_state);
 }
 
@@ -490,16 +446,7 @@ pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {
         Constraint::Length(12),
     ];
 
-    let table = Table::new(rows, widths)
-        .header(header)
-        .block(block)
-        .row_highlight_style(
-            Style::default()
-                .bg(Theme::highlight_bg())
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol("\u{25ba} ");
-
+    let table = styled_table(rows, widths, header, block);
     frame.render_stateful_widget(table, area, &mut app.index_table_state);
 }
 
@@ -710,15 +657,6 @@ pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
         Constraint::Length(7),
     ];
 
-    let table = Table::new(rows, widths)
-        .header(header)
-        .block(block)
-        .row_highlight_style(
-            Style::default()
-                .bg(Theme::highlight_bg())
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol("\u{25ba} ");
-
+    let table = styled_table(rows, widths, header, block);
     frame.render_stateful_widget(table, area, &mut app.stmt_table_state);
 }

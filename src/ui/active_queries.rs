@@ -1,13 +1,13 @@
 use ratatui::layout::{Constraint, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Line;
-use ratatui::widgets::{Block, BorderType, Borders, Cell, Row, Table};
+use ratatui::widgets::{Block, BorderType, Borders, Cell, Row};
 use ratatui::Frame;
 
 use crate::app::{App, BottomPanel, SortColumn};
 use super::overlay::highlight_sql_inline;
 use super::theme::Theme;
-use super::util::format_duration;
+use super::util::{format_duration, styled_table};
 
 pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
     let total_count = app
@@ -105,16 +105,7 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
         Constraint::Fill(6), // Query (gets most space)
     ];
 
-    let table = Table::new(rows, widths)
-        .header(header)
-        .block(block)
-        .row_highlight_style(
-            Style::default()
-                .bg(Theme::highlight_bg())
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol("► ");
-
+    let table = styled_table(rows, widths, header, block);
     frame.render_stateful_widget(table, area, &mut app.query_table_state);
 }
 
