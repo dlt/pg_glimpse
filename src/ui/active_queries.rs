@@ -7,7 +7,7 @@ use ratatui::Frame;
 use crate::app::{App, BottomPanel, SortColumn};
 use super::overlay::highlight_sql_inline;
 use super::theme::Theme;
-use super::util::{format_duration, styled_table};
+use super::util::{compute_match_indices, format_duration, highlight_matches, styled_table};
 
 pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
     let total_count = app
@@ -64,6 +64,12 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
     // Calculate query column width: Fill(6) out of total Fill(16), minus borders/highlight
     let query_width = ((area.width.saturating_sub(4)) as usize * 6 / 16).max(20);
 
+    // Check if filtering is active
+    let is_filtering = app.bottom_panel == BottomPanel::Queries
+        && !app.filter_text.is_empty()
+        && (app.filter_active || app.view_mode == crate::app::ViewMode::Filter);
+    let filter_text = &app.filter_text;
+
     let rows: Vec<Row> = match &app.snapshot {
         Some(snap) => indices
             .iter()
@@ -72,12 +78,39 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
                 let dur_color = Theme::duration_color(q.duration_secs);
                 let state_color = Theme::state_color(q.state.as_deref());
                 let query_text = q.query.as_deref().unwrap_or("");
+                let usename = q.usename.clone().unwrap_or_else(|| "-".into());
+                let datname = q.datname.clone().unwrap_or_else(|| "-".into());
+
+                // Compute match indices if filtering
+                let match_indices = if is_filtering {
+                    compute_match_indices(query_text, filter_text)
+                } else {
+                    None
+                };
+
+                // Build query cell with optional highlighting
+                let query_cell = if let Some(indices) = match_indices {
+                    // Truncate query_text for display
+                    let display_text = if query_text.len() > query_width {
+                        format!("{}…", &query_text[..query_width.saturating_sub(1)])
+                    } else {
+                        query_text.to_string()
+                    };
+
+                    let spans = highlight_matches(
+                        &display_text,
+                        &indices,
+                        Style::default().fg(Theme::fg()),
+                    );
+                    Cell::from(Line::from(spans))
+                } else {
+                    Cell::from(Line::from(highlight_sql_inline(query_text, query_width)))
+                };
 
                 Row::new(vec![
                     Cell::from(q.pid.to_string()),
-                    Cell::from(q.usename.clone().unwrap_or_else(|| "-".into())),
-                    Cell::from(q.datname.clone().unwrap_or_else(|| "-".into()))
-                        .style(Style::default().fg(Theme::fg_dim())),
+                    Cell::from(usename),
+                    Cell::from(datname).style(Style::default().fg(Theme::fg_dim())),
                     Cell::from(format_duration(q.duration_secs))
                         .style(Style::default().fg(dur_color)),
                     Cell::from(short_state(q.state.as_deref()))
@@ -88,7 +121,7 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
                         } else {
                             Theme::fg_dim()
                         })),
-                    Cell::from(Line::from(highlight_sql_inline(query_text, query_width))),
+                    query_cell,
                 ])
             })
             .collect(),

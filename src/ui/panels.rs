@@ -8,8 +8,8 @@ use crate::app::{App, BottomPanel, IndexSortColumn, StatementSortColumn, TableSt
 use super::overlay::highlight_sql_inline;
 use super::theme::Theme;
 use super::util::{
-    empty_state, format_bytes, format_compact, format_lag, format_time_ms, styled_table,
-    truncate,
+    compute_match_indices, empty_state, format_bytes, format_compact, format_lag, format_time_ms,
+    highlight_matches, styled_table, truncate,
 };
 
 fn panel_block(title: &str) -> Block<'_> {
@@ -161,13 +161,39 @@ pub fn render_table_stats(frame: &mut Frame, app: &mut App, area: Rect) {
     .style(Theme::title_style())
     .bottom_margin(0);
 
+    // Check if filtering is active
+    let is_filtering = app.bottom_panel == BottomPanel::TableStats
+        && !app.filter_text.is_empty()
+        && (app.filter_active || app.view_mode == ViewMode::Filter);
+    let filter_text = &app.filter_text;
+
     let rows: Vec<Row> = indices
         .iter()
         .map(|&i| {
             let t = &snap.table_stats[i];
             let dead_color = Theme::dead_ratio_color(t.dead_ratio);
+            let table_name = format!("{}.{}", t.schemaname, &t.relname);
+
+            // Compute match indices if filtering
+            let match_indices = if is_filtering {
+                compute_match_indices(&table_name, filter_text)
+            } else {
+                None
+            };
+
+            let table_cell = if let Some(indices) = match_indices {
+                let spans = highlight_matches(
+                    &table_name,
+                    &indices,
+                    Style::default().fg(Theme::fg()),
+                );
+                Cell::from(Line::from(spans))
+            } else {
+                Cell::from(table_name)
+            };
+
             Row::new(vec![
-                Cell::from(format!("{}.{}", t.schemaname, &t.relname)),
+                table_cell,
                 Cell::from(format_bytes(t.total_size_bytes)),
                 Cell::from(t.seq_scan.to_string()),
                 Cell::from(t.idx_scan.to_string()),
@@ -404,14 +430,41 @@ pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {
     .style(Theme::title_style())
     .bottom_margin(0);
 
+    // Check if filtering is active
+    let is_filtering = app.filter_active
+        || (!app.filter_text.is_empty()
+            && app.view_mode == ViewMode::Filter
+            && app.bottom_panel == BottomPanel::Indexes);
+    let filter_text = &app.filter_text;
+
     let rows: Vec<Row> = indices
         .iter()
         .map(|&i| {
             let idx = &snap.indexes[i];
             let scan_color = Theme::index_usage_color(idx.idx_scan);
+            let table_name = format!("{}.{}", idx.schemaname, idx.table_name);
+
+            // Compute match indices if filtering - match against index name
+            let match_indices = if is_filtering {
+                compute_match_indices(&idx.index_name, filter_text)
+            } else {
+                None
+            };
+
+            let index_cell = if let Some(indices) = match_indices {
+                let spans = highlight_matches(
+                    &idx.index_name,
+                    &indices,
+                    Style::default().fg(Theme::fg()),
+                );
+                Cell::from(Line::from(spans))
+            } else {
+                Cell::from(idx.index_name.clone())
+            };
+
             Row::new(vec![
-                Cell::from(format!("{}.{}", idx.schemaname, idx.table_name)),
-                Cell::from(idx.index_name.clone()),
+                Cell::from(table_name),
+                index_cell,
                 Cell::from(format_bytes(idx.index_size_bytes)),
                 Cell::from(idx.idx_scan.to_string())
                     .style(Style::default().fg(scan_color)),
@@ -572,6 +625,13 @@ pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
     // Fixed columns: 7+9+9+9+8+7+5+7+9+7 = 77
     let query_width = (area.width as usize).saturating_sub(2 + 2 + 77).max(20);
 
+    // Check if filtering is active
+    let is_filtering = app.filter_active
+        || (!app.filter_text.is_empty()
+            && app.view_mode == ViewMode::Filter
+            && app.bottom_panel == BottomPanel::Statements);
+    let filter_text = &app.filter_text;
+
     let rows: Vec<Row> = indices
         .iter()
         .map(|&i| {
@@ -600,8 +660,35 @@ pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
             } else {
                 Theme::fg()
             };
+
+            // Compute match indices if filtering
+            let match_indices = if is_filtering {
+                compute_match_indices(&stmt.query, filter_text)
+            } else {
+                None
+            };
+
+            // For statements, filter string is just the query
+            let query_cell = if let Some(indices) = match_indices {
+                // Truncate query for display
+                let display_text = if stmt.query.len() > query_width {
+                    format!("{}…", &stmt.query[..query_width.saturating_sub(1)])
+                } else {
+                    stmt.query.clone()
+                };
+
+                let spans = highlight_matches(
+                    &display_text,
+                    &indices,
+                    Style::default().fg(Theme::fg()),
+                );
+                Cell::from(Line::from(spans))
+            } else {
+                Cell::from(Line::from(highlight_sql_inline(&stmt.query, query_width)))
+            };
+
             Row::new(vec![
-                Cell::from(Line::from(highlight_sql_inline(&stmt.query, query_width))),
+                query_cell,
                 Cell::from(format_compact(stmt.calls)),
                 Cell::from(format_time_ms(stmt.total_exec_time)),
                 Cell::from(format_time_ms(stmt.mean_exec_time)),
