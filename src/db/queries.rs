@@ -384,11 +384,12 @@ SELECT
 FROM pg_stat_bgwriter
 ";
 
-/// Database stats query for TPS rate calculation
+/// Database stats query for rate calculations (TPS, blocks read)
 const DATABASE_STATS_SQL: &str = "
 SELECT
     COALESCE(xact_commit, 0) AS xact_commit,
-    COALESCE(xact_rollback, 0) AS xact_rollback
+    COALESCE(xact_rollback, 0) AS xact_rollback,
+    COALESCE(blks_read, 0) AS blks_read
 FROM pg_stat_database
 WHERE datname = current_database()
 ";
@@ -488,6 +489,7 @@ pub async fn fetch_database_stats(client: &Client) -> Result<DatabaseStats> {
     Ok(DatabaseStats {
         xact_commit: row.get("xact_commit"),
         xact_rollback: row.get("xact_rollback"),
+        blks_read: row.get("blks_read"),
     })
 }
 

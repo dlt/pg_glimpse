@@ -73,6 +73,7 @@ pub struct BgwriterStats {
 pub struct DatabaseStats {
     pub xact_commit: i64,
     pub xact_rollback: i64,
+    pub blks_read: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

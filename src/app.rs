@@ -233,10 +233,12 @@ pub struct App {
     pub prev_snapshot: Option<PgSnapshot>,
     pub tps_history: RingBuffer<u64>,
     pub wal_rate_history: RingBuffer<u64>,
+    pub blks_read_history: RingBuffer<u64>,
 
     // Current rates (for display)
     pub current_tps: Option<f64>,
     pub current_wal_rate: Option<f64>,
+    pub current_blks_read_rate: Option<f64>,
 
     pub server_info: ServerInfo,
 
@@ -306,8 +308,10 @@ impl App {
             prev_snapshot: None,
             tps_history: RingBuffer::new(history_len),
             wal_rate_history: RingBuffer::new(history_len),
+            blks_read_history: RingBuffer::new(history_len),
             current_tps: None,
             current_wal_rate: None,
+            current_blks_read_rate: None,
             server_info,
             host,
             port,
@@ -390,7 +394,7 @@ impl App {
                 / 1000.0;
 
             if secs > 0.0 {
-                // TPS from pg_stat_database
+                // TPS and blocks read from pg_stat_database
                 if let (Some(curr), Some(prev_db)) = (&snap.db_stats, &prev.db_stats) {
                     let commits = curr.xact_commit - prev_db.xact_commit;
                     let rollbacks = curr.xact_rollback - prev_db.xact_rollback;
@@ -399,6 +403,14 @@ impl App {
                         let tps = (commits + rollbacks) as f64 / secs;
                         self.current_tps = Some(tps);
                         self.tps_history.push(tps as u64);
+                    }
+
+                    // Blocks read rate (physical I/O)
+                    let blks = curr.blks_read - prev_db.blks_read;
+                    if blks >= 0 {
+                        let rate = blks as f64 / secs;
+                        self.current_blks_read_rate = Some(rate);
+                        self.blks_read_history.push(rate as u64);
                     }
                 }
 

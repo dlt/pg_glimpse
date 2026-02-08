@@ -193,10 +193,36 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         cache_line.extend(dead_spans);
         lines.push(Line::from(cache_line));
 
+        // Line 6: Blocks read/sec (physical I/O - cache misses)
+        let blks_spark = render_sparkline(&app.blks_read_history.as_vec(), sparkline_width);
+        let blks_display = match app.current_blks_read_rate {
+            Some(rate) => format_rate(rate),
+            None => "\u{2014}".into(),
+        };
+        // Color based on I/O pressure
+        let blks_color = match app.current_blks_read_rate {
+            Some(r) if r > 1000.0 => Theme::border_danger(),
+            Some(r) if r > 100.0 => Theme::border_warn(),
+            _ => Theme::fg(),
+        };
+        lines.push(Line::from(vec![
+            Span::styled("Blks/s: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                blks_display,
+                Style::default()
+                    .fg(blks_color)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!(" {}", blks_spark),
+                Style::default().fg(blks_color),
+            ),
+        ]));
+
         // Separator before throughput section
         lines.push(sep_line.clone());
 
-        // Line 6: TPS (transactions per second)
+        // Line 7: TPS (transactions per second)
         let tps_spark = render_sparkline(&app.tps_history.as_vec(), sparkline_width);
         let tps_display = match app.current_tps {
             Some(tps) => format_rate(tps),
