@@ -78,12 +78,25 @@ WHERE datname = current_database()
 const TABLE_STATS_SQL: &str = "
 SELECT schemaname, relname,
     pg_total_relation_size(relid) AS total_size_bytes,
+    pg_table_size(relid) AS table_size_bytes,
+    pg_indexes_size(relid) AS indexes_size_bytes,
     COALESCE(seq_scan, 0) AS seq_scan,
+    COALESCE(seq_tup_read, 0) AS seq_tup_read,
     COALESCE(idx_scan, 0) AS idx_scan,
+    COALESCE(idx_tup_fetch, 0) AS idx_tup_fetch,
     COALESCE(n_live_tup, 0) AS n_live_tup,
     COALESCE(n_dead_tup, 0) AS n_dead_tup,
     COALESCE((CASE WHEN n_live_tup > 0 THEN (100.0 * n_dead_tup / n_live_tup) ELSE 0 END)::float8, 0) AS dead_ratio,
-    last_autovacuum
+    COALESCE(n_tup_ins, 0) AS n_tup_ins,
+    COALESCE(n_tup_upd, 0) AS n_tup_upd,
+    COALESCE(n_tup_del, 0) AS n_tup_del,
+    COALESCE(n_tup_hot_upd, 0) AS n_tup_hot_upd,
+    last_vacuum,
+    last_autovacuum,
+    last_analyze,
+    last_autoanalyze,
+    COALESCE(vacuum_count, 0) AS vacuum_count,
+    COALESCE(autovacuum_count, 0) AS autovacuum_count
 FROM pg_stat_user_tables ORDER BY n_dead_tup DESC LIMIT 30
 ";
 
@@ -470,12 +483,25 @@ pub async fn fetch_table_stats(client: &Client) -> Result<Vec<TableStat>> {
             schemaname: row.get("schemaname"),
             relname: row.get("relname"),
             total_size_bytes: row.get("total_size_bytes"),
+            table_size_bytes: row.get("table_size_bytes"),
+            indexes_size_bytes: row.get("indexes_size_bytes"),
             seq_scan: row.get("seq_scan"),
+            seq_tup_read: row.get("seq_tup_read"),
             idx_scan: row.get("idx_scan"),
+            idx_tup_fetch: row.get("idx_tup_fetch"),
             n_live_tup: row.get("n_live_tup"),
             n_dead_tup: row.get("n_dead_tup"),
             dead_ratio: row.get("dead_ratio"),
+            n_tup_ins: row.get("n_tup_ins"),
+            n_tup_upd: row.get("n_tup_upd"),
+            n_tup_del: row.get("n_tup_del"),
+            n_tup_hot_upd: row.get("n_tup_hot_upd"),
+            last_vacuum: row.get("last_vacuum"),
             last_autovacuum: row.get("last_autovacuum"),
+            last_analyze: row.get("last_analyze"),
+            last_autoanalyze: row.get("last_autoanalyze"),
+            vacuum_count: row.get("vacuum_count"),
+            autovacuum_count: row.get("autovacuum_count"),
         });
     }
     Ok(results)

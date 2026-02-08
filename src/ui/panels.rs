@@ -193,7 +193,7 @@ pub fn render_table_stats(frame: &mut Frame, app: &mut App, area: Rect) {
                 Theme::fg()
             };
             Row::new(vec![
-                Cell::from(format!("{}.{}", t.schemaname, truncate(&t.relname, 20))),
+                Cell::from(format!("{}.{}", t.schemaname, &t.relname)),
                 Cell::from(format_bytes(t.total_size_bytes)),
                 Cell::from(t.seq_scan.to_string()),
                 Cell::from(t.idx_scan.to_string()),
@@ -210,7 +210,7 @@ pub fn render_table_stats(frame: &mut Frame, app: &mut App, area: Rect) {
         .collect();
 
     let widths = [
-        Constraint::Min(20),
+        Constraint::Fill(1),
         Constraint::Length(9),
         Constraint::Length(10),
         Constraint::Length(10),

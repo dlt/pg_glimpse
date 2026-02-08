@@ -515,6 +515,221 @@ pub fn render_replication_inspect(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, popup);
 }
 
+pub fn render_table_inspect(frame: &mut Frame, app: &App, area: Rect) {
+    let popup = centered_rect(75, 75, area);
+    frame.render_widget(Clear, popup);
+
+    let block = overlay_block(" Table Details ", Theme::border_active());
+
+    let Some(snap) = &app.snapshot else {
+        frame.render_widget(Paragraph::new("No data").block(block), popup);
+        return;
+    };
+
+    let sel = app.table_stat_table_state.selected().unwrap_or(0);
+    let indices = app.sorted_table_stat_indices();
+    let Some(&real_idx) = indices.get(sel) else {
+        frame.render_widget(
+            Paragraph::new("No table selected").block(block),
+            popup,
+        );
+        return;
+    };
+    let tbl = &snap.table_stats[real_idx];
+
+    let dead_color = if tbl.dead_ratio > 20.0 {
+        Theme::border_danger()
+    } else if tbl.dead_ratio > 5.0 {
+        Theme::border_warn()
+    } else {
+        Theme::border_ok()
+    };
+
+    let seq_scan_color = if tbl.seq_scan > tbl.idx_scan && tbl.n_live_tup > 1000 {
+        Theme::border_warn()
+    } else {
+        Theme::fg()
+    };
+
+    let format_timestamp = |ts: &Option<chrono::DateTime<chrono::Utc>>| -> String {
+        ts.map(|t| t.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_else(|| "-".into())
+    };
+
+    let hot_pct = if tbl.n_tup_upd > 0 {
+        tbl.n_tup_hot_upd as f64 / tbl.n_tup_upd as f64 * 100.0
+    } else {
+        0.0
+    };
+    let hot_color = if hot_pct > 80.0 {
+        Theme::border_ok()
+    } else if hot_pct > 50.0 {
+        Theme::border_warn()
+    } else if tbl.n_tup_upd > 0 {
+        Theme::border_danger()
+    } else {
+        Theme::fg()
+    };
+
+    // Find related indexes
+    let related_indexes: Vec<_> = snap.indexes.iter()
+        .filter(|idx| idx.schemaname == tbl.schemaname && idx.table_name == tbl.relname)
+        .collect();
+
+    let mut lines = vec![
+        Line::from(""),
+        section_header("Table Info"),
+        Line::from(vec![
+            Span::styled("  Schema:        ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(&tbl.schemaname, Style::default().fg(Theme::fg())),
+            Span::styled("     Table: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                &tbl.relname,
+                Style::default()
+                    .fg(Theme::border_active())
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(""),
+        section_header("Size"),
+        Line::from(vec![
+            Span::styled("  Total:         ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                format_bytes(tbl.total_size_bytes),
+                Style::default().fg(Theme::fg()).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("  Table:         ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(format_bytes(tbl.table_size_bytes), Style::default().fg(Theme::fg())),
+            Span::styled("     Indexes: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(format_bytes(tbl.indexes_size_bytes), Style::default().fg(Theme::fg())),
+        ]),
+        Line::from(""),
+        section_header("Row Stats"),
+        Line::from(vec![
+            Span::styled("  Live:          ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                format_compact(tbl.n_live_tup),
+                Style::default().fg(Theme::fg()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("     Dead: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                format!("{} ({:.1}%)", format_compact(tbl.n_dead_tup), tbl.dead_ratio),
+                Style::default().fg(dead_color),
+            ),
+        ]),
+        Line::from(""),
+        section_header("Scan Activity"),
+        Line::from(vec![
+            Span::styled("  Seq Scans:     ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                format_compact(tbl.seq_scan),
+                Style::default().fg(seq_scan_color),
+            ),
+            Span::styled("     Rows Read: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(format_compact(tbl.seq_tup_read), Style::default().fg(Theme::fg())),
+        ]),
+        Line::from(vec![
+            Span::styled("  Idx Scans:     ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(format_compact(tbl.idx_scan), Style::default().fg(Theme::fg())),
+            Span::styled("     Rows Fetch: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(format_compact(tbl.idx_tup_fetch), Style::default().fg(Theme::fg())),
+        ]),
+        Line::from(""),
+        section_header("DML Activity"),
+        Line::from(vec![
+            Span::styled("  Inserts:       ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(format_compact(tbl.n_tup_ins), Style::default().fg(Theme::fg())),
+            Span::styled("     Updates: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(format_compact(tbl.n_tup_upd), Style::default().fg(Theme::fg())),
+            Span::styled("     Deletes: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(format_compact(tbl.n_tup_del), Style::default().fg(Theme::fg())),
+        ]),
+        Line::from(vec![
+            Span::styled("  HOT Updates:   ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                format!("{} ({:.0}%)", format_compact(tbl.n_tup_hot_upd), hot_pct),
+                Style::default().fg(hot_color),
+            ),
+        ]),
+        Line::from(""),
+        section_header("Maintenance"),
+        Line::from(vec![
+            Span::styled("  Last Vacuum:   ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(format_timestamp(&tbl.last_vacuum), Style::default().fg(Theme::fg())),
+        ]),
+        Line::from(vec![
+            Span::styled("  Last AutoVac:  ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(format_timestamp(&tbl.last_autovacuum), Style::default().fg(Theme::fg())),
+        ]),
+        Line::from(vec![
+            Span::styled("  Last Analyze:  ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(format_timestamp(&tbl.last_analyze), Style::default().fg(Theme::fg())),
+        ]),
+        Line::from(vec![
+            Span::styled("  Last AutoAnly: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(format_timestamp(&tbl.last_autoanalyze), Style::default().fg(Theme::fg())),
+        ]),
+        Line::from(vec![
+            Span::styled("  Vacuum Count:  ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(tbl.vacuum_count.to_string(), Style::default().fg(Theme::fg())),
+            Span::styled("     AutoVac: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(tbl.autovacuum_count.to_string(), Style::default().fg(Theme::fg())),
+        ]),
+    ];
+
+    // Add indexes section if any
+    if !related_indexes.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(section_header(&format!("Indexes ({})", related_indexes.len())));
+        for idx in &related_indexes {
+            let scan_color = if idx.idx_scan == 0 {
+                Theme::border_danger()
+            } else {
+                Theme::border_ok()
+            };
+            lines.push(Line::from(vec![
+                Span::styled("  ", Style::default()),
+                Span::styled(
+                    format!("{:<30}", &idx.index_name),
+                    Style::default().fg(Theme::fg()),
+                ),
+                Span::styled(
+                    format!(" {} ", format_bytes(idx.index_size_bytes)),
+                    Style::default().fg(Theme::fg_dim()),
+                ),
+                Span::styled(
+                    format!("{} scans", idx.idx_scan),
+                    Style::default().fg(scan_color),
+                ),
+            ]));
+        }
+    }
+
+    lines.push(Line::from(""));
+    lines.push(separator_line());
+    lines.push(action_hint(vec![("j/k", "scroll"), ("Esc", "close")]));
+
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false })
+        .scroll((app.overlay_scroll, 0));
+    frame.render_widget(paragraph, popup);
+}
+
+fn format_compact(n: i64) -> String {
+    if n >= 1_000_000_000 {
+        format!("{:.1}B", n as f64 / 1_000_000_000.0)
+    } else if n >= 1_000_000 {
+        format!("{:.1}M", n as f64 / 1_000_000.0)
+    } else if n >= 1_000 {
+        format!("{:.1}K", n as f64 / 1_000.0)
+    } else {
+        format!("{}", n)
+    }
+}
+
 pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(80, 80, area);
     frame.render_widget(Clear, popup);

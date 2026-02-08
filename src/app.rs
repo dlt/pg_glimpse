@@ -4,7 +4,7 @@ use nucleo_matcher::{Config as MatcherConfig, Matcher};
 use ratatui::widgets::TableState;
 
 use crate::config::{AppConfig, ConfigItem};
-use crate::db::models::{ActiveQuery, IndexInfo, PgSnapshot, ServerInfo, StatStatement};
+use crate::db::models::{ActiveQuery, IndexInfo, PgSnapshot, ServerInfo, StatStatement, TableStat};
 use crate::history::RingBuffer;
 use crate::ui::theme;
 
@@ -23,7 +23,7 @@ pub enum BottomPanel {
 
 impl BottomPanel {
     pub fn supports_filter(self) -> bool {
-        matches!(self, Self::Queries | Self::Indexes | Self::Statements)
+        matches!(self, Self::Queries | Self::Indexes | Self::Statements | Self::TableStats)
     }
 
     #[allow(dead_code)]
@@ -50,6 +50,7 @@ pub enum ViewMode {
     IndexInspect,
     StatementInspect,
     ReplicationInspect,
+    TableInspect,
     ConfirmCancel(i32),
     ConfirmKill(i32),
     Config,
@@ -378,6 +379,10 @@ impl App {
         stmt.query.clone()
     }
 
+    fn table_stat_to_filter_string(t: &TableStat) -> String {
+        format!("{} {}", t.schemaname, t.relname)
+    }
+
     pub fn sorted_query_indices(&self) -> Vec<usize> {
         let Some(snap) = &self.snapshot else {
             return vec![];
@@ -604,6 +609,24 @@ impl App {
             return vec![];
         };
         let mut indices: Vec<usize> = (0..snap.table_stats.len()).collect();
+
+        // Apply fuzzy filter only when on the TableStats panel
+        let filter_text = &self.filter_text;
+        if self.bottom_panel == BottomPanel::TableStats
+            && !filter_text.is_empty()
+            && (self.filter_active || self.view_mode == ViewMode::Filter)
+        {
+            let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
+            let pattern =
+                Pattern::parse(filter_text, CaseMatching::Ignore, Normalization::Smart);
+            indices.retain(|&i| {
+                let haystack = Self::table_stat_to_filter_string(&snap.table_stats[i]);
+                let mut buf = Vec::new();
+                pattern
+                    .score(nucleo_matcher::Utf32Str::new(&haystack, &mut buf), &mut matcher)
+                    .is_some()
+            });
+        }
 
         let asc = self.table_stat_sort_ascending;
         match self.table_stat_sort_column {
@@ -863,6 +886,15 @@ impl App {
                 let i = self.table_stat_table_state.selected().unwrap_or(0);
                 self.table_stat_table_state.select(Some((i + 1).min(max)));
             }
+            KeyCode::Enter => {
+                if self.snapshot.as_ref().is_some_and(|s| !s.table_stats.is_empty()) {
+                    if self.table_stat_table_state.selected().is_none() {
+                        self.table_stat_table_state.select(Some(0));
+                    }
+                    self.overlay_scroll = 0;
+                    self.view_mode = ViewMode::TableInspect;
+                }
+            }
             KeyCode::Char('s') => {
                 let next = self.table_stat_sort_column.next();
                 if next == self.table_stat_sort_column {
@@ -1051,6 +1083,28 @@ impl App {
                 return;
             }
             ViewMode::ReplicationInspect => {
+                match key.code {
+                    KeyCode::Esc | KeyCode::Char('q') => {
+                        self.overlay_scroll = 0;
+                        self.view_mode = ViewMode::Normal;
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        self.overlay_scroll = self.overlay_scroll.saturating_sub(1);
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        self.overlay_scroll = self.overlay_scroll.saturating_add(1);
+                    }
+                    KeyCode::Char('g') => {
+                        self.overlay_scroll = 0;
+                    }
+                    KeyCode::Char('G') => {
+                        self.overlay_scroll = u16::MAX;
+                    }
+                    _ => {}
+                }
+                return;
+            }
+            ViewMode::TableInspect => {
                 match key.code {
                     KeyCode::Esc | KeyCode::Char('q') => {
                         self.overlay_scroll = 0;
