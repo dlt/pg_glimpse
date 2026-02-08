@@ -4,7 +4,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap};
 use ratatui::Frame;
 
-use crate::app::App;
+use crate::app::{App, BottomPanel};
 use crate::config::ConfigItem;
 use super::theme::Theme;
 use super::util::{format_bytes, format_compact, format_duration, format_lag, format_time_ms};
@@ -1503,7 +1503,9 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
         ])
     };
 
-    let lines = vec![
+    let panel = app.bottom_panel;
+
+    let mut lines = vec![
         Line::from(""),
         section_header("Navigation"),
         entry("q", "Quit application"),
@@ -1529,20 +1531,36 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
         entry("↑ / k", "Select previous row"),
         entry("↓ / j", "Select next row"),
         entry("s", "Cycle sort column"),
-        entry("/", "Fuzzy filter"),
-        entry("Enter", "Inspect selected row"),
-        entry("b", "Refresh bloat estimates (Tables/Indexes)"),
-        Line::from(""),
-        section_header("Query Actions"),
-        entry("C", "Cancel query (batch if filter)"),
-        entry("K", "Terminate backend (batch if filter)"),
-        entry("y", "Copy to clipboard"),
+    ];
+
+    // Filter - only for panels that support it
+    if panel.supports_filter() {
+        lines.push(entry("/", "Fuzzy filter"));
+    }
+
+    lines.push(entry("Enter", "Inspect selected row"));
+
+    // Bloat refresh - only for Tables and Indexes
+    if matches!(panel, BottomPanel::TableStats | BottomPanel::Indexes) {
+        lines.push(entry("b", "Refresh bloat estimates"));
+    }
+
+    // Query actions - only for Queries panel
+    if panel == BottomPanel::Queries {
+        lines.push(Line::from(""));
+        lines.push(section_header("Query Actions"));
+        lines.push(entry("C", "Cancel query (batch if filtered)"));
+        lines.push(entry("K", "Terminate backend (batch if filtered)"));
+        lines.push(entry("y", "Copy query to clipboard"));
+    }
+
+    lines.extend([
         Line::from(""),
         section_header("Overlay"),
         entry("Esc / q", "Close"),
         entry("j / k", "Scroll"),
         entry("g / G", "Top / bottom"),
-    ];
+    ]);
 
     let paragraph = Paragraph::new(lines)
         .block(block)
