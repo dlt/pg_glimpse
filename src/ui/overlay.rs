@@ -67,29 +67,11 @@ fn separator_line() -> Line<'static> {
     ))
 }
 
-/// Create an action hint line (for bottom of overlays)
-fn action_hint(hints: Vec<(&str, &str)>) -> Line<'static> {
-    let mut spans = vec![Span::styled("  ", Style::default())];
-    let key_style = Style::default()
-        .fg(Theme::border_active())
-        .add_modifier(Modifier::BOLD);
-    let desc_style = Style::default().fg(Theme::fg_dim());
-
-    for (i, (key, desc)) in hints.iter().enumerate() {
-        if i > 0 {
-            spans.push(Span::styled("  ·  ", Style::default().fg(Theme::border_dim())));
-        }
-        spans.push(Span::styled(key.to_string(), key_style));
-        spans.push(Span::styled(format!(" {}", desc), desc_style));
-    }
-    Line::from(spans)
-}
-
 pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(70, 70, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block(" Query Details ", Theme::border_active());
+    let block = overlay_block(" Query Details  [j/k] scroll  [y] copy query  [C] cancel  [K] kill  [Esc] close ", Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(
@@ -173,16 +155,6 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
         q.query.as_deref().unwrap_or("<no query>"),
         "  ",
     ));
-    lines.push(Line::from(""));
-    lines.push(separator_line());
-    lines.push(action_hint(vec![
-        ("j/k", "scroll"),
-        ("y", "copy"),
-        ("C", "cancel"),
-        ("K", "kill"),
-        ("Esc", "close"),
-    ]));
-
     let paragraph = Paragraph::new(lines)
         .block(block)
         .wrap(Wrap { trim: false })
@@ -194,7 +166,7 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(75, 60, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block(" Index Details ", Theme::border_active());
+    let block = overlay_block(" Index Details  [j/k] scroll  [y] copy definition  [Esc] close ", Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -269,9 +241,6 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
         section_header("Definition"),
     ];
     lines.extend(highlight_sql(&idx.index_definition, "  "));
-    lines.push(Line::from(""));
-    lines.push(separator_line());
-    lines.push(action_hint(vec![("j/k", "scroll"), ("y", "copy"), ("Esc", "close")]));
 
     let paragraph = Paragraph::new(lines)
         .block(block)
@@ -372,7 +341,7 @@ pub fn render_replication_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(70, 70, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Replication Details  [j/k] scroll  [Esc] back", Theme::border_active());
+    let block = overlay_block(" Replication Details  [j/k] scroll  [y] copy app  [Esc] close ", Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -519,7 +488,7 @@ pub fn render_table_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(75, 75, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block(" Table Details ", Theme::border_active());
+    let block = overlay_block(" Table Details  [j/k] scroll  [y] copy name  [Esc] close ", Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -707,10 +676,6 @@ pub fn render_table_inspect(frame: &mut Frame, app: &App, area: Rect) {
         }
     }
 
-    lines.push(Line::from(""));
-    lines.push(separator_line());
-    lines.push(action_hint(vec![("j/k", "scroll"), ("Esc", "close")]));
-
     let paragraph = Paragraph::new(lines)
         .block(block)
         .wrap(Wrap { trim: false })
@@ -734,7 +699,7 @@ pub fn render_blocking_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(80, 70, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block(" Lock Details ", Theme::border_danger());
+    let block = overlay_block(" Lock Details  [j/k] scroll  [y] copy query  [Esc] close ", Theme::border_danger());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -810,10 +775,6 @@ pub fn render_blocking_inspect(frame: &mut Frame, app: &App, area: Rect) {
         "  ",
     ));
 
-    lines.push(Line::from(""));
-    lines.push(separator_line());
-    lines.push(action_hint(vec![("j/k", "scroll"), ("Esc", "close")]));
-
     let paragraph = Paragraph::new(lines)
         .block(block)
         .wrap(Wrap { trim: false })
@@ -825,7 +786,7 @@ pub fn render_vacuum_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(70, 60, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block(" Vacuum Progress ", Theme::border_active());
+    let block = overlay_block(" Vacuum Progress  [j/k] scroll  [y] copy table  [Esc] close ", Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -922,9 +883,6 @@ pub fn render_vacuum_inspect(frame: &mut Frame, app: &App, area: Rect) {
                 Style::default().fg(if vac.num_dead_tuples > 0 { Theme::border_warn() } else { Theme::fg() }),
             ),
         ]),
-        Line::from(""),
-        separator_line(),
-        action_hint(vec![("j/k", "scroll"), ("Esc", "close")]),
     ];
 
     let paragraph = Paragraph::new(lines)
@@ -938,7 +896,7 @@ pub fn render_wraparound_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(70, 65, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block(" Transaction ID Details ", Theme::border_active());
+    let block = overlay_block(" XID Details  [j/k] scroll  [y] copy db  [Esc] close ", Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -1047,9 +1005,6 @@ pub fn render_wraparound_inspect(frame: &mut Frame, app: &App, area: Rect) {
                 Style::default().fg(Theme::border_ok()),
             ))
         },
-        Line::from(""),
-        separator_line(),
-        action_hint(vec![("j/k", "scroll"), ("Esc", "close")]),
     ];
 
     let paragraph = Paragraph::new(lines)
@@ -1063,7 +1018,7 @@ pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(80, 80, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("Statement Details  [j/k] scroll  [y] copy  [Esc] back", Theme::border_active());
+    let block = overlay_block(" Statement Details  [j/k] scroll  [y] copy query  [Esc] close ", Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -1232,7 +1187,7 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(70, 75, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block(" Configuration ", Theme::border_active());
+    let block = overlay_block(" Configuration  [←→] change  [Esc] save & close ", Theme::border_active());
 
     let logo_style = Style::default().fg(Theme::border_active());
     let mut lines = vec![
@@ -1326,9 +1281,6 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
         Span::styled("    Issues:     ", label_style),
         Span::styled("github.com/dlt/pg_glimpse/issues", link_style),
     ]));
-    lines.push(Line::from(""));
-    lines.push(separator_line());
-    lines.push(action_hint(vec![("←→", "change"), ("Esc", "save & close")]));
 
     let paragraph = Paragraph::new(lines).block(block);
     frame.render_widget(paragraph, popup);
@@ -1338,7 +1290,7 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(70, 80, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block(" Keybindings ", Theme::border_active());
+    let block = overlay_block(" Keybindings  [j/k] scroll  [Esc] close ", Theme::border_active());
 
     let key_style = Style::default()
         .fg(Theme::border_active())
@@ -1389,9 +1341,6 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
         entry("Esc / q", "Close"),
         entry("j / k", "Scroll"),
         entry("g / G", "Top / bottom"),
-        Line::from(""),
-        separator_line(),
-        action_hint(vec![("j/k", "scroll"), ("Esc", "close")]),
     ];
 
     let paragraph = Paragraph::new(lines)
