@@ -321,7 +321,7 @@ LIMIT 100
 ";
 
 /// Parse extension version like "1.8" or "1.10" and return (major, minor)
-fn parse_ext_version(v: &str) -> Option<(u32, u32)> {
+pub(crate) fn parse_ext_version(v: &str) -> Option<(u32, u32)> {
     let parts: Vec<&str> = v.split('.').collect();
     if parts.len() >= 2 {
         let major = parts[0].parse().ok()?;
@@ -329,6 +329,40 @@ fn parse_ext_version(v: &str) -> Option<(u32, u32)> {
         Some((major, minor))
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_ext_version_valid() {
+        assert_eq!(parse_ext_version("1.8"), Some((1, 8)));
+        assert_eq!(parse_ext_version("1.10"), Some((1, 10)));
+        assert_eq!(parse_ext_version("2.0"), Some((2, 0)));
+        assert_eq!(parse_ext_version("10.5"), Some((10, 5)));
+    }
+
+    #[test]
+    fn parse_ext_version_with_patch() {
+        // Should still parse major.minor even with patch version
+        assert_eq!(parse_ext_version("1.8.3"), Some((1, 8)));
+    }
+
+    #[test]
+    fn parse_ext_version_invalid() {
+        assert_eq!(parse_ext_version(""), None);
+        assert_eq!(parse_ext_version("1"), None);
+        assert_eq!(parse_ext_version("abc"), None);
+        assert_eq!(parse_ext_version("a.b"), None);
+        assert_eq!(parse_ext_version("1.abc"), None);
+    }
+
+    #[test]
+    fn parse_ext_version_edge_cases() {
+        assert_eq!(parse_ext_version("0.0"), Some((0, 0)));
+        assert_eq!(parse_ext_version("99.99"), Some((99, 99)));
     }
 }
 

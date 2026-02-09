@@ -221,3 +221,258 @@ pub fn compute_match_indices(text: &str, filter: &str) -> Option<Vec<u32>> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // format_bytes tests
+    #[test]
+    fn format_bytes_zero() {
+        assert_eq!(format_bytes(0), "0 B");
+    }
+
+    #[test]
+    fn format_bytes_bytes() {
+        assert_eq!(format_bytes(512), "512 B");
+        assert_eq!(format_bytes(1023), "1023 B");
+    }
+
+    #[test]
+    fn format_bytes_kilobytes() {
+        assert_eq!(format_bytes(1024), "1 KB");
+        assert_eq!(format_bytes(1536), "2 KB"); // 1.5 KB rounds to 2
+        assert_eq!(format_bytes(10240), "10 KB");
+    }
+
+    #[test]
+    fn format_bytes_megabytes() {
+        assert_eq!(format_bytes(1024 * 1024), "1.0 MB");
+        assert_eq!(format_bytes(1024 * 1024 * 5 + 1024 * 512), "5.5 MB");
+    }
+
+    #[test]
+    fn format_bytes_gigabytes() {
+        assert_eq!(format_bytes(1024 * 1024 * 1024), "1.0 GB");
+        assert_eq!(format_bytes(1024 * 1024 * 1024 * 2 + 1024 * 1024 * 512), "2.5 GB");
+    }
+
+    // format_lag tests
+    #[test]
+    fn format_lag_none() {
+        assert_eq!(format_lag(None), "-");
+    }
+
+    #[test]
+    fn format_lag_some() {
+        assert_eq!(format_lag(Some(1.234)), "1.234s");
+        assert_eq!(format_lag(Some(0.0)), "0.000s");
+        assert_eq!(format_lag(Some(100.5)), "100.500s");
+    }
+
+    // format_compact tests
+    #[test]
+    fn format_compact_small() {
+        assert_eq!(format_compact(0), "0");
+        assert_eq!(format_compact(999), "999");
+    }
+
+    #[test]
+    fn format_compact_thousands() {
+        assert_eq!(format_compact(1_000), "1.0K");
+        assert_eq!(format_compact(1_500), "1.5K");
+        assert_eq!(format_compact(999_999), "1000.0K");
+    }
+
+    #[test]
+    fn format_compact_millions() {
+        assert_eq!(format_compact(1_000_000), "1.0M");
+        assert_eq!(format_compact(2_500_000), "2.5M");
+    }
+
+    #[test]
+    fn format_compact_billions() {
+        assert_eq!(format_compact(1_000_000_000), "1.0B");
+        assert_eq!(format_compact(3_500_000_000), "3.5B");
+    }
+
+    // truncate tests
+    #[test]
+    fn truncate_short_string() {
+        assert_eq!(truncate("hello", 10), "hello");
+        assert_eq!(truncate("hello", 5), "hello");
+    }
+
+    #[test]
+    fn truncate_exact_length() {
+        assert_eq!(truncate("hello", 5), "hello");
+    }
+
+    #[test]
+    fn truncate_long_string() {
+        assert_eq!(truncate("hello world", 5), "hell…");
+        assert_eq!(truncate("hello world", 8), "hello w…");
+    }
+
+    #[test]
+    fn truncate_edge_cases() {
+        assert_eq!(truncate("hello", 1), "…");
+        assert_eq!(truncate("hello", 0), "…");
+        assert_eq!(truncate("hello", 2), "h…");
+    }
+
+    // format_duration tests
+    #[test]
+    fn format_duration_sub_millisecond() {
+        assert_eq!(format_duration(0.0), "0s");
+        assert_eq!(format_duration(0.0001), "0s");
+    }
+
+    #[test]
+    fn format_duration_milliseconds() {
+        assert_eq!(format_duration(0.001), "1ms");
+        assert_eq!(format_duration(0.5), "500ms");
+        assert_eq!(format_duration(0.999), "999ms");
+    }
+
+    #[test]
+    fn format_duration_seconds() {
+        assert_eq!(format_duration(1.0), "1.0s");
+        assert_eq!(format_duration(30.5), "30.5s");
+        assert_eq!(format_duration(59.9), "59.9s");
+    }
+
+    #[test]
+    fn format_duration_minutes() {
+        assert_eq!(format_duration(60.0), "1m0s");
+        assert_eq!(format_duration(90.0), "2m30s"); // 90/60=1.5 rounds to 2
+        assert_eq!(format_duration(3599.0), "60m59s");
+    }
+
+    #[test]
+    fn format_duration_hours() {
+        assert_eq!(format_duration(3600.0), "1h0m");
+        assert_eq!(format_duration(5400.0), "2h30m"); // 5400/3600=1.5 rounds to 2
+        assert_eq!(format_duration(7200.0), "2h0m");
+    }
+
+    // format_time_ms tests
+    #[test]
+    fn format_time_ms_sub_millisecond() {
+        assert_eq!(format_time_ms(0.001), "0.001 ms");
+        assert_eq!(format_time_ms(0.5), "0.500 ms");
+    }
+
+    #[test]
+    fn format_time_ms_milliseconds() {
+        assert_eq!(format_time_ms(1.0), "1.0 ms");
+        assert_eq!(format_time_ms(100.5), "100.5 ms");
+        assert_eq!(format_time_ms(999.9), "999.9 ms");
+    }
+
+    #[test]
+    fn format_time_ms_seconds() {
+        assert_eq!(format_time_ms(1_000.0), "1.00 s");
+        assert_eq!(format_time_ms(30_000.0), "30.00 s");
+    }
+
+    #[test]
+    fn format_time_ms_minutes() {
+        assert_eq!(format_time_ms(60_000.0), "1.0 min");
+        assert_eq!(format_time_ms(150_000.0), "2.5 min");
+    }
+
+    #[test]
+    fn format_time_ms_hours() {
+        assert_eq!(format_time_ms(3_600_000.0), "1.0 hr");
+        assert_eq!(format_time_ms(5_400_000.0), "1.5 hr");
+    }
+
+    // format_rate tests
+    #[test]
+    fn format_rate_zero() {
+        assert_eq!(format_rate(0.0), "0/s");
+    }
+
+    #[test]
+    fn format_rate_fractional() {
+        assert_eq!(format_rate(0.5), "0.5/s");
+    }
+
+    #[test]
+    fn format_rate_small() {
+        assert_eq!(format_rate(1.0), "1/s");
+        assert_eq!(format_rate(999.0), "999/s");
+    }
+
+    #[test]
+    fn format_rate_thousands() {
+        assert_eq!(format_rate(1_000.0), "1.0K/s");
+        assert_eq!(format_rate(2_500.0), "2.5K/s");
+    }
+
+    #[test]
+    fn format_rate_millions() {
+        assert_eq!(format_rate(1_000_000.0), "1.0M/s");
+        assert_eq!(format_rate(5_500_000.0), "5.5M/s");
+    }
+
+    // format_byte_rate tests
+    #[test]
+    fn format_byte_rate_zero() {
+        assert_eq!(format_byte_rate(0.0), "0 B/s");
+    }
+
+    #[test]
+    fn format_byte_rate_bytes() {
+        assert_eq!(format_byte_rate(512.0), "512 B/s");
+    }
+
+    #[test]
+    fn format_byte_rate_kilobytes() {
+        assert_eq!(format_byte_rate(1024.0), "1 KB/s");
+        assert_eq!(format_byte_rate(2048.0), "2 KB/s");
+    }
+
+    #[test]
+    fn format_byte_rate_megabytes() {
+        assert_eq!(format_byte_rate(1024.0 * 1024.0), "1.0 MB/s");
+        assert_eq!(format_byte_rate(1024.0 * 1024.0 * 5.5), "5.5 MB/s");
+    }
+
+    #[test]
+    fn format_byte_rate_gigabytes() {
+        assert_eq!(format_byte_rate(1024.0 * 1024.0 * 1024.0), "1.0 GB/s");
+    }
+
+    // compute_match_indices tests
+    #[test]
+    fn compute_match_indices_empty_filter() {
+        assert_eq!(compute_match_indices("hello", ""), None);
+    }
+
+    #[test]
+    fn compute_match_indices_no_match() {
+        assert_eq!(compute_match_indices("hello", "xyz"), None);
+    }
+
+    #[test]
+    fn compute_match_indices_exact_match() {
+        let result = compute_match_indices("hello", "hello");
+        assert!(result.is_some());
+        let indices = result.unwrap();
+        assert_eq!(indices.len(), 5);
+    }
+
+    #[test]
+    fn compute_match_indices_partial_match() {
+        let result = compute_match_indices("hello world", "hlo");
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn compute_match_indices_case_insensitive() {
+        let result = compute_match_indices("Hello World", "hello");
+        assert!(result.is_some());
+    }
+}
+

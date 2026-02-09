@@ -31,6 +31,9 @@ dirs = "6"
 nucleo-matcher = "0.3"
 arboard = "3"
 
+[features]
+integration = []
+
 [profile.release]
 lto = true
 strip = true
