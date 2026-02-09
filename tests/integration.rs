@@ -444,13 +444,15 @@ async fn test_fetch_stat_statements_all_versions() {
             ..Default::default()
         };
         let (statements, error) = queries::fetch_stat_statements(&client, &ext, 11).await;
-        // Either we get results or a clear error (permission etc)
+        // Either we get results or a clear error (permission, not loaded, etc)
         if error.is_none() || !statements.is_empty() {
             println!("pg11: fetch_stat_statements succeeded with {} rows", statements.len());
         } else if let Some(ref err) = error {
-            // Permission errors are acceptable in test environment
+            // These errors are acceptable in test environment
             assert!(
-                err.contains("permission") || err.contains("does not exist"),
+                err.contains("permission")
+                    || err.contains("does not exist")
+                    || err.contains("shared_preload_libraries"),
                 "pg11: unexpected error: {}",
                 err
             );
@@ -472,7 +474,9 @@ async fn test_fetch_stat_statements_all_versions() {
             println!("pg14: fetch_stat_statements succeeded with {} rows", statements.len());
         } else if let Some(ref err) = error {
             assert!(
-                err.contains("permission") || err.contains("does not exist"),
+                err.contains("permission")
+                    || err.contains("does not exist")
+                    || err.contains("shared_preload_libraries"),
                 "pg14: unexpected error: {}",
                 err
             );
@@ -494,7 +498,9 @@ async fn test_fetch_stat_statements_all_versions() {
             println!("pg17: fetch_stat_statements succeeded with {} rows", statements.len());
         } else if let Some(ref err) = error {
             assert!(
-                err.contains("permission") || err.contains("does not exist"),
+                err.contains("permission")
+                    || err.contains("does not exist")
+                    || err.contains("shared_preload_libraries"),
                 "pg17: unexpected error: {}",
                 err
             );
