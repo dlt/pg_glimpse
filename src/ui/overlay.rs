@@ -1508,7 +1508,7 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
     let mut lines = vec![
         Line::from(""),
         section_header("Navigation"),
-        entry("q", "Quit application"),
+        entry("q", "Back to queries / quit"),
         entry("Ctrl+C", "Force quit"),
         entry("p", "Pause / resume refresh"),
         entry("r", "Force refresh now"),

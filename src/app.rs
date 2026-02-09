@@ -1734,7 +1734,11 @@ impl App {
         // Layer 2: Normal mode global keys
         match key.code {
             KeyCode::Char('q') => {
-                self.running = false;
+                if self.bottom_panel == BottomPanel::Queries {
+                    self.running = false;
+                } else {
+                    self.switch_panel(BottomPanel::Queries);
+                }
                 return;
             }
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
