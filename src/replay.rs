@@ -433,4 +433,214 @@ mod tests {
         assert!(session.at_end()); // Single snapshot, always at end
         assert_eq!(session.len(), 1);
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Fuzz tests for JSONL parsing robustness
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    mod fuzz_tests {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            /// Parsing arbitrary strings as JSON should never panic
+            #[test]
+            fn json_parse_never_panics(input in ".*") {
+                let _ = serde_json::from_str::<RecordLine>(&input);
+            }
+
+            /// Parsing arbitrary bytes as UTF-8 then JSON should never panic
+            #[test]
+            fn json_parse_arbitrary_bytes_never_panics(bytes in proptest::collection::vec(any::<u8>(), 0..500)) {
+                if let Ok(input) = String::from_utf8(bytes) {
+                    let _ = serde_json::from_str::<RecordLine>(&input);
+                }
+            }
+
+            /// Loading a file with arbitrary content should return Err, not panic
+            #[test]
+            fn load_arbitrary_content_never_panics(content in ".*") {
+                let mut file = NamedTempFile::new().unwrap();
+                writeln!(file, "{}", content).unwrap();
+                file.flush().unwrap();
+
+                // Should return Err for invalid content, never panic
+                let _ = ReplaySession::load(file.path());
+            }
+
+            /// Loading multiple arbitrary lines should never panic
+            #[test]
+            fn load_multiple_arbitrary_lines_never_panics(
+                lines in proptest::collection::vec(".{0,200}", 1..20)
+            ) {
+                let mut file = NamedTempFile::new().unwrap();
+                for line in &lines {
+                    writeln!(file, "{}", line).unwrap();
+                }
+                file.flush().unwrap();
+
+                let _ = ReplaySession::load(file.path());
+            }
+
+            /// Valid header with corrupted snapshots should fail gracefully
+            #[test]
+            fn corrupted_snapshot_after_valid_header(corruption in ".{1,100}") {
+                let header = make_header_json("localhost", 5432, "testdb", "testuser");
+                let mut file = NamedTempFile::new().unwrap();
+                writeln!(file, "{}", header).unwrap();
+                writeln!(file, "{}", corruption).unwrap();
+                file.flush().unwrap();
+
+                // Should return Err for corrupted snapshot
+                let result = ReplaySession::load(file.path());
+                // Either succeeds (if corruption is valid JSON that gets skipped)
+                // or fails gracefully
+                let _ = result;
+            }
+
+            /// Truncated JSON should fail gracefully
+            #[test]
+            fn truncated_json_handled(truncate_at in 1usize..100) {
+                let header = make_header_json("localhost", 5432, "testdb", "testuser");
+                let truncated = if truncate_at < header.len() {
+                    &header[..truncate_at]
+                } else {
+                    &header
+                };
+
+                let mut file = NamedTempFile::new().unwrap();
+                writeln!(file, "{}", truncated).unwrap();
+                file.flush().unwrap();
+
+                let _ = ReplaySession::load(file.path());
+            }
+
+            /// JSON with wrong type field should fail gracefully
+            #[test]
+            fn wrong_type_field(type_value in "[a-z]{1,20}") {
+                let json = format!(r#"{{"type": "{}"}}"#, type_value);
+                let mut file = NamedTempFile::new().unwrap();
+                writeln!(file, "{}", json).unwrap();
+                file.flush().unwrap();
+
+                let _ = ReplaySession::load(file.path());
+            }
+
+            /// Very deep nesting should not cause stack overflow
+            #[test]
+            fn deeply_nested_json(depth in 1usize..100) {
+                let open_braces: String = "{\"a\":".repeat(depth);
+                let close_braces: String = "}".repeat(depth);
+                let json = format!("{}1{}", open_braces, close_braces);
+
+                let mut file = NamedTempFile::new().unwrap();
+                writeln!(file, "{}", json).unwrap();
+                file.flush().unwrap();
+
+                let _ = ReplaySession::load(file.path());
+            }
+
+            /// JSON with very long string values should be handled
+            #[test]
+            fn very_long_string_values(len in 100usize..5000) {
+                let long_value = "x".repeat(len);
+                let json = format!(r#"{{"type": "header", "host": "{}"}}"#, long_value);
+
+                let mut file = NamedTempFile::new().unwrap();
+                writeln!(file, "{}", json).unwrap();
+                file.flush().unwrap();
+
+                let _ = ReplaySession::load(file.path());
+            }
+
+            /// Unicode in JSON values should be handled
+            #[test]
+            fn unicode_in_json(s in "\\PC{0,50}") {
+                // Escape for JSON string
+                let escaped = s.replace('\\', "\\\\")
+                    .replace('"', "\\\"")
+                    .replace('\n', "\\n")
+                    .replace('\r', "\\r")
+                    .replace('\t', "\\t");
+                let json = format!(r#"{{"type": "header", "host": "{}"}}"#, escaped);
+
+                let mut file = NamedTempFile::new().unwrap();
+                writeln!(file, "{}", json).unwrap();
+                file.flush().unwrap();
+
+                let _ = ReplaySession::load(file.path());
+            }
+
+            /// Null bytes and control characters should be handled
+            #[test]
+            fn control_characters_handled(bytes in proptest::collection::vec(0u8..32, 1..50)) {
+                let s: String = bytes.iter()
+                    .filter(|&&b| b != 0) // Skip null bytes for string creation
+                    .map(|&b| b as char)
+                    .collect();
+
+                let mut file = NamedTempFile::new().unwrap();
+                writeln!(file, "{}", s).unwrap();
+                file.flush().unwrap();
+
+                let _ = ReplaySession::load(file.path());
+            }
+
+            /// Empty lines mixed with content should be handled
+            #[test]
+            fn empty_lines_interspersed(num_empty in 0usize..20) {
+                let header = make_header_json("localhost", 5432, "testdb", "testuser");
+                let snap = make_snapshot_json(10);
+
+                let mut file = NamedTempFile::new().unwrap();
+                writeln!(file, "{}", header).unwrap();
+                for _ in 0..num_empty {
+                    writeln!(file).unwrap();
+                }
+                writeln!(file, "{}", snap).unwrap();
+                for _ in 0..num_empty {
+                    writeln!(file).unwrap();
+                }
+                file.flush().unwrap();
+
+                let result = ReplaySession::load(file.path());
+                prop_assert!(result.is_ok());
+            }
+
+            /// Random valid-looking JSON objects should be handled
+            #[test]
+            fn random_json_objects(
+                key in "[a-z]{1,10}",
+                value in "[a-zA-Z0-9]{1,20}"
+            ) {
+                let json = format!(r#"{{"{}" : "{}"}}"#, key, value);
+
+                let mut file = NamedTempFile::new().unwrap();
+                writeln!(file, "{}", json).unwrap();
+                file.flush().unwrap();
+
+                // Should fail (missing required fields) but not panic
+                let result = ReplaySession::load(file.path());
+                prop_assert!(result.is_err());
+            }
+
+            /// Numbers at boundary values should be handled
+            #[test]
+            fn boundary_numbers(n in prop_oneof![
+                Just(i64::MIN),
+                Just(i64::MAX),
+                Just(0i64),
+                Just(-1i64),
+                Just(1i64)
+            ]) {
+                let json = format!(r#"{{"type": "header", "port": {}}}"#, n);
+
+                let mut file = NamedTempFile::new().unwrap();
+                writeln!(file, "{}", json).unwrap();
+                file.flush().unwrap();
+
+                let _ = ReplaySession::load(file.path());
+            }
+        }
+    }
 }

@@ -868,4 +868,147 @@ mod tests {
         assert!(config.refresh_interval_secs >= 1);
         assert!(config.danger_duration_secs >= config.warn_duration_secs);
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Fuzz tests for TOML parsing robustness
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    mod fuzz_tests {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            /// Parsing arbitrary strings should never panic
+            #[test]
+            fn toml_parse_never_panics(input in ".*") {
+                // Should return Ok or Err, never panic
+                let _ = toml::from_str::<AppConfig>(&input);
+            }
+
+            /// Parsing arbitrary bytes as UTF-8 then TOML should never panic
+            #[test]
+            fn toml_parse_arbitrary_bytes_never_panics(bytes in proptest::collection::vec(any::<u8>(), 0..1000)) {
+                if let Ok(input) = String::from_utf8(bytes) {
+                    let _ = toml::from_str::<AppConfig>(&input);
+                }
+            }
+
+            /// unwrap_or_default pattern should always succeed
+            #[test]
+            fn toml_unwrap_or_default_always_works(input in ".*") {
+                let config: AppConfig = toml::from_str(&input).unwrap_or_default();
+                // Should always get a valid config
+                prop_assert!(config.refresh_interval_secs <= u64::MAX);
+            }
+
+            /// Valid TOML with random field values should parse or fail gracefully
+            #[test]
+            fn toml_with_random_values(
+                refresh in 0u64..1000000,
+                warn in 0.0f64..10000.0,
+                danger in 0.0f64..10000.0,
+                retention in 0u64..1000000
+            ) {
+                let toml_str = format!(
+                    r#"
+                    refresh_interval_secs = {}
+                    warn_duration_secs = {}
+                    danger_duration_secs = {}
+                    recording_retention_secs = {}
+                    "#,
+                    refresh, warn, danger, retention
+                );
+                let result = toml::from_str::<AppConfig>(&toml_str);
+                prop_assert!(result.is_ok());
+                let config = result.unwrap();
+                prop_assert_eq!(config.refresh_interval_secs, refresh);
+            }
+
+            /// Random strings as enum values should fail gracefully
+            #[test]
+            fn toml_random_enum_values(marker in "[a-zA-Z0-9_]{1,20}", theme in "[a-zA-Z0-9_]{1,20}") {
+                let toml_str = format!(
+                    r#"
+                    graph_marker = "{}"
+                    color_theme = "{}"
+                    "#,
+                    marker, theme
+                );
+                // Should either parse (if valid enum) or return error
+                let _ = toml::from_str::<AppConfig>(&toml_str);
+            }
+
+            /// Deeply nested/malformed TOML should not cause stack overflow
+            #[test]
+            fn toml_nested_structures(depth in 1usize..50) {
+                let open_brackets: String = "[".repeat(depth);
+                let close_brackets: String = "]".repeat(depth);
+                let input = format!("{}value{}", open_brackets, close_brackets);
+                let _ = toml::from_str::<AppConfig>(&input);
+            }
+
+            /// Very long string values should be handled
+            #[test]
+            fn toml_long_string_values(len in 100usize..10000) {
+                let long_value = "x".repeat(len);
+                let toml_str = format!(r#"graph_marker = "{}""#, long_value);
+                let _ = toml::from_str::<AppConfig>(&toml_str);
+            }
+
+            /// Unicode in TOML should be handled gracefully
+            #[test]
+            fn toml_unicode_values(s in "\\PC*") {
+                let toml_str = format!(r#"graph_marker = "{}""#, s.replace('\\', "\\\\").replace('"', "\\\""));
+                let _ = toml::from_str::<AppConfig>(&toml_str);
+            }
+
+            /// Negative numbers where unsigned expected should fail gracefully
+            #[test]
+            fn toml_negative_unsigned(n in -1000000i64..-1) {
+                let toml_str = format!("refresh_interval_secs = {}", n);
+                let result = toml::from_str::<AppConfig>(&toml_str);
+                prop_assert!(result.is_err());
+            }
+
+            /// NaN/Infinity in floats should be handled
+            #[test]
+            fn toml_special_floats(special in prop_oneof![
+                Just("nan"),
+                Just("inf"),
+                Just("-inf"),
+                Just("NaN"),
+                Just("Infinity")
+            ]) {
+                let toml_str = format!("warn_duration_secs = {}", special);
+                // TOML doesn't support these, should fail
+                let _ = toml::from_str::<AppConfig>(&toml_str);
+            }
+
+            /// Roundtrip: valid config -> TOML -> parse should preserve values
+            #[test]
+            fn toml_roundtrip_preserves_values(
+                refresh in 1u64..10000,
+                warn in 0.1f64..100.0,
+                danger in 0.1f64..100.0,
+                retention in 60u64..100000
+            ) {
+                let config = AppConfig {
+                    graph_marker: GraphMarkerStyle::Braille,
+                    color_theme: ColorTheme::TokyoNight,
+                    refresh_interval_secs: refresh,
+                    warn_duration_secs: warn,
+                    danger_duration_secs: danger,
+                    recording_retention_secs: retention,
+                };
+
+                let toml_str = toml::to_string_pretty(&config).unwrap();
+                let parsed: AppConfig = toml::from_str(&toml_str).unwrap();
+
+                prop_assert_eq!(parsed.refresh_interval_secs, refresh);
+                prop_assert!((parsed.warn_duration_secs - warn).abs() < 1e-10);
+                prop_assert!((parsed.danger_duration_secs - danger).abs() < 1e-10);
+                prop_assert_eq!(parsed.recording_retention_secs, retention);
+            }
+        }
+    }
 }
