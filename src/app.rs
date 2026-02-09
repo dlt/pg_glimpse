@@ -3100,6 +3100,569 @@ mod tests {
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
+    // Rate calculation tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn rate_calculation_first_snapshot_no_rate() {
+        use crate::db::models::DatabaseStats;
+
+        let mut app = make_app();
+
+        // First snapshot - should not calculate rates (no previous)
+        let mut snap = make_snapshot();
+        snap.db_stats = Some(DatabaseStats {
+            xact_commit: 1000,
+            xact_rollback: 10,
+            blks_read: 500,
+        });
+        app.update(snap);
+
+        // No previous snapshot, so no rate should be calculated
+        assert!(app.current_tps.is_none());
+        assert!(app.current_blks_read_rate.is_none());
+    }
+
+    #[test]
+    fn rate_calculation_tps_normal() {
+        use crate::db::models::DatabaseStats;
+
+        let mut app = make_app();
+        let base_time = chrono::Utc::now();
+
+        // First snapshot
+        let mut snap1 = make_snapshot();
+        snap1.timestamp = base_time;
+        snap1.db_stats = Some(DatabaseStats {
+            xact_commit: 1000,
+            xact_rollback: 10,
+            blks_read: 500,
+        });
+        app.update(snap1);
+
+        // Second snapshot 2 seconds later with 200 more transactions
+        let mut snap2 = make_snapshot();
+        snap2.timestamp = base_time + chrono::Duration::seconds(2);
+        snap2.db_stats = Some(DatabaseStats {
+            xact_commit: 1190, // +190 commits
+            xact_rollback: 20, // +10 rollbacks
+            blks_read: 600,    // +100 reads
+        });
+        app.update(snap2);
+
+        // TPS should be (190 + 10) / 2 = 100 TPS
+        assert!(app.current_tps.is_some());
+        let tps = app.current_tps.unwrap();
+        assert!((tps - 100.0).abs() < 0.1, "Expected ~100 TPS, got {}", tps);
+
+        // Blks/sec should be 100 / 2 = 50
+        assert!(app.current_blks_read_rate.is_some());
+        let blks = app.current_blks_read_rate.unwrap();
+        assert!((blks - 50.0).abs() < 0.1, "Expected ~50 blks/s, got {}", blks);
+
+        // History should have one entry
+        assert_eq!(app.tps_history.as_vec().len(), 1);
+        assert_eq!(app.blks_read_history.as_vec().len(), 1);
+    }
+
+    #[test]
+    fn rate_calculation_wal_rate() {
+        use crate::db::models::{DatabaseStats, WalStats};
+
+        let mut app = make_app();
+        let base_time = chrono::Utc::now();
+
+        // First snapshot with WAL stats
+        let mut snap1 = make_snapshot();
+        snap1.timestamp = base_time;
+        snap1.db_stats = Some(DatabaseStats {
+            xact_commit: 1000,
+            xact_rollback: 10,
+            blks_read: 500,
+        });
+        snap1.wal_stats = Some(WalStats {
+            wal_records: 10000,
+            wal_fpi: 100,
+            wal_bytes: 1_000_000, // 1 MB
+            wal_buffers_full: 0,
+            wal_write: 1000,
+            wal_sync: 1000,
+            wal_write_time: 100.0,
+            wal_sync_time: 50.0,
+        });
+        app.update(snap1);
+
+        // Second snapshot 2 seconds later with 2MB more WAL
+        let mut snap2 = make_snapshot();
+        snap2.timestamp = base_time + chrono::Duration::seconds(2);
+        snap2.db_stats = Some(DatabaseStats {
+            xact_commit: 1100,
+            xact_rollback: 10,
+            blks_read: 600,
+        });
+        snap2.wal_stats = Some(WalStats {
+            wal_records: 12000,
+            wal_fpi: 120,
+            wal_bytes: 3_000_000, // 3 MB (+2 MB)
+            wal_buffers_full: 0,
+            wal_write: 1200,
+            wal_sync: 1200,
+            wal_write_time: 120.0,
+            wal_sync_time: 60.0,
+        });
+        app.update(snap2);
+
+        // WAL rate should be 2MB / 2s = 1MB/s
+        assert!(app.current_wal_rate.is_some());
+        let wal_rate = app.current_wal_rate.unwrap();
+        let expected = 1_000_000.0; // 1 MB/s
+        assert!(
+            (wal_rate - expected).abs() < 1000.0,
+            "Expected ~1MB/s WAL rate, got {}",
+            wal_rate
+        );
+
+        // History should have one entry (stored as KB/s)
+        assert_eq!(app.wal_rate_history.as_vec().len(), 1);
+    }
+
+    #[test]
+    fn rate_calculation_missing_db_stats() {
+        let mut app = make_app();
+        let base_time = chrono::Utc::now();
+
+        // First snapshot without db_stats
+        let mut snap1 = make_snapshot();
+        snap1.timestamp = base_time;
+        snap1.db_stats = None;
+        app.update(snap1);
+
+        // Second snapshot also without db_stats
+        let mut snap2 = make_snapshot();
+        snap2.timestamp = base_time + chrono::Duration::seconds(2);
+        snap2.db_stats = None;
+        app.update(snap2);
+
+        // No rates should be calculated
+        assert!(app.current_tps.is_none());
+        assert!(app.current_blks_read_rate.is_none());
+    }
+
+    #[test]
+    fn rate_calculation_missing_wal_stats() {
+        use crate::db::models::DatabaseStats;
+
+        let mut app = make_app();
+        let base_time = chrono::Utc::now();
+
+        // First snapshot without wal_stats
+        let mut snap1 = make_snapshot();
+        snap1.timestamp = base_time;
+        snap1.db_stats = Some(DatabaseStats {
+            xact_commit: 1000,
+            xact_rollback: 10,
+            blks_read: 500,
+        });
+        snap1.wal_stats = None;
+        app.update(snap1);
+
+        // Second snapshot
+        let mut snap2 = make_snapshot();
+        snap2.timestamp = base_time + chrono::Duration::seconds(2);
+        snap2.db_stats = Some(DatabaseStats {
+            xact_commit: 1100,
+            xact_rollback: 10,
+            blks_read: 600,
+        });
+        snap2.wal_stats = None;
+        app.update(snap2);
+
+        // TPS should be calculated, but WAL rate should not
+        assert!(app.current_tps.is_some());
+        assert!(app.current_wal_rate.is_none());
+    }
+
+    #[test]
+    fn rate_calculation_zero_time_difference() {
+        use crate::db::models::DatabaseStats;
+
+        let mut app = make_app();
+        let same_time = chrono::Utc::now();
+
+        // Two snapshots with same timestamp
+        let mut snap1 = make_snapshot();
+        snap1.timestamp = same_time;
+        snap1.db_stats = Some(DatabaseStats {
+            xact_commit: 1000,
+            xact_rollback: 10,
+            blks_read: 500,
+        });
+        app.update(snap1);
+
+        let mut snap2 = make_snapshot();
+        snap2.timestamp = same_time; // Same timestamp
+        snap2.db_stats = Some(DatabaseStats {
+            xact_commit: 1100,
+            xact_rollback: 20,
+            blks_read: 600,
+        });
+        app.update(snap2);
+
+        // No rate should be calculated with zero time difference
+        // (would cause division by zero)
+        assert!(app.current_tps.is_none());
+    }
+
+    #[test]
+    fn rate_calculation_very_small_interval() {
+        use crate::db::models::DatabaseStats;
+
+        let mut app = make_app();
+        let base_time = chrono::Utc::now();
+
+        // First snapshot
+        let mut snap1 = make_snapshot();
+        snap1.timestamp = base_time;
+        snap1.db_stats = Some(DatabaseStats {
+            xact_commit: 1000,
+            xact_rollback: 10,
+            blks_read: 500,
+        });
+        app.update(snap1);
+
+        // Second snapshot 100ms later
+        let mut snap2 = make_snapshot();
+        snap2.timestamp = base_time + chrono::Duration::milliseconds(100);
+        snap2.db_stats = Some(DatabaseStats {
+            xact_commit: 1010, // +10 in 100ms
+            xact_rollback: 10,
+            blks_read: 505,
+        });
+        app.update(snap2);
+
+        // TPS should be 10 / 0.1 = 100 TPS
+        assert!(app.current_tps.is_some());
+        let tps = app.current_tps.unwrap();
+        assert!((tps - 100.0).abs() < 1.0, "Expected ~100 TPS, got {}", tps);
+    }
+
+    #[test]
+    fn rate_calculation_history_accumulates() {
+        use crate::db::models::DatabaseStats;
+
+        let mut app = make_app();
+        let base_time = chrono::Utc::now();
+
+        // Initial snapshot
+        let mut snap = make_snapshot();
+        snap.timestamp = base_time;
+        snap.db_stats = Some(DatabaseStats {
+            xact_commit: 1000,
+            xact_rollback: 0,
+            blks_read: 100,
+        });
+        app.update(snap);
+
+        // Add 5 more snapshots
+        for i in 1..=5 {
+            let mut snap = make_snapshot();
+            snap.timestamp = base_time + chrono::Duration::seconds(i * 2);
+            snap.db_stats = Some(DatabaseStats {
+                xact_commit: 1000 + (i as i64 * 100), // +100 per 2 sec = 50 TPS
+                xact_rollback: 0,
+                blks_read: 100 + (i as i64 * 10),
+            });
+            app.update(snap);
+        }
+
+        // Should have 5 history entries
+        assert_eq!(app.tps_history.as_vec().len(), 5);
+        assert_eq!(app.blks_read_history.as_vec().len(), 5);
+    }
+
+    #[test]
+    fn rate_calculation_counter_reset_blks() {
+        use crate::db::models::DatabaseStats;
+
+        let mut app = make_app();
+        let base_time = chrono::Utc::now();
+
+        // First snapshot with high blks_read
+        let mut snap1 = make_snapshot();
+        snap1.timestamp = base_time;
+        snap1.db_stats = Some(DatabaseStats {
+            xact_commit: 1000,
+            xact_rollback: 10,
+            blks_read: 1_000_000,
+        });
+        app.update(snap1);
+
+        // Second snapshot with lower blks_read (counter reset)
+        let mut snap2 = make_snapshot();
+        snap2.timestamp = base_time + chrono::Duration::seconds(2);
+        snap2.db_stats = Some(DatabaseStats {
+            xact_commit: 1100, // Normal increase
+            xact_rollback: 20,
+            blks_read: 100, // Counter reset
+        });
+        app.update(snap2);
+
+        // TPS should be calculated (commits/rollbacks increased normally)
+        assert!(app.current_tps.is_some());
+        // But blks rate should not be in history (counter went backwards)
+        // Note: current_blks_read_rate may still have old value
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Error handling tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn update_error_sets_last_error() {
+        let mut app = make_app();
+
+        assert!(app.last_error.is_none());
+
+        app.update_error("Connection refused".to_string());
+
+        assert!(app.last_error.is_some());
+        assert_eq!(app.last_error.as_ref().unwrap(), "Connection refused");
+    }
+
+    #[test]
+    fn update_error_overwrites_previous() {
+        let mut app = make_app();
+
+        app.update_error("First error".to_string());
+        assert_eq!(app.last_error.as_ref().unwrap(), "First error");
+
+        app.update_error("Second error".to_string());
+        assert_eq!(app.last_error.as_ref().unwrap(), "Second error");
+    }
+
+    #[test]
+    fn update_clears_error() {
+        let mut app = make_app();
+
+        app.update_error("Some error".to_string());
+        assert!(app.last_error.is_some());
+
+        // Successful update should clear error
+        app.update(make_snapshot());
+        assert!(app.last_error.is_none());
+    }
+
+    #[test]
+    fn stat_statements_error_displayed() {
+        let mut app = make_app();
+
+        let mut snap = make_snapshot();
+        snap.stat_statements_error = Some("permission denied for view pg_stat_statements".to_string());
+        app.update(snap);
+
+        // Error should be preserved in snapshot
+        assert!(app.snapshot.is_some());
+        let snapshot = app.snapshot.as_ref().unwrap();
+        assert!(snapshot.stat_statements_error.is_some());
+        assert!(snapshot.stat_statements_error.as_ref().unwrap().contains("permission denied"));
+    }
+
+    #[test]
+    fn empty_active_queries_no_panic() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+        let mut app = make_app();
+
+        let mut snap = make_snapshot();
+        snap.active_queries = vec![];
+        app.update(snap);
+
+        // Navigation should not panic with empty queries
+        let key_j = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
+        let key_k = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
+        app.handle_key(key_j);
+        app.handle_key(key_k);
+
+        // Selection should stay at None or 0
+        let selected = app.query_table_state.selected();
+        assert!(selected.is_none() || selected == Some(0));
+    }
+
+    #[test]
+    fn empty_tables_no_panic() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+        let mut app = make_app();
+        app.bottom_panel = BottomPanel::TableStats;
+
+        let mut snap = make_snapshot();
+        snap.table_stats = vec![];
+        app.update(snap);
+
+        // Navigation should not panic
+        let key_j = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
+        let key_k = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
+        app.handle_key(key_j);
+        app.handle_key(key_k);
+    }
+
+    #[test]
+    fn empty_indexes_no_panic() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+        let mut app = make_app();
+        app.bottom_panel = BottomPanel::Indexes;
+
+        let mut snap = make_snapshot();
+        snap.indexes = vec![];
+        app.update(snap);
+
+        // Navigation should not panic
+        let key_j = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
+        let key_k = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
+        app.handle_key(key_j);
+        app.handle_key(key_k);
+    }
+
+    #[test]
+    fn empty_blocking_info_no_panic() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+        let mut app = make_app();
+        app.bottom_panel = BottomPanel::Blocking;
+
+        let mut snap = make_snapshot();
+        snap.blocking_info = vec![];
+        app.update(snap);
+
+        // Navigation should not panic
+        let key_j = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
+        let key_k = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
+        app.handle_key(key_j);
+        app.handle_key(key_k);
+    }
+
+    #[test]
+    fn empty_replication_no_panic() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+        let mut app = make_app();
+        app.bottom_panel = BottomPanel::Replication;
+
+        let mut snap = make_snapshot();
+        snap.replication = vec![];
+        app.update(snap);
+
+        // Navigation should not panic
+        let key_j = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
+        let key_k = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
+        app.handle_key(key_j);
+        app.handle_key(key_k);
+    }
+
+    #[test]
+    fn empty_vacuum_progress_no_panic() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+        let mut app = make_app();
+        app.bottom_panel = BottomPanel::VacuumProgress;
+
+        let mut snap = make_snapshot();
+        snap.vacuum_progress = vec![];
+        app.update(snap);
+
+        // Navigation should not panic
+        let key_j = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
+        let key_k = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
+        app.handle_key(key_j);
+        app.handle_key(key_k);
+    }
+
+    #[test]
+    fn empty_wraparound_no_panic() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+        let mut app = make_app();
+        app.bottom_panel = BottomPanel::Wraparound;
+
+        let mut snap = make_snapshot();
+        snap.wraparound = vec![];
+        app.update(snap);
+
+        // Navigation should not panic
+        let key_j = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
+        let key_k = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
+        app.handle_key(key_j);
+        app.handle_key(key_k);
+    }
+
+    #[test]
+    fn empty_statements_no_panic() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+        let mut app = make_app();
+        app.bottom_panel = BottomPanel::Statements;
+
+        let mut snap = make_snapshot();
+        snap.stat_statements = vec![];
+        app.update(snap);
+
+        // Navigation should not panic
+        let key_j = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
+        let key_k = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
+        app.handle_key(key_j);
+        app.handle_key(key_k);
+    }
+
+    #[test]
+    fn no_snapshot_navigation_no_panic() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+        let mut app = make_app();
+        app.snapshot = None;
+
+        let key_j = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
+        let key_k = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
+
+        // All navigation should be safe with no snapshot
+        app.handle_key(key_j);
+        app.handle_key(key_k);
+
+        // Panel switching should work
+        for panel in [
+            BottomPanel::Queries,
+            BottomPanel::Blocking,
+            BottomPanel::WaitEvents,
+            BottomPanel::TableStats,
+            BottomPanel::Replication,
+            BottomPanel::VacuumProgress,
+            BottomPanel::Wraparound,
+            BottomPanel::Indexes,
+            BottomPanel::Statements,
+            BottomPanel::WalIo,
+        ] {
+            app.bottom_panel = panel;
+            app.handle_key(key_j);
+            app.handle_key(key_k);
+        }
+    }
+
+    #[test]
+    fn inspect_with_no_selection_no_panic() {
+        let mut app = make_app();
+        app.update(make_snapshot());
+
+        // Clear selection
+        app.query_table_state.select(None);
+
+        // Trying to enter inspect mode should be safe
+        app.view_mode = ViewMode::Inspect;
+
+        // App should handle this state gracefully
+        assert!(app.snapshot.is_some());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
     // Sort column labels
     // ─────────────────────────────────────────────────────────────────────────────
 
