@@ -19,7 +19,7 @@ SELECT
     wait_event,
     query_start,
     COALESCE(EXTRACT(EPOCH FROM (clock_timestamp() - query_start))::float8, 0) AS duration_secs,
-    LEFT(query, 120) AS query,
+    query,
     backend_type
 FROM pg_stat_activity
 WHERE pid <> pg_backend_pid()
@@ -53,11 +53,11 @@ const BLOCKING_SQL: &str = "
 SELECT
     blocked.pid AS blocked_pid,
     blocked.usename AS blocked_user,
-    LEFT(blocked.query, 100) AS blocked_query,
+    blocked.query AS blocked_query,
     COALESCE(EXTRACT(EPOCH FROM (clock_timestamp() - blocked.query_start))::float8, 0) AS blocked_duration_secs,
     blocker.pid AS blocker_pid,
     blocker.usename AS blocker_user,
-    LEFT(blocker.query, 100) AS blocker_query,
+    blocker.query AS blocker_query,
     blocker.state AS blocker_state
 FROM pg_stat_activity AS blocked
 JOIN LATERAL unnest(pg_blocking_pids(blocked.pid)) AS blocker_pid ON TRUE
