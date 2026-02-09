@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git Policy
+
+**Never push to remote without explicit user confirmation.** Always wait for the user to say "push" or confirm before running `git push`.
+
 ## Build Commands
 
 ```bash
