@@ -17,6 +17,8 @@
 
 A blazing-fast TUI for PostgreSQL. Monitor active queries, connections, locks, cache performance, replication lag, vacuum progress, and more — all from your terminal.
 
+![pg_glimpse demo](demo-final.gif)
+
 ## Install
 
 **Homebrew** (macOS):
