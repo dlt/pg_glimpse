@@ -1889,3 +1889,685 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::models::{
+        ActiveQuery, ActivitySummary, BufferCacheStats, DetectedExtensions, PgSnapshot, ServerInfo,
+    };
+    use chrono::Utc;
+
+    fn make_server_info() -> ServerInfo {
+        ServerInfo {
+            version: "PostgreSQL 14.5".into(),
+            start_time: Utc::now(),
+            max_connections: 100,
+            extensions: DetectedExtensions::default(),
+            settings: vec![],
+        }
+    }
+
+    fn make_snapshot() -> PgSnapshot {
+        PgSnapshot {
+            timestamp: Utc::now(),
+            active_queries: vec![ActiveQuery {
+                pid: 12345,
+                usename: Some("postgres".into()),
+                datname: Some("testdb".into()),
+                state: Some("active".into()),
+                query: Some("SELECT 1".into()),
+                duration_secs: 1.5,
+                wait_event_type: None,
+                wait_event: None,
+                query_start: None,
+                backend_type: None,
+            }],
+            wait_events: vec![],
+            blocking_info: vec![],
+            buffer_cache: BufferCacheStats {
+                blks_hit: 9900,
+                blks_read: 100,
+                hit_ratio: 0.99,
+            },
+            summary: ActivitySummary {
+                total_backends: 10,
+                active_query_count: 1,
+                idle_in_transaction_count: 0,
+                waiting_count: 0,
+                lock_count: 0,
+                oldest_xact_secs: None,
+                autovacuum_count: 0,
+            },
+            table_stats: vec![],
+            replication: vec![],
+            replication_slots: vec![],
+            subscriptions: vec![],
+            vacuum_progress: vec![],
+            wraparound: vec![],
+            indexes: vec![],
+            stat_statements: vec![],
+            stat_statements_error: None,
+            extensions: DetectedExtensions::default(),
+            db_size: 1000000,
+            checkpoint_stats: None,
+            wal_stats: None,
+            archiver_stats: None,
+            bgwriter_stats: None,
+            db_stats: None,
+        }
+    }
+
+    fn make_app() -> App {
+        App::new(
+            "localhost".into(),
+            5432,
+            "postgres".into(),
+            "postgres".into(),
+            2,
+            120,
+            AppConfig::default(),
+            make_server_info(),
+        )
+    }
+
+    fn make_replay_app() -> App {
+        App::new_replay(
+            "localhost".into(),
+            5432,
+            "postgres".into(),
+            "postgres".into(),
+            120,
+            AppConfig::default(),
+            make_server_info(),
+            "test.jsonl".into(),
+            10,
+        )
+    }
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    fn key_ctrl(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::CONTROL)
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Global keys
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn quit_from_queries_panel() {
+        let mut app = make_app();
+        assert!(app.running);
+        app.handle_key(key(KeyCode::Char('q')));
+        assert!(!app.running);
+    }
+
+    #[test]
+    fn quit_from_other_panel_returns_to_queries() {
+        let mut app = make_app();
+        app.bottom_panel = BottomPanel::Indexes;
+        app.handle_key(key(KeyCode::Char('q')));
+        assert!(app.running);
+        assert_eq!(app.bottom_panel, BottomPanel::Queries);
+    }
+
+    #[test]
+    fn ctrl_c_quits() {
+        let mut app = make_app();
+        app.handle_key(key_ctrl(KeyCode::Char('c')));
+        assert!(!app.running);
+    }
+
+    #[test]
+    fn esc_from_queries_quits() {
+        let mut app = make_app();
+        app.handle_key(key(KeyCode::Esc));
+        assert!(!app.running);
+    }
+
+    #[test]
+    fn esc_from_other_panel_returns_to_queries() {
+        let mut app = make_app();
+        app.bottom_panel = BottomPanel::Replication;
+        app.handle_key(key(KeyCode::Esc));
+        assert!(app.running);
+        assert_eq!(app.bottom_panel, BottomPanel::Queries);
+    }
+
+    #[test]
+    fn pause_toggle() {
+        let mut app = make_app();
+        assert!(!app.paused);
+        app.handle_key(key(KeyCode::Char('p')));
+        assert!(app.paused);
+        app.handle_key(key(KeyCode::Char('p')));
+        assert!(!app.paused);
+    }
+
+    #[test]
+    fn pause_disabled_in_replay_mode() {
+        let mut app = make_replay_app();
+        assert!(!app.paused);
+        app.handle_key(key(KeyCode::Char('p')));
+        assert!(!app.paused); // Should remain unchanged
+    }
+
+    #[test]
+    fn force_refresh() {
+        let mut app = make_app();
+        app.handle_key(key(KeyCode::Char('r')));
+        assert!(matches!(app.pending_action, Some(AppAction::ForceRefresh)));
+    }
+
+    #[test]
+    fn force_refresh_disabled_in_replay_mode() {
+        let mut app = make_replay_app();
+        app.handle_key(key(KeyCode::Char('r')));
+        assert!(app.pending_action.is_none());
+    }
+
+    #[test]
+    fn help_opens() {
+        let mut app = make_app();
+        app.handle_key(key(KeyCode::Char('?')));
+        assert_eq!(app.view_mode, ViewMode::Help);
+    }
+
+    #[test]
+    fn config_opens() {
+        let mut app = make_app();
+        app.handle_key(key(KeyCode::Char(',')));
+        assert_eq!(app.view_mode, ViewMode::Config);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Panel switching
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn tab_switches_to_blocking() {
+        let mut app = make_app();
+        app.handle_key(key(KeyCode::Tab));
+        assert_eq!(app.bottom_panel, BottomPanel::Blocking);
+    }
+
+    #[test]
+    fn tab_toggles_back_to_queries() {
+        let mut app = make_app();
+        app.bottom_panel = BottomPanel::Blocking;
+        app.handle_key(key(KeyCode::Tab));
+        assert_eq!(app.bottom_panel, BottomPanel::Queries);
+    }
+
+    #[test]
+    fn panel_switch_keys() {
+        let cases = [
+            ('w', BottomPanel::WaitEvents),
+            ('t', BottomPanel::TableStats),
+            ('R', BottomPanel::Replication),
+            ('v', BottomPanel::VacuumProgress),
+            ('x', BottomPanel::Wraparound),
+            ('I', BottomPanel::Indexes),
+            ('S', BottomPanel::Statements),
+            ('A', BottomPanel::WalIo),
+            ('P', BottomPanel::Settings),
+            ('Q', BottomPanel::Queries),
+        ];
+        for (ch, expected) in cases {
+            let mut app = make_app();
+            app.handle_key(key(KeyCode::Char(ch)));
+            assert_eq!(app.bottom_panel, expected, "Key '{}' should switch to {:?}", ch, expected);
+        }
+    }
+
+    #[test]
+    fn panel_switch_clears_filter() {
+        let mut app = make_app();
+        app.filter_text = "test".into();
+        app.filter_active = true;
+        app.handle_key(key(KeyCode::Char('I')));
+        assert!(app.filter_text.is_empty());
+        assert!(!app.filter_active);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Filter mode
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn filter_opens_on_supported_panels() {
+        for panel in [
+            BottomPanel::Queries,
+            BottomPanel::Indexes,
+            BottomPanel::Statements,
+            BottomPanel::TableStats,
+            BottomPanel::Settings,
+        ] {
+            let mut app = make_app();
+            app.bottom_panel = panel;
+            app.handle_key(key(KeyCode::Char('/')));
+            assert_eq!(app.view_mode, ViewMode::Filter, "Filter should open on {:?}", panel);
+        }
+    }
+
+    #[test]
+    fn filter_does_not_open_on_unsupported_panels() {
+        for panel in [
+            BottomPanel::Blocking,
+            BottomPanel::WaitEvents,
+            BottomPanel::Replication,
+            BottomPanel::VacuumProgress,
+            BottomPanel::Wraparound,
+            BottomPanel::WalIo,
+        ] {
+            let mut app = make_app();
+            app.bottom_panel = panel;
+            app.handle_key(key(KeyCode::Char('/')));
+            assert_eq!(app.view_mode, ViewMode::Normal, "Filter should not open on {:?}", panel);
+        }
+    }
+
+    #[test]
+    fn filter_typing() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Filter;
+        app.handle_key(key(KeyCode::Char('t')));
+        app.handle_key(key(KeyCode::Char('e')));
+        app.handle_key(key(KeyCode::Char('s')));
+        app.handle_key(key(KeyCode::Char('t')));
+        assert_eq!(app.filter_text, "test");
+    }
+
+    #[test]
+    fn filter_backspace() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Filter;
+        app.filter_text = "test".into();
+        app.handle_key(key(KeyCode::Backspace));
+        assert_eq!(app.filter_text, "tes");
+    }
+
+    #[test]
+    fn filter_enter_activates() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Filter;
+        app.filter_text = "query".into();
+        app.handle_key(key(KeyCode::Enter));
+        assert_eq!(app.view_mode, ViewMode::Normal);
+        assert!(app.filter_active);
+    }
+
+    #[test]
+    fn filter_enter_with_empty_text_does_not_activate() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Filter;
+        app.handle_key(key(KeyCode::Enter));
+        assert_eq!(app.view_mode, ViewMode::Normal);
+        assert!(!app.filter_active);
+    }
+
+    #[test]
+    fn filter_esc_clears_and_exits() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Filter;
+        app.filter_text = "test".into();
+        app.handle_key(key(KeyCode::Esc));
+        assert_eq!(app.view_mode, ViewMode::Normal);
+        assert!(app.filter_text.is_empty());
+        assert!(!app.filter_active);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Config mode
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn config_navigation() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Config;
+        app.config_selected = 0;
+
+        app.handle_key(key(KeyCode::Down));
+        assert_eq!(app.config_selected, 1);
+
+        app.handle_key(key(KeyCode::Char('j')));
+        assert_eq!(app.config_selected, 2);
+
+        app.handle_key(key(KeyCode::Up));
+        assert_eq!(app.config_selected, 1);
+
+        app.handle_key(key(KeyCode::Char('k')));
+        assert_eq!(app.config_selected, 0);
+    }
+
+    #[test]
+    fn config_esc_saves() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Config;
+        app.handle_key(key(KeyCode::Esc));
+        assert_eq!(app.view_mode, ViewMode::Normal);
+        assert!(matches!(app.pending_action, Some(AppAction::SaveConfig)));
+    }
+
+    #[test]
+    fn config_adjust_refresh_interval() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Config;
+        app.config_selected = ConfigItem::ALL
+            .iter()
+            .position(|&i| i == ConfigItem::RefreshInterval)
+            .unwrap();
+        let initial = app.config.refresh_interval_secs;
+        app.handle_key(key(KeyCode::Right));
+        assert_eq!(app.config.refresh_interval_secs, initial + 1);
+        app.handle_key(key(KeyCode::Left));
+        assert_eq!(app.config.refresh_interval_secs, initial);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Help mode
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn help_scroll() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Help;
+        app.overlay_scroll = 5;
+
+        app.handle_key(key(KeyCode::Down));
+        assert_eq!(app.overlay_scroll, 6);
+
+        app.handle_key(key(KeyCode::Up));
+        assert_eq!(app.overlay_scroll, 5);
+
+        app.handle_key(key(KeyCode::Char('g')));
+        assert_eq!(app.overlay_scroll, 0);
+
+        app.handle_key(key(KeyCode::Char('G')));
+        assert_eq!(app.overlay_scroll, u16::MAX);
+    }
+
+    #[test]
+    fn help_exit_keys() {
+        for code in [KeyCode::Esc, KeyCode::Char('q'), KeyCode::Enter] {
+            let mut app = make_app();
+            app.view_mode = ViewMode::Help;
+            app.overlay_scroll = 10;
+            app.handle_key(key(code));
+            assert_eq!(app.view_mode, ViewMode::Normal);
+            assert_eq!(app.overlay_scroll, 0);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Confirm dialogs
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn confirm_cancel_yes() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::ConfirmCancel(12345);
+        app.handle_key(key(KeyCode::Char('y')));
+        assert_eq!(app.view_mode, ViewMode::Normal);
+        assert!(matches!(app.pending_action, Some(AppAction::CancelQuery(12345))));
+    }
+
+    #[test]
+    fn confirm_cancel_any_other_key_aborts() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::ConfirmCancel(12345);
+        app.handle_key(key(KeyCode::Char('n')));
+        assert_eq!(app.view_mode, ViewMode::Normal);
+        assert!(app.pending_action.is_none());
+        assert!(app.status_message.as_ref().unwrap().contains("aborted"));
+    }
+
+    #[test]
+    fn confirm_kill_yes() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::ConfirmKill(12345);
+        app.handle_key(key(KeyCode::Char('Y')));
+        assert_eq!(app.view_mode, ViewMode::Normal);
+        assert!(matches!(app.pending_action, Some(AppAction::TerminateBackend(12345))));
+    }
+
+    #[test]
+    fn confirm_cancel_choice_one() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::ConfirmCancelChoice {
+            selected_pid: 100,
+            all_pids: vec![100, 200, 300],
+        };
+        app.handle_key(key(KeyCode::Char('1')));
+        assert_eq!(app.view_mode, ViewMode::Normal);
+        assert!(matches!(app.pending_action, Some(AppAction::CancelQuery(100))));
+    }
+
+    #[test]
+    fn confirm_cancel_choice_all() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::ConfirmCancelChoice {
+            selected_pid: 100,
+            all_pids: vec![100, 200, 300],
+        };
+        app.handle_key(key(KeyCode::Char('a')));
+        assert!(matches!(app.view_mode, ViewMode::ConfirmCancelBatch(_)));
+    }
+
+    #[test]
+    fn confirm_cancel_batch_yes() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::ConfirmCancelBatch(vec![100, 200, 300]);
+        app.handle_key(key(KeyCode::Char('y')));
+        assert_eq!(app.view_mode, ViewMode::Normal);
+        match &app.pending_action {
+            Some(AppAction::CancelQueries(pids)) => assert_eq!(pids, &vec![100, 200, 300]),
+            _ => panic!("Expected CancelQueries action"),
+        }
+    }
+
+    #[test]
+    fn confirm_kill_choice_esc() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::ConfirmKillChoice {
+            selected_pid: 100,
+            all_pids: vec![100, 200],
+        };
+        app.handle_key(key(KeyCode::Esc));
+        assert_eq!(app.view_mode, ViewMode::Normal);
+        assert!(app.pending_action.is_none());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Inspect modes
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn inspect_scroll_and_exit() {
+        let modes = [
+            ViewMode::Inspect,
+            ViewMode::IndexInspect,
+            ViewMode::StatementInspect,
+            ViewMode::ReplicationInspect,
+            ViewMode::TableInspect,
+            ViewMode::BlockingInspect,
+            ViewMode::VacuumInspect,
+            ViewMode::WraparoundInspect,
+        ];
+        for mode in modes {
+            let mut app = make_app();
+            app.view_mode = mode.clone();
+            app.overlay_scroll = 5;
+
+            app.handle_key(key(KeyCode::Down));
+            assert_eq!(app.overlay_scroll, 6, "Down should scroll in {:?}", mode);
+
+            app.handle_key(key(KeyCode::Char('k')));
+            assert_eq!(app.overlay_scroll, 5, "k should scroll up in {:?}", mode);
+
+            app.handle_key(key(KeyCode::Esc));
+            assert_eq!(app.view_mode, ViewMode::Normal, "Esc should exit {:?}", mode);
+            assert_eq!(app.overlay_scroll, 0, "Overlay scroll should reset after {:?}", mode);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Panel-specific navigation
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn queries_panel_navigation() {
+        let mut app = make_app();
+        app.query_table_state.select(Some(5));
+        app.handle_key(key(KeyCode::Up));
+        assert_eq!(app.query_table_state.selected(), Some(4));
+
+        app.handle_key(key(KeyCode::Char('k')));
+        assert_eq!(app.query_table_state.selected(), Some(3));
+    }
+
+    #[test]
+    fn queries_panel_sort_cycle() {
+        let mut app = make_app();
+        assert_eq!(app.sort_column, SortColumn::Duration);
+
+        app.handle_key(key(KeyCode::Char('s')));
+        assert_eq!(app.sort_column, SortColumn::Pid);
+
+        app.handle_key(key(KeyCode::Char('s')));
+        assert_eq!(app.sort_column, SortColumn::User);
+    }
+
+    #[test]
+    fn indexes_panel_bloat_refresh() {
+        let mut app = make_app();
+        app.bottom_panel = BottomPanel::Indexes;
+        app.handle_key(key(KeyCode::Char('b')));
+        assert!(matches!(app.pending_action, Some(AppAction::RefreshBloat)));
+        assert!(app.bloat_loading);
+    }
+
+    #[test]
+    fn indexes_panel_bloat_disabled_in_replay() {
+        let mut app = make_replay_app();
+        app.bottom_panel = BottomPanel::Indexes;
+        app.handle_key(key(KeyCode::Char('b')));
+        assert!(app.pending_action.is_none());
+        assert!(!app.bloat_loading);
+    }
+
+    #[test]
+    fn table_stats_panel_bloat_refresh() {
+        let mut app = make_app();
+        app.bottom_panel = BottomPanel::TableStats;
+        app.handle_key(key(KeyCode::Char('b')));
+        assert!(matches!(app.pending_action, Some(AppAction::RefreshBloat)));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Cancel/Kill in replay mode
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn cancel_disabled_in_replay_mode() {
+        let mut app = make_replay_app();
+        // Set up a query so there's something to cancel
+        app.snapshot = Some(make_snapshot());
+        app.query_table_state.select(Some(0));
+        app.handle_key(key(KeyCode::Char('C')));
+        // Should not enter any confirm mode
+        assert_eq!(app.view_mode, ViewMode::Normal);
+    }
+
+    #[test]
+    fn kill_disabled_in_replay_mode() {
+        let mut app = make_replay_app();
+        app.snapshot = Some(make_snapshot());
+        app.query_table_state.select(Some(0));
+        app.handle_key(key(KeyCode::Char('K')));
+        assert_eq!(app.view_mode, ViewMode::Normal);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Modal consumes all input
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn modal_blocks_global_keys() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Help;
+
+        // 'q' should not quit when in help mode, just close help
+        app.handle_key(key(KeyCode::Char('q')));
+        assert!(app.running); // Should still be running
+        assert_eq!(app.view_mode, ViewMode::Normal);
+    }
+
+    #[test]
+    fn confirm_modal_blocks_panel_switch() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::ConfirmCancel(123);
+
+        // Tab should not switch panels
+        app.handle_key(key(KeyCode::Tab));
+        assert_eq!(app.bottom_panel, BottomPanel::Queries);
+        // Instead it should abort the confirm
+        assert_eq!(app.view_mode, ViewMode::Normal);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Sort column cycling
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn sort_column_cycles() {
+        assert_eq!(SortColumn::Duration.next(), SortColumn::Pid);
+        assert_eq!(SortColumn::Pid.next(), SortColumn::User);
+        assert_eq!(SortColumn::User.next(), SortColumn::State);
+        assert_eq!(SortColumn::State.next(), SortColumn::Duration);
+    }
+
+    #[test]
+    fn index_sort_column_cycles() {
+        assert_eq!(IndexSortColumn::Scans.next(), IndexSortColumn::Size);
+        assert_eq!(IndexSortColumn::Size.next(), IndexSortColumn::Name);
+        assert_eq!(IndexSortColumn::Name.next(), IndexSortColumn::TupRead);
+        assert_eq!(IndexSortColumn::TupRead.next(), IndexSortColumn::TupFetch);
+        assert_eq!(IndexSortColumn::TupFetch.next(), IndexSortColumn::Scans);
+    }
+
+    #[test]
+    fn statement_sort_column_cycles() {
+        assert_eq!(StatementSortColumn::TotalTime.next(), StatementSortColumn::MeanTime);
+        assert_eq!(StatementSortColumn::Temp.next(), StatementSortColumn::TotalTime);
+    }
+
+    #[test]
+    fn table_stat_sort_column_cycles() {
+        assert_eq!(TableStatSortColumn::DeadTuples.next(), TableStatSortColumn::Size);
+        assert_eq!(TableStatSortColumn::DeadRatio.next(), TableStatSortColumn::DeadTuples);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Panel supports_filter
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn panel_supports_filter() {
+        assert!(BottomPanel::Queries.supports_filter());
+        assert!(BottomPanel::Indexes.supports_filter());
+        assert!(BottomPanel::Statements.supports_filter());
+        assert!(BottomPanel::TableStats.supports_filter());
+        assert!(BottomPanel::Settings.supports_filter());
+
+        assert!(!BottomPanel::Blocking.supports_filter());
+        assert!(!BottomPanel::WaitEvents.supports_filter());
+        assert!(!BottomPanel::Replication.supports_filter());
+        assert!(!BottomPanel::VacuumProgress.supports_filter());
+        assert!(!BottomPanel::Wraparound.supports_filter());
+        assert!(!BottomPanel::WalIo.supports_filter());
+    }
+}
