@@ -626,3 +626,1071 @@ async fn test_fetch_subscriptions_version_gating() {
     // We can't test this with a real connection, but we can verify the logic
     // by checking the function handles it gracefully
 }
+
+// ============================================================================
+// Core fetch_* Function Tests
+// ============================================================================
+
+/// Test fetch_snapshot - the main aggregator function
+#[tokio::test]
+async fn test_fetch_snapshot_all_versions() {
+    for instance in PG_INSTANCES {
+        if let Ok(client) = connect(instance.port).await {
+            let version = match instance.port {
+                5411 => 11,
+                5414 => 14,
+                5417 => 17,
+                _ => continue,
+            };
+
+            // First detect extensions
+            let extensions = queries::detect_extensions(&client).await;
+
+            // Fetch the full snapshot
+            let result = queries::fetch_snapshot(&client, &extensions, version).await;
+            assert!(
+                result.is_ok(),
+                "{}: fetch_snapshot should succeed: {:?}",
+                instance.name,
+                result.err()
+            );
+
+            let snapshot = result.unwrap();
+
+            // Verify snapshot has valid structure
+            assert!(
+                snapshot.timestamp.timestamp() > 0,
+                "{}: snapshot should have valid timestamp",
+                instance.name
+            );
+
+            // Buffer cache should have valid hit ratio
+            assert!(
+                snapshot.buffer_cache.hit_ratio >= 0.0 && snapshot.buffer_cache.hit_ratio <= 1.0,
+                "{}: hit_ratio should be between 0 and 1, got {}",
+                instance.name,
+                snapshot.buffer_cache.hit_ratio
+            );
+
+            // Summary counts should be non-negative
+            assert!(
+                snapshot.summary.total_backends >= 0,
+                "{}: total_backends should be non-negative",
+                instance.name
+            );
+
+            // db_size should be positive
+            assert!(
+                snapshot.db_size > 0,
+                "{}: db_size should be positive, got {}",
+                instance.name,
+                snapshot.db_size
+            );
+
+            // Checkpoint stats should exist for all versions
+            assert!(
+                snapshot.checkpoint_stats.is_some(),
+                "{}: checkpoint_stats should be Some",
+                instance.name
+            );
+
+            // WAL stats should only exist for PG14+
+            if version >= 14 {
+                assert!(
+                    snapshot.wal_stats.is_some(),
+                    "{}: wal_stats should be Some for PG14+",
+                    instance.name
+                );
+            } else {
+                assert!(
+                    snapshot.wal_stats.is_none(),
+                    "{}: wal_stats should be None for PG11",
+                    instance.name
+                );
+            }
+
+            println!(
+                "{}: fetch_snapshot succeeded - {} queries, {} backends, db_size={}",
+                instance.name,
+                snapshot.active_queries.len(),
+                snapshot.summary.total_backends,
+                snapshot.db_size
+            );
+        }
+    }
+}
+
+/// Test fetch_server_info and detect_extensions
+#[tokio::test]
+async fn test_fetch_server_info_all_versions() {
+    for instance in PG_INSTANCES {
+        if let Ok(client) = connect(instance.port).await {
+            let expected_version = match instance.port {
+                5411 => 11,
+                5414 => 14,
+                5417 => 17,
+                _ => continue,
+            };
+
+            let result = queries::fetch_server_info(&client).await;
+            assert!(
+                result.is_ok(),
+                "{}: fetch_server_info should succeed: {:?}",
+                instance.name,
+                result.err()
+            );
+
+            let info = result.unwrap();
+
+            // Version string should contain expected major version
+            assert!(
+                info.version.contains(&format!("PostgreSQL {}", expected_version))
+                    || info.version.contains(&format!(" {}", expected_version)),
+                "{}: version should contain {}, got: {}",
+                instance.name,
+                expected_version,
+                info.version
+            );
+
+            // Start time should be in the past
+            assert!(
+                info.start_time < chrono::Utc::now(),
+                "{}: start_time should be in the past",
+                instance.name
+            );
+
+            // max_connections should be positive
+            assert!(
+                info.max_connections > 0,
+                "{}: max_connections should be positive, got {}",
+                instance.name,
+                info.max_connections
+            );
+
+            // Settings should have entries
+            assert!(
+                !info.settings.is_empty(),
+                "{}: settings should not be empty",
+                instance.name
+            );
+
+            println!(
+                "{}: fetch_server_info succeeded - {} settings, max_conn={}",
+                instance.name,
+                info.settings.len(),
+                info.max_connections
+            );
+        }
+    }
+}
+
+/// Test fetch_active_queries - core monitoring function
+#[tokio::test]
+async fn test_fetch_active_queries_all_versions() {
+    for instance in PG_INSTANCES {
+        if let Ok(client) = connect(instance.port).await {
+            let result = queries::fetch_active_queries(&client).await;
+            assert!(
+                result.is_ok(),
+                "{}: fetch_active_queries should succeed: {:?}",
+                instance.name,
+                result.err()
+            );
+
+            let queries_list = result.unwrap();
+
+            // We should have at least our own connection (but it's filtered out)
+            // So empty result is valid
+            for query in &queries_list {
+                // Verify fields have expected types
+                assert!(query.pid > 0, "{}: pid should be positive", instance.name);
+                assert!(
+                    query.duration_secs >= 0.0,
+                    "{}: duration_secs should be non-negative",
+                    instance.name
+                );
+            }
+
+            println!(
+                "{}: fetch_active_queries succeeded with {} queries",
+                instance.name,
+                queries_list.len()
+            );
+        }
+    }
+}
+
+/// Test fetch_activity_summary
+#[tokio::test]
+async fn test_fetch_activity_summary_all_versions() {
+    for instance in PG_INSTANCES {
+        if let Ok(client) = connect(instance.port).await {
+            let result = queries::fetch_activity_summary(&client).await;
+            assert!(
+                result.is_ok(),
+                "{}: fetch_activity_summary should succeed: {:?}",
+                instance.name,
+                result.err()
+            );
+
+            let summary = result.unwrap();
+
+            // total_backends should include at least our connection
+            assert!(
+                summary.total_backends >= 1,
+                "{}: total_backends should be >= 1, got {}",
+                instance.name,
+                summary.total_backends
+            );
+
+            // All counts should be non-negative
+            assert!(
+                summary.active_query_count >= 0,
+                "{}: active_query_count should be non-negative",
+                instance.name
+            );
+            assert!(
+                summary.idle_in_transaction_count >= 0,
+                "{}: idle_in_transaction_count should be non-negative",
+                instance.name
+            );
+            assert!(
+                summary.lock_count >= 0,
+                "{}: lock_count should be non-negative",
+                instance.name
+            );
+
+            println!(
+                "{}: fetch_activity_summary - {} backends, {} active",
+                instance.name, summary.total_backends, summary.active_query_count
+            );
+        }
+    }
+}
+
+/// Test fetch_buffer_cache
+#[tokio::test]
+async fn test_fetch_buffer_cache_all_versions() {
+    for instance in PG_INSTANCES {
+        if let Ok(client) = connect(instance.port).await {
+            let result = queries::fetch_buffer_cache(&client).await;
+            assert!(
+                result.is_ok(),
+                "{}: fetch_buffer_cache should succeed: {:?}",
+                instance.name,
+                result.err()
+            );
+
+            let cache = result.unwrap();
+
+            // hit_ratio should be between 0 and 1
+            assert!(
+                cache.hit_ratio >= 0.0 && cache.hit_ratio <= 1.0,
+                "{}: hit_ratio should be between 0 and 1, got {}",
+                instance.name,
+                cache.hit_ratio
+            );
+
+            // Block counts should be non-negative
+            assert!(
+                cache.blks_hit >= 0,
+                "{}: blks_hit should be non-negative",
+                instance.name
+            );
+            assert!(
+                cache.blks_read >= 0,
+                "{}: blks_read should be non-negative",
+                instance.name
+            );
+
+            println!(
+                "{}: fetch_buffer_cache - hit_ratio={:.2}%, hits={}, reads={}",
+                instance.name,
+                cache.hit_ratio * 100.0,
+                cache.blks_hit,
+                cache.blks_read
+            );
+        }
+    }
+}
+
+// ============================================================================
+// Table and Index Statistics Tests
+// ============================================================================
+
+/// Helper to create a test table for table/index stats tests
+async fn create_test_table(client: &Client, table_name: &str) -> Result<(), tokio_postgres::Error> {
+    // Drop if exists
+    let _ = client
+        .execute(&format!("DROP TABLE IF EXISTS {}", table_name), &[])
+        .await;
+
+    // Create table with some data
+    client
+        .execute(
+            &format!(
+                "CREATE TABLE {} (
+                    id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    value INTEGER,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )",
+                table_name
+            ),
+            &[],
+        )
+        .await?;
+
+    // Insert some data
+    client
+        .execute(
+            &format!(
+                "INSERT INTO {} (name, value)
+                 SELECT 'item_' || i, i
+                 FROM generate_series(1, 100) AS i",
+                table_name
+            ),
+            &[],
+        )
+        .await?;
+
+    // Update some rows to create dead tuples
+    client
+        .execute(
+            &format!("UPDATE {} SET value = value + 1 WHERE id <= 10", table_name),
+            &[],
+        )
+        .await?;
+
+    // Run ANALYZE to update statistics
+    client
+        .execute(&format!("ANALYZE {}", table_name), &[])
+        .await?;
+
+    Ok(())
+}
+
+/// Helper to cleanup test table
+async fn cleanup_test_table(client: &Client, table_name: &str) {
+    let _ = client
+        .execute(&format!("DROP TABLE IF EXISTS {}", table_name), &[])
+        .await;
+}
+
+/// Test fetch_table_stats on all versions
+#[tokio::test]
+async fn test_fetch_table_stats_all_versions() {
+    for instance in PG_INSTANCES {
+        if let Ok(client) = connect(instance.port).await {
+            let table_name = format!("test_table_{}", instance.port);
+
+            // Create test table
+            if let Err(e) = create_test_table(&client, &table_name).await {
+                eprintln!("{}: failed to create test table: {}", instance.name, e);
+                continue;
+            }
+
+            // Force stats update by doing a sequential scan
+            let _ = client
+                .query(&format!("SELECT COUNT(*) FROM {}", table_name), &[])
+                .await;
+
+            let result = queries::fetch_table_stats(&client).await;
+            assert!(
+                result.is_ok(),
+                "{}: fetch_table_stats should succeed: {:?}",
+                instance.name,
+                result.err()
+            );
+
+            let tables = result.unwrap();
+
+            // Find our test table
+            let test_table = tables.iter().find(|t| t.relname == table_name);
+            assert!(
+                test_table.is_some(),
+                "{}: should find test table in results",
+                instance.name
+            );
+
+            let table = test_table.unwrap();
+
+            // Verify expected values
+            assert_eq!(table.schemaname, "public", "{}: schemaname should be public", instance.name);
+            // Note: n_live_tup may be 0 or estimated - stats aren't always immediately available
+            assert!(
+                table.n_live_tup >= 0,
+                "{}: n_live_tup should be non-negative, got {}",
+                instance.name,
+                table.n_live_tup
+            );
+            assert!(
+                table.total_size_bytes > 0,
+                "{}: total_size_bytes should be positive",
+                instance.name
+            );
+            assert!(
+                table.seq_scan >= 0,
+                "{}: seq_scan should be non-negative",
+                instance.name
+            );
+
+            // dead_ratio should be non-negative
+            assert!(
+                table.dead_ratio >= 0.0,
+                "{}: dead_ratio should be non-negative",
+                instance.name
+            );
+
+            // Cleanup
+            cleanup_test_table(&client, &table_name).await;
+
+            println!(
+                "{}: fetch_table_stats - found {} tables, test table has {} live tuples",
+                instance.name,
+                tables.len(),
+                table.n_live_tup
+            );
+        }
+    }
+}
+
+/// Test fetch_indexes on all versions
+#[tokio::test]
+async fn test_fetch_indexes_all_versions() {
+    for instance in PG_INSTANCES {
+        if let Ok(client) = connect(instance.port).await {
+            let table_name = format!("test_idx_table_{}", instance.port);
+            let index_name = format!("test_idx_{}", instance.port);
+
+            // Create test table with index
+            if let Err(e) = create_test_table(&client, &table_name).await {
+                eprintln!("{}: failed to create test table: {}", instance.name, e);
+                continue;
+            }
+
+            // Create additional index
+            let _ = client
+                .execute(
+                    &format!("CREATE INDEX {} ON {} (value)", index_name, table_name),
+                    &[],
+                )
+                .await;
+
+            // Use the index
+            let _ = client
+                .query(
+                    &format!("SELECT * FROM {} WHERE value > 50", table_name),
+                    &[],
+                )
+                .await;
+
+            let result = queries::fetch_indexes(&client).await;
+            assert!(
+                result.is_ok(),
+                "{}: fetch_indexes should succeed: {:?}",
+                instance.name,
+                result.err()
+            );
+
+            let indexes = result.unwrap();
+
+            // Find our test index
+            let test_index = indexes.iter().find(|i| i.index_name == index_name);
+            assert!(
+                test_index.is_some(),
+                "{}: should find test index in results",
+                instance.name
+            );
+
+            let index = test_index.unwrap();
+
+            // Verify expected values
+            assert_eq!(index.schemaname, "public", "{}: schemaname should be public", instance.name);
+            assert_eq!(
+                index.table_name, table_name,
+                "{}: table_name should match",
+                instance.name
+            );
+            assert!(
+                index.index_size_bytes > 0,
+                "{}: index_size_bytes should be positive",
+                instance.name
+            );
+            assert!(
+                index.index_definition.contains("CREATE INDEX"),
+                "{}: index_definition should contain CREATE INDEX",
+                instance.name
+            );
+
+            // Cleanup
+            cleanup_test_table(&client, &table_name).await;
+
+            println!(
+                "{}: fetch_indexes - found {} indexes, test index size={}",
+                instance.name,
+                indexes.len(),
+                index.index_size_bytes
+            );
+        }
+    }
+}
+
+// ============================================================================
+// Bloat Estimation Tests
+// ============================================================================
+
+/// Test fetch_table_bloat on all versions
+#[tokio::test]
+async fn test_fetch_table_bloat_all_versions() {
+    for instance in PG_INSTANCES {
+        if let Ok(client) = connect(instance.port).await {
+            let table_name = format!("test_bloat_table_{}", instance.port);
+
+            // Create test table with updates to cause some bloat
+            if let Err(e) = create_test_table(&client, &table_name).await {
+                eprintln!("{}: failed to create test table: {}", instance.name, e);
+                continue;
+            }
+
+            // Create more updates to simulate bloat
+            for _ in 0..5 {
+                let _ = client
+                    .execute(
+                        &format!("UPDATE {} SET value = value + 1", table_name),
+                        &[],
+                    )
+                    .await;
+            }
+
+            // Force a scan to update stats
+            let _ = client
+                .query(&format!("SELECT COUNT(*) FROM {}", table_name), &[])
+                .await;
+
+            let result = queries::fetch_table_bloat(&client).await;
+            assert!(
+                result.is_ok(),
+                "{}: fetch_table_bloat should succeed: {:?}",
+                instance.name,
+                result.err()
+            );
+
+            let bloat_map = result.unwrap();
+
+            // Find our test table (may not exist if stats aren't populated yet)
+            let key = format!("public.{}", table_name);
+            if let Some(bloat) = bloat_map.get(&key) {
+                // bloat_pct should be between 0 and 100
+                assert!(
+                    bloat.bloat_pct >= 0.0 && bloat.bloat_pct <= 100.0,
+                    "{}: bloat_pct should be between 0 and 100, got {}",
+                    instance.name,
+                    bloat.bloat_pct
+                );
+
+                // bloat_bytes should be non-negative
+                assert!(
+                    bloat.bloat_bytes >= 0,
+                    "{}: bloat_bytes should be non-negative",
+                    instance.name
+                );
+
+                println!(
+                    "{}: fetch_table_bloat - {} tables, test table bloat={:.1}% ({} bytes)",
+                    instance.name,
+                    bloat_map.len(),
+                    bloat.bloat_pct,
+                    bloat.bloat_bytes
+                );
+            } else {
+                // Table not found in bloat results - stats may not be populated yet
+                // This is acceptable as we're testing the query works
+                println!(
+                    "{}: fetch_table_bloat - {} tables (test table not in results, stats not ready)",
+                    instance.name,
+                    bloat_map.len()
+                );
+            }
+
+            // Cleanup
+            cleanup_test_table(&client, &table_name).await;
+        }
+    }
+}
+
+/// Test fetch_index_bloat on all versions
+#[tokio::test]
+async fn test_fetch_index_bloat_all_versions() {
+    for instance in PG_INSTANCES {
+        if let Ok(client) = connect(instance.port).await {
+            let table_name = format!("test_ibloat_table_{}", instance.port);
+            let index_name = format!("test_ibloat_idx_{}", instance.port);
+
+            // Create test table with index
+            if let Err(e) = create_test_table(&client, &table_name).await {
+                eprintln!("{}: failed to create test table: {}", instance.name, e);
+                continue;
+            }
+
+            // Create index
+            let _ = client
+                .execute(
+                    &format!("CREATE INDEX {} ON {} (value)", index_name, table_name),
+                    &[],
+                )
+                .await;
+
+            // Do updates to cause index bloat
+            for _ in 0..3 {
+                let _ = client
+                    .execute(
+                        &format!("UPDATE {} SET value = value + 1", table_name),
+                        &[],
+                    )
+                    .await;
+            }
+
+            let result = queries::fetch_index_bloat(&client).await;
+            assert!(
+                result.is_ok(),
+                "{}: fetch_index_bloat should succeed: {:?}",
+                instance.name,
+                result.err()
+            );
+
+            let bloat_map = result.unwrap();
+
+            // Find our test index
+            let key = format!("public.{}", index_name);
+            let test_bloat = bloat_map.get(&key);
+            assert!(
+                test_bloat.is_some(),
+                "{}: should find test index in bloat results",
+                instance.name
+            );
+
+            let bloat = test_bloat.unwrap();
+
+            // bloat_pct should be between 0 and 100
+            assert!(
+                bloat.bloat_pct >= 0.0 && bloat.bloat_pct <= 100.0,
+                "{}: bloat_pct should be between 0 and 100, got {}",
+                instance.name,
+                bloat.bloat_pct
+            );
+
+            // bloat_bytes should be non-negative
+            assert!(
+                bloat.bloat_bytes >= 0,
+                "{}: bloat_bytes should be non-negative",
+                instance.name
+            );
+
+            // Cleanup
+            cleanup_test_table(&client, &table_name).await;
+
+            println!(
+                "{}: fetch_index_bloat - {} indexes, test index bloat={:.1}% ({} bytes)",
+                instance.name,
+                bloat_map.len(),
+                bloat.bloat_pct,
+                bloat.bloat_bytes
+            );
+        }
+    }
+}
+
+// ============================================================================
+// Additional Query Tests
+// ============================================================================
+
+/// Test fetch_wait_events on all versions
+#[tokio::test]
+async fn test_fetch_wait_events_all_versions() {
+    for instance in PG_INSTANCES {
+        if let Ok(client) = connect(instance.port).await {
+            let result = queries::fetch_wait_events(&client).await;
+            assert!(
+                result.is_ok(),
+                "{}: fetch_wait_events should succeed: {:?}",
+                instance.name,
+                result.err()
+            );
+
+            let events = result.unwrap();
+
+            // Each event should have positive count
+            for event in &events {
+                assert!(
+                    event.count > 0,
+                    "{}: wait event count should be positive",
+                    instance.name
+                );
+                assert!(
+                    !event.wait_event_type.is_empty(),
+                    "{}: wait_event_type should not be empty",
+                    instance.name
+                );
+            }
+
+            println!(
+                "{}: fetch_wait_events - {} event types",
+                instance.name,
+                events.len()
+            );
+        }
+    }
+}
+
+/// Test fetch_blocking_info on all versions (usually empty)
+#[tokio::test]
+async fn test_fetch_blocking_info_all_versions() {
+    for instance in PG_INSTANCES {
+        if let Ok(client) = connect(instance.port).await {
+            let result = queries::fetch_blocking_info(&client).await;
+            assert!(
+                result.is_ok(),
+                "{}: fetch_blocking_info should succeed: {:?}",
+                instance.name,
+                result.err()
+            );
+
+            // Result is usually empty unless there are actual locks
+            let blocking = result.unwrap();
+            println!(
+                "{}: fetch_blocking_info - {} blocked queries",
+                instance.name,
+                blocking.len()
+            );
+        }
+    }
+}
+
+/// Test fetch_wraparound on all versions
+#[tokio::test]
+async fn test_fetch_wraparound_all_versions() {
+    for instance in PG_INSTANCES {
+        if let Ok(client) = connect(instance.port).await {
+            let result = queries::fetch_wraparound(&client).await;
+            assert!(
+                result.is_ok(),
+                "{}: fetch_wraparound should succeed: {:?}",
+                instance.name,
+                result.err()
+            );
+
+            let wraparound = result.unwrap();
+
+            // Should have at least one database
+            assert!(
+                !wraparound.is_empty(),
+                "{}: should have at least one database",
+                instance.name
+            );
+
+            for db in &wraparound {
+                // XID age should be positive
+                assert!(
+                    db.xid_age > 0,
+                    "{}: xid_age should be positive",
+                    instance.name
+                );
+                // pct_towards_wraparound should be between 0 and 100
+                assert!(
+                    db.pct_towards_wraparound >= 0.0 && db.pct_towards_wraparound <= 100.0,
+                    "{}: pct_towards_wraparound should be between 0 and 100",
+                    instance.name
+                );
+            }
+
+            println!(
+                "{}: fetch_wraparound - {} databases",
+                instance.name,
+                wraparound.len()
+            );
+        }
+    }
+}
+
+/// Test fetch_replication on all versions (usually empty)
+#[tokio::test]
+async fn test_fetch_replication_all_versions() {
+    for instance in PG_INSTANCES {
+        if let Ok(client) = connect(instance.port).await {
+            let version = match instance.port {
+                5411 => 11,
+                5414 => 14,
+                5417 => 17,
+                _ => continue,
+            };
+
+            let result = queries::fetch_replication(&client, version).await;
+            assert!(
+                result.is_ok(),
+                "{}: fetch_replication should succeed: {:?}",
+                instance.name,
+                result.err()
+            );
+
+            // Result is usually empty unless there are actual replicas
+            let replication = result.unwrap();
+            println!(
+                "{}: fetch_replication - {} replicas",
+                instance.name,
+                replication.len()
+            );
+        }
+    }
+}
+
+/// Test fetch_vacuum_progress on all versions (usually empty)
+#[tokio::test]
+async fn test_fetch_vacuum_progress_all_versions() {
+    for instance in PG_INSTANCES {
+        if let Ok(client) = connect(instance.port).await {
+            let version = match instance.port {
+                5411 => 11,
+                5414 => 14,
+                5417 => 17,
+                _ => continue,
+            };
+
+            let result = queries::fetch_vacuum_progress(&client, version).await;
+            assert!(
+                result.is_ok(),
+                "{}: fetch_vacuum_progress should succeed: {:?}",
+                instance.name,
+                result.err()
+            );
+
+            // Result is usually empty unless vacuum is running
+            let progress = result.unwrap();
+            println!(
+                "{}: fetch_vacuum_progress - {} active vacuums",
+                instance.name,
+                progress.len()
+            );
+        }
+    }
+}
+
+/// Test fetch_archiver_stats on all versions
+#[tokio::test]
+async fn test_fetch_archiver_stats_all_versions() {
+    for instance in PG_INSTANCES {
+        if let Ok(client) = connect(instance.port).await {
+            let result = queries::fetch_archiver_stats(&client).await;
+            assert!(
+                result.is_ok(),
+                "{}: fetch_archiver_stats should succeed: {:?}",
+                instance.name,
+                result.err()
+            );
+
+            let stats = result.unwrap();
+
+            // Counts should be non-negative
+            assert!(
+                stats.archived_count >= 0,
+                "{}: archived_count should be non-negative",
+                instance.name
+            );
+            assert!(
+                stats.failed_count >= 0,
+                "{}: failed_count should be non-negative",
+                instance.name
+            );
+
+            println!(
+                "{}: fetch_archiver_stats - archived={}, failed={}",
+                instance.name, stats.archived_count, stats.failed_count
+            );
+        }
+    }
+}
+
+/// Test fetch_bgwriter_stats on all versions
+#[tokio::test]
+async fn test_fetch_bgwriter_stats_all_versions() {
+    for instance in PG_INSTANCES {
+        if let Ok(client) = connect(instance.port).await {
+            let result = queries::fetch_bgwriter_stats(&client).await;
+            assert!(
+                result.is_ok(),
+                "{}: fetch_bgwriter_stats should succeed: {:?}",
+                instance.name,
+                result.err()
+            );
+
+            let stats = result.unwrap();
+
+            // Counts should be non-negative
+            assert!(
+                stats.buffers_clean >= 0,
+                "{}: buffers_clean should be non-negative",
+                instance.name
+            );
+            assert!(
+                stats.buffers_alloc >= 0,
+                "{}: buffers_alloc should be non-negative",
+                instance.name
+            );
+
+            println!(
+                "{}: fetch_bgwriter_stats - clean={}, alloc={}",
+                instance.name, stats.buffers_clean, stats.buffers_alloc
+            );
+        }
+    }
+}
+
+/// Test fetch_database_stats on all versions
+#[tokio::test]
+async fn test_fetch_database_stats_all_versions() {
+    for instance in PG_INSTANCES {
+        if let Ok(client) = connect(instance.port).await {
+            let result = queries::fetch_database_stats(&client).await;
+            assert!(
+                result.is_ok(),
+                "{}: fetch_database_stats should succeed: {:?}",
+                instance.name,
+                result.err()
+            );
+
+            let stats = result.unwrap();
+
+            // Transaction counts should be non-negative
+            assert!(
+                stats.xact_commit >= 0,
+                "{}: xact_commit should be non-negative",
+                instance.name
+            );
+            assert!(
+                stats.xact_rollback >= 0,
+                "{}: xact_rollback should be non-negative",
+                instance.name
+            );
+            assert!(
+                stats.blks_read >= 0,
+                "{}: blks_read should be non-negative",
+                instance.name
+            );
+
+            println!(
+                "{}: fetch_database_stats - commits={}, rollbacks={}, reads={}",
+                instance.name, stats.xact_commit, stats.xact_rollback, stats.blks_read
+            );
+        }
+    }
+}
+
+/// Test fetch_db_size on all versions
+#[tokio::test]
+async fn test_fetch_db_size_all_versions() {
+    for instance in PG_INSTANCES {
+        if let Ok(client) = connect(instance.port).await {
+            let result = queries::fetch_db_size(&client).await;
+            assert!(
+                result.is_ok(),
+                "{}: fetch_db_size should succeed: {:?}",
+                instance.name,
+                result.err()
+            );
+
+            let size = result.unwrap();
+
+            // Database size should be positive
+            assert!(
+                size > 0,
+                "{}: db_size should be positive, got {}",
+                instance.name,
+                size
+            );
+
+            println!("{}: fetch_db_size - {} bytes", instance.name, size);
+        }
+    }
+}
+
+/// Test fetch_pg_settings on all versions
+#[tokio::test]
+async fn test_fetch_pg_settings_all_versions() {
+    for instance in PG_INSTANCES {
+        if let Ok(client) = connect(instance.port).await {
+            let result = queries::fetch_pg_settings(&client).await;
+            assert!(
+                result.is_ok(),
+                "{}: fetch_pg_settings should succeed: {:?}",
+                instance.name,
+                result.err()
+            );
+
+            let settings = result.unwrap();
+
+            // Should have many settings
+            assert!(
+                settings.len() > 100,
+                "{}: should have more than 100 settings, got {}",
+                instance.name,
+                settings.len()
+            );
+
+            // Verify structure of a setting
+            let max_conn = settings.iter().find(|s| s.name == "max_connections");
+            assert!(
+                max_conn.is_some(),
+                "{}: should find max_connections setting",
+                instance.name
+            );
+
+            let setting = max_conn.unwrap();
+            assert!(
+                !setting.setting.is_empty(),
+                "{}: setting value should not be empty",
+                instance.name
+            );
+            assert!(
+                !setting.category.is_empty(),
+                "{}: category should not be empty",
+                instance.name
+            );
+
+            println!(
+                "{}: fetch_pg_settings - {} settings",
+                instance.name,
+                settings.len()
+            );
+        }
+    }
+}
+
+/// Test detect_extensions on all versions
+#[tokio::test]
+async fn test_detect_extensions_all_versions() {
+    for instance in PG_INSTANCES {
+        if let Ok(client) = connect(instance.port).await {
+            let _ = ensure_pg_stat_statements(&client).await;
+
+            let extensions = queries::detect_extensions(&client).await;
+
+            // pg_stat_statements should be detected if installed
+            // (we tried to install it above)
+            println!(
+                "{}: detect_extensions - pg_stat_statements={}, version={:?}",
+                instance.name,
+                extensions.pg_stat_statements,
+                extensions.pg_stat_statements_version
+            );
+
+            // If pg_stat_statements is detected, version should be set
+            if extensions.pg_stat_statements {
+                assert!(
+                    extensions.pg_stat_statements_version.is_some(),
+                    "{}: pg_stat_statements_version should be Some when extension is detected",
+                    instance.name
+                );
+            }
+        }
+    }
+}

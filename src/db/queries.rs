@@ -105,7 +105,8 @@ SELECT schemaname, relname,
 FROM pg_stat_user_tables ORDER BY n_dead_tup DESC LIMIT 30
 ";
 
-const REPLICATION_SQL: &str = "
+/// Replication query for PG12+: includes reply_time
+const REPLICATION_SQL_V12: &str = "
 SELECT pid,
     usesysid::bigint AS usesysid,
     usename,
@@ -126,6 +127,30 @@ SELECT pid,
     sync_priority,
     sync_state::text AS sync_state,
     reply_time
+FROM pg_stat_replication ORDER BY replay_lag DESC NULLS LAST
+";
+
+/// Replication query for PG10-11: no reply_time column
+const REPLICATION_SQL_V10: &str = "
+SELECT pid,
+    usesysid::bigint AS usesysid,
+    usename,
+    application_name,
+    host(client_addr) AS client_addr,
+    client_hostname,
+    client_port,
+    backend_start,
+    backend_xmin::text AS backend_xmin,
+    state::text AS state,
+    sent_lsn::text AS sent_lsn,
+    write_lsn::text AS write_lsn,
+    flush_lsn::text AS flush_lsn,
+    replay_lsn::text AS replay_lsn,
+    EXTRACT(EPOCH FROM write_lag)::float8 AS write_lag_secs,
+    EXTRACT(EPOCH FROM flush_lag)::float8 AS flush_lag_secs,
+    EXTRACT(EPOCH FROM replay_lag)::float8 AS replay_lag_secs,
+    sync_priority,
+    sync_state::text AS sync_state
 FROM pg_stat_replication ORDER BY replay_lag DESC NULLS LAST
 ";
 
@@ -211,13 +236,13 @@ SELECT
     s.schemaname,
     s.relname AS table_name,
     s.indexrelname AS index_name,
-    pg_relation_size(s.indexrelid)::bigint AS index_size_bytes,
+    COALESCE(pg_relation_size(s.indexrelid), 0)::bigint AS index_size_bytes,
     COALESCE(s.idx_scan, 0)::bigint AS idx_scan,
     COALESCE(s.idx_tup_read, 0)::bigint AS idx_tup_read,
     COALESCE(s.idx_tup_fetch, 0)::bigint AS idx_tup_fetch,
     pg_get_indexdef(s.indexrelid) AS index_definition
 FROM pg_stat_user_indexes s
-ORDER BY pg_relation_size(s.indexrelid) DESC
+ORDER BY pg_relation_size(s.indexrelid) DESC NULLS LAST
 ";
 
 /// pg_stat_statements query for PG11-12: uses total_time, blk_read_time
@@ -748,8 +773,13 @@ pub async fn fetch_table_stats(client: &Client) -> Result<Vec<TableStat>> {
     Ok(results)
 }
 
-pub async fn fetch_replication(client: &Client) -> Result<Vec<ReplicationInfo>> {
-    let rows = client.query(REPLICATION_SQL, &[]).await?;
+pub async fn fetch_replication(client: &Client, version: u32) -> Result<Vec<ReplicationInfo>> {
+    let sql = if version >= 12 {
+        REPLICATION_SQL_V12
+    } else {
+        REPLICATION_SQL_V10
+    };
+    let rows = client.query(sql, &[]).await?;
     let mut results = Vec::with_capacity(rows.len());
     for row in rows {
         results.push(ReplicationInfo {
@@ -772,7 +802,7 @@ pub async fn fetch_replication(client: &Client) -> Result<Vec<ReplicationInfo>> 
             replay_lag_secs: row.get(16),
             sync_priority: row.get(17),
             sync_state: row.get(18),
-            reply_time: row.get(19),
+            reply_time: if version >= 12 { row.get(19) } else { None },
         });
     }
     Ok(results)
@@ -1121,7 +1151,7 @@ pub async fn fetch_snapshot(
             fetch_buffer_cache(client),
             fetch_activity_summary(client),
             fetch_table_stats(client),
-            fetch_replication(client),
+            fetch_replication(client, version),
             fetch_replication_slots(client, version),
             fetch_subscriptions(client, version),
             fetch_vacuum_progress(client, version),
