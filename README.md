@@ -15,7 +15,7 @@
 
 > **Note:** This project is under active development. You may encounter bugs or unexpected behavior. If you find any issues, please [open an issue](https://github.com/dlt/pg_glimpse/issues).
 
-A blazing-fast TUI for PostgreSQL. Monitor active queries, connections, locks, cache performance, replication lag, vacuum progress, and more — all from your terminal.
+A blazing-fast TUI for PostgreSQL. Monitor active queries, connections, locks, cache performance, replication lag, vacuum progress, and more — all from your terminal. Built with Rust and [ratatui](https://ratatui.rs).
 
 ![pg_glimpse demo](demo-final.gif)
 
