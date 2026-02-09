@@ -11,6 +11,19 @@ cargo run -- -H localhost -d postgres   # Run with connection params
 cargo run -- --ssl-insecure -H rds-host -d mydb -U user -W pass  # RDS/cloud with SSL
 ```
 
+## Testing
+
+```bash
+cargo test                # Unit tests only
+
+# Integration tests (requires Docker)
+docker compose -f tests/docker-compose.yml up -d
+cargo test --features integration --test integration
+docker compose -f tests/docker-compose.yml down -v
+```
+
+Integration tests run against PG11, PG14, and PG17 to verify version-aware query logic.
+
 ## Architecture
 
 Rust TUI application using ratatui + crossterm + tokio + tokio-postgres.
