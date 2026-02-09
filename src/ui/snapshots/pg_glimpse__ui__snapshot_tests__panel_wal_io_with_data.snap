@@ -7,7 +7,7 @@ expression: buffer_to_string(&terminal)
 │                                                                                                  │
 │Rate:         1.5 MB/s           Total:        105               Archived:     500                │
 │Records:      1.0M               Timed:        100 (95%)         Failed:       2                  │
-│Total Size:   512.0 MB           Forced:       5 (5%)            Last Archive: XXh XXm ago      │
+│Total Size:   512.0 MB           Forced:       5 (5%)            Last Archive: XXh XXm ago     │
 │Buffers Full: 100                Write Time:   50.00 s           Last WAL:     00000000000F       │
 │Write Time:   2.50 s             Sync Time:    1.00 s            Last Failed:  00000000000E       │
 │Sync Time:    500.0 ms                                                                            │
