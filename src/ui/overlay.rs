@@ -1516,6 +1516,7 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
         entry(",", "Configuration"),
         Line::from(""),
         section_header("Panels"),
+        entry("Q", "Queries (active)"),
         entry("Tab", "Blocking chains"),
         entry("w", "Wait events"),
         entry("t", "Table stats"),

@@ -1776,6 +1776,10 @@ impl App {
 
         // Layer 3: Panel-switch keys
         match key.code {
+            KeyCode::Char('Q') => {
+                self.switch_panel(BottomPanel::Queries);
+                return;
+            }
             KeyCode::Tab => {
                 self.switch_panel(BottomPanel::Blocking);
                 return;
