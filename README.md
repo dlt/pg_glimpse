@@ -187,6 +187,24 @@ Automatically detects and uses:
 - **pg_stat_kcache** — OS-level cache stats
 - **pg_wait_sampling** — wait event profiling
 
+## Troubleshooting
+
+**Password with special characters**
+
+If your password contains special characters (`!`, `$`, `"`, etc.), the shell may interpret them before pg_glimpse receives them. Use the `PGPASSWORD` environment variable with single quotes:
+
+```bash
+PGPASSWORD='my!pass$word' pg_glimpse -H myhost -d mydb -U myuser
+```
+
+**SSL connection to RDS/Aurora**
+
+Cloud-hosted PostgreSQL typically requires SSL but uses certificates not in your system trust store. Use `--ssl-insecure`:
+
+```bash
+pg_glimpse --ssl-insecure -H myinstance.rds.amazonaws.com -d mydb -U myuser
+```
+
 ## FAQ
 
 **Did you build it or did Claude?**
