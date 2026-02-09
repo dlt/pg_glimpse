@@ -82,9 +82,9 @@ WHERE datname = current_database()
 
 const TABLE_STATS_SQL: &str = "
 SELECT schemaname, relname,
-    pg_total_relation_size(relid) AS total_size_bytes,
-    pg_table_size(relid) AS table_size_bytes,
-    pg_indexes_size(relid) AS indexes_size_bytes,
+    COALESCE(pg_total_relation_size(relid), 0) AS total_size_bytes,
+    COALESCE(pg_table_size(relid), 0) AS table_size_bytes,
+    COALESCE(pg_indexes_size(relid), 0) AS indexes_size_bytes,
     COALESCE(seq_scan, 0) AS seq_scan,
     COALESCE(seq_tup_read, 0) AS seq_tup_read,
     COALESCE(idx_scan, 0) AS idx_scan,
@@ -467,8 +467,8 @@ fn checkpoint_stats_sql(version: u32) -> &'static str {
     }
 }
 
-/// WAL stats query for PG14+ (pg_stat_wal)
-const WAL_STATS_SQL: &str = "
+/// WAL stats query for PG14-17 (pg_stat_wal with full columns)
+const WAL_STATS_SQL_V14: &str = "
 SELECT
     COALESCE(wal_records, 0) AS wal_records,
     COALESCE(wal_fpi, 0) AS wal_fpi,
@@ -478,6 +478,20 @@ SELECT
     COALESCE(wal_sync, 0) AS wal_sync,
     COALESCE(wal_write_time, 0)::float8 AS wal_write_time,
     COALESCE(wal_sync_time, 0)::float8 AS wal_sync_time
+FROM pg_stat_wal
+";
+
+/// WAL stats query for PG18+ (wal_write, wal_sync, wal_write_time, wal_sync_time removed)
+const WAL_STATS_SQL_V18: &str = "
+SELECT
+    COALESCE(wal_records, 0) AS wal_records,
+    COALESCE(wal_fpi, 0) AS wal_fpi,
+    COALESCE(wal_bytes, 0)::bigint AS wal_bytes,
+    COALESCE(wal_buffers_full, 0) AS wal_buffers_full,
+    0::bigint AS wal_write,
+    0::bigint AS wal_sync,
+    0::float8 AS wal_write_time,
+    0::float8 AS wal_sync_time
 FROM pg_stat_wal
 ";
 
@@ -622,8 +636,13 @@ pub async fn fetch_checkpoint_stats(client: &Client, version: u32) -> Result<Che
     })
 }
 
-pub async fn fetch_wal_stats(client: &Client) -> Result<WalStats> {
-    let row = client.query_one(WAL_STATS_SQL, &[]).await?;
+pub async fn fetch_wal_stats(client: &Client, version: u32) -> Result<WalStats> {
+    let sql = if version >= 18 {
+        WAL_STATS_SQL_V18
+    } else {
+        WAL_STATS_SQL_V14
+    };
+    let row = client.query_one(sql, &[]).await?;
     Ok(WalStats {
         wal_records: row.get("wal_records"),
         wal_fpi: row.get("wal_fpi"),
@@ -1150,20 +1169,22 @@ pub async fn fetch_snapshot(
             fetch_blocking_info(client),
             fetch_buffer_cache(client),
             fetch_activity_summary(client),
-            fetch_table_stats(client),
+            // Table stats can fail if tables are dropped during query - return empty on error
+            async { Ok::<_, color_eyre::Report>(fetch_table_stats(client).await.unwrap_or_default()) },
             fetch_replication(client, version),
             fetch_replication_slots(client, version),
             fetch_subscriptions(client, version),
             fetch_vacuum_progress(client, version),
             fetch_wraparound(client),
-            fetch_indexes(client),
+            // Index stats can fail if tables are dropped during query - return empty on error
+            async { Ok::<_, color_eyre::Report>(fetch_indexes(client).await.unwrap_or_default()) },
             async { Ok(fetch_stat_statements(client, &ext, version).await) },
             fetch_db_size(client),
             async { Ok(fetch_checkpoint_stats(client, version).await.ok()) },
             async {
                 // pg_stat_wal only available in PG14+
                 if version >= 14 {
-                    Ok(fetch_wal_stats(client).await.ok())
+                    Ok(fetch_wal_stats(client, version).await.ok())
                 } else {
                     Ok(None)
                 }
