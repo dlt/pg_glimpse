@@ -38,6 +38,7 @@ integration = []
 tempfile = "3"
 filetime = "0.2"
 insta = "1.42"
+proptest = "1.5"
 
 [profile.release]
 lto = true

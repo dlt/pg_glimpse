@@ -401,14 +401,14 @@ fn buffer_to_string(terminal: &Terminal<TestBackend>) -> String {
     redact_timestamps(&result)
 }
 
-/// Replace HH:MM:SS timestamps with XX:XX:XX for reproducible snapshots
+/// Replace timestamps and relative times with placeholders for reproducible snapshots
 fn redact_timestamps(s: &str) -> String {
     let mut result = String::with_capacity(s.len());
     let chars: Vec<char> = s.chars().collect();
     let mut i = 0;
 
     while i < chars.len() {
-        // Look for pattern: DD:DD:DD where D is digit
+        // Look for pattern: DD:DD:DD where D is digit (clock time)
         if i + 7 < chars.len()
             && chars[i].is_ascii_digit()
             && chars[i + 1].is_ascii_digit()
@@ -421,12 +421,68 @@ fn redact_timestamps(s: &str) -> String {
         {
             result.push_str("XX:XX:XX");
             i += 8;
+        }
+        // Look for relative time patterns like "18152h 24m ago" or "5m ago"
+        else if is_relative_time_start(&chars, i) {
+            // Find the end of the relative time expression (ends with " ago")
+            if let Some((replacement, skip)) = extract_relative_time(&chars, i) {
+                result.push_str(&replacement);
+                i += skip;
+            } else {
+                result.push(chars[i]);
+                i += 1;
+            }
         } else {
             result.push(chars[i]);
             i += 1;
         }
     }
     result
+}
+
+/// Check if position i starts a relative time pattern (digits followed by h/m/s)
+fn is_relative_time_start(chars: &[char], i: usize) -> bool {
+    if i >= chars.len() || !chars[i].is_ascii_digit() {
+        return false;
+    }
+    // Look ahead for digits followed by time unit
+    let mut j = i;
+    while j < chars.len() && chars[j].is_ascii_digit() {
+        j += 1;
+    }
+    if j < chars.len() && (chars[j] == 'h' || chars[j] == 'm' || chars[j] == 's' || chars[j] == 'd') {
+        // Check if this eventually has " ago"
+        let remaining: String = chars[j..].iter().take(30).collect();
+        return remaining.contains(" ago");
+    }
+    false
+}
+
+/// Extract a relative time expression and return (placeholder, chars_to_skip)
+fn extract_relative_time(chars: &[char], start: usize) -> Option<(String, usize)> {
+    // Find " ago" in the next 30 characters
+    let mut end = start;
+    let mut found_ago = false;
+
+    while end < chars.len() && end - start < 30 {
+        if end + 3 < chars.len()
+            && chars[end] == ' '
+            && chars[end + 1] == 'a'
+            && chars[end + 2] == 'g'
+            && chars[end + 3] == 'o'
+        {
+            found_ago = true;
+            end += 4; // Include " ago"
+            break;
+        }
+        end += 1;
+    }
+
+    if found_ago {
+        Some(("XXh XXm ago".to_string(), end - start))
+    } else {
+        None
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

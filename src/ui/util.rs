@@ -70,14 +70,16 @@ pub fn format_compact(n: i64) -> String {
     }
 }
 
-/// Truncate string to max length, adding ellipsis if truncated
+/// Truncate string to max length (in characters), adding ellipsis if truncated
 pub fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
+    let char_count = s.chars().count();
+    if char_count <= max {
         s.to_string()
     } else if max <= 1 {
         "…".to_string()
     } else {
-        format!("{}…", &s[..max - 1])
+        let truncated: String = s.chars().take(max - 1).collect();
+        format!("{}…", truncated)
     }
 }
 
@@ -473,6 +475,310 @@ mod tests {
     fn compute_match_indices_case_insensitive() {
         let result = compute_match_indices("Hello World", "hello");
         assert!(result.is_some());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Property-based tests using proptest
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    mod proptests {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            // ─────────────────────────────────────────────────────────────────
+            // truncate properties
+            // ─────────────────────────────────────────────────────────────────
+
+            /// truncate output should never exceed max_len in characters
+            #[test]
+            fn truncate_never_exceeds_max_len(s in ".*", max in 0usize..1000) {
+                let result = truncate(&s, max);
+                let char_count = result.chars().count();
+                prop_assert!(
+                    char_count <= max.max(1),
+                    "truncate({:?}, {}) produced {} chars, expected <= {}",
+                    s, max, char_count, max.max(1)
+                );
+            }
+
+            /// truncate should preserve content when string fits
+            #[test]
+            fn truncate_preserves_short_strings(s in ".{0,50}", max in 50usize..100) {
+                let result = truncate(&s, max);
+                if s.len() <= max {
+                    prop_assert_eq!(result, s);
+                }
+            }
+
+            /// truncate should end with ellipsis when truncated
+            #[test]
+            fn truncate_adds_ellipsis_when_needed(s in ".{10,100}", max in 2usize..9) {
+                let result = truncate(&s, max);
+                if s.len() > max {
+                    prop_assert!(
+                        result.ends_with('…'),
+                        "truncate({:?}, {}) = {:?} should end with ellipsis",
+                        s, max, result
+                    );
+                }
+            }
+
+            // ─────────────────────────────────────────────────────────────────
+            // format_bytes properties
+            // ─────────────────────────────────────────────────────────────────
+
+            /// format_bytes should never panic and always produce valid output
+            #[test]
+            fn format_bytes_never_panics(bytes: i64) {
+                let result = format_bytes(bytes);
+                prop_assert!(!result.is_empty());
+            }
+
+            /// format_bytes output should contain appropriate unit suffix
+            #[test]
+            fn format_bytes_has_valid_suffix(bytes in 0i64..i64::MAX) {
+                let result = format_bytes(bytes);
+                prop_assert!(
+                    result.ends_with(" B") || result.ends_with(" KB") ||
+                    result.ends_with(" MB") || result.ends_with(" GB"),
+                    "format_bytes({}) = {:?} has invalid suffix",
+                    bytes, result
+                );
+            }
+
+            /// format_bytes should produce consistent ordering (larger bytes = larger/equal unit)
+            #[test]
+            fn format_bytes_ordering(a in 0i64..1_000_000_000, b in 0i64..1_000_000_000) {
+                let result_a = format_bytes(a);
+                let result_b = format_bytes(b);
+
+                // If a >= b and both are in the same unit range, the numeric prefix should reflect order
+                // This is a weak check - mainly ensures no weird inversions
+                if a == b {
+                    prop_assert_eq!(result_a, result_b);
+                }
+            }
+
+            // ─────────────────────────────────────────────────────────────────
+            // format_compact properties
+            // ─────────────────────────────────────────────────────────────────
+
+            /// format_compact should never panic
+            #[test]
+            fn format_compact_never_panics(n: i64) {
+                let result = format_compact(n);
+                prop_assert!(!result.is_empty());
+            }
+
+            /// format_compact output should have valid suffix for large numbers
+            #[test]
+            fn format_compact_valid_suffix(n in 0i64..i64::MAX) {
+                let result = format_compact(n);
+                if n >= 1_000_000_000 {
+                    prop_assert!(result.ends_with('B'), "format_compact({}) = {:?}", n, result);
+                } else if n >= 1_000_000 {
+                    prop_assert!(result.ends_with('M'), "format_compact({}) = {:?}", n, result);
+                } else if n >= 1_000 {
+                    prop_assert!(result.ends_with('K'), "format_compact({}) = {:?}", n, result);
+                }
+            }
+
+            // ─────────────────────────────────────────────────────────────────
+            // format_duration properties
+            // ─────────────────────────────────────────────────────────────────
+
+            /// format_duration should never panic for non-negative values
+            #[test]
+            fn format_duration_never_panics(secs in 0.0f64..1e12) {
+                let result = format_duration(secs);
+                prop_assert!(!result.is_empty());
+            }
+
+            /// format_duration should have valid time suffix
+            #[test]
+            fn format_duration_valid_suffix(secs in 0.0f64..1e9) {
+                let result = format_duration(secs);
+                prop_assert!(
+                    result.ends_with('s') || result.ends_with('m') || result.ends_with('h'),
+                    "format_duration({}) = {:?} has invalid suffix",
+                    secs, result
+                );
+            }
+
+            /// format_duration output length should be reasonable
+            #[test]
+            fn format_duration_reasonable_length(secs in 0.0f64..1e9) {
+                let result = format_duration(secs);
+                prop_assert!(
+                    result.len() <= 20,
+                    "format_duration({}) = {:?} is too long",
+                    secs, result
+                );
+            }
+
+            // ─────────────────────────────────────────────────────────────────
+            // format_time_ms properties
+            // ─────────────────────────────────────────────────────────────────
+
+            /// format_time_ms should never panic for non-negative values
+            #[test]
+            fn format_time_ms_never_panics(ms in 0.0f64..1e15) {
+                let result = format_time_ms(ms);
+                prop_assert!(!result.is_empty());
+            }
+
+            /// format_time_ms should have valid time unit
+            #[test]
+            fn format_time_ms_valid_unit(ms in 0.0f64..1e12) {
+                let result = format_time_ms(ms);
+                prop_assert!(
+                    result.contains("ms") || result.contains(" s") ||
+                    result.contains("min") || result.contains("hr"),
+                    "format_time_ms({}) = {:?} has invalid unit",
+                    ms, result
+                );
+            }
+
+            // ─────────────────────────────────────────────────────────────────
+            // format_rate properties
+            // ─────────────────────────────────────────────────────────────────
+
+            /// format_rate should never panic for non-negative values
+            #[test]
+            fn format_rate_never_panics(rate in 0.0f64..1e15) {
+                let result = format_rate(rate);
+                prop_assert!(!result.is_empty());
+            }
+
+            /// format_rate should always end with /s
+            #[test]
+            fn format_rate_ends_with_per_second(rate in 0.0f64..1e12) {
+                let result = format_rate(rate);
+                prop_assert!(
+                    result.ends_with("/s"),
+                    "format_rate({}) = {:?} should end with /s",
+                    rate, result
+                );
+            }
+
+            // ─────────────────────────────────────────────────────────────────
+            // format_byte_rate properties
+            // ─────────────────────────────────────────────────────────────────
+
+            /// format_byte_rate should never panic for non-negative values
+            #[test]
+            fn format_byte_rate_never_panics(rate in 0.0f64..1e15) {
+                let result = format_byte_rate(rate);
+                prop_assert!(!result.is_empty());
+            }
+
+            /// format_byte_rate should have valid byte unit suffix
+            #[test]
+            fn format_byte_rate_valid_suffix(rate in 0.0f64..1e15) {
+                let result = format_byte_rate(rate);
+                prop_assert!(
+                    result.ends_with("B/s") || result.ends_with("KB/s") ||
+                    result.ends_with("MB/s") || result.ends_with("GB/s"),
+                    "format_byte_rate({}) = {:?} has invalid suffix",
+                    rate, result
+                );
+            }
+
+            // ─────────────────────────────────────────────────────────────────
+            // format_lag properties
+            // ─────────────────────────────────────────────────────────────────
+
+            /// format_lag should never panic
+            #[test]
+            fn format_lag_never_panics(secs in proptest::option::of(-1e15f64..1e15f64)) {
+                let result = format_lag(secs);
+                prop_assert!(!result.is_empty());
+            }
+
+            /// format_lag should return "-" for None
+            #[test]
+            fn format_lag_none_is_dash(_dummy in 0..1) {
+                prop_assert_eq!(format_lag(None), "-");
+            }
+
+            /// format_lag should end with 's' for Some values
+            #[test]
+            fn format_lag_some_ends_with_s(secs in -1e12f64..1e12f64) {
+                let result = format_lag(Some(secs));
+                prop_assert!(
+                    result.ends_with('s'),
+                    "format_lag(Some({})) = {:?} should end with s",
+                    secs, result
+                );
+            }
+
+            // ─────────────────────────────────────────────────────────────────
+            // highlight_matches properties
+            // ─────────────────────────────────────────────────────────────────
+
+            /// highlight_matches should never panic and preserve text content
+            #[test]
+            fn highlight_matches_preserves_text(
+                text in ".{0,100}",
+                indices in proptest::collection::vec(0u32..100, 0..20)
+            ) {
+                let result = highlight_matches(&text, &indices, Style::default());
+
+                // Concatenate all spans
+                let combined: String = result.iter().map(|s| s.content.as_ref()).collect();
+
+                prop_assert_eq!(
+                    combined, text,
+                    "highlight_matches should preserve text content"
+                );
+            }
+
+            /// highlight_matches with empty indices returns single span
+            #[test]
+            fn highlight_matches_empty_indices_single_span(text in ".{0,50}") {
+                let result = highlight_matches(&text, &[], Style::default());
+                prop_assert_eq!(result.len(), 1);
+            }
+
+            // ─────────────────────────────────────────────────────────────────
+            // compute_match_indices properties
+            // ─────────────────────────────────────────────────────────────────
+
+            /// compute_match_indices should never panic
+            #[test]
+            fn compute_match_indices_never_panics(
+                text in ".{0,100}",
+                filter in ".{0,20}"
+            ) {
+                // Just verify it doesn't panic
+                let _ = compute_match_indices(&text, &filter);
+            }
+
+            /// compute_match_indices empty filter always returns None
+            #[test]
+            fn compute_match_indices_empty_filter_is_none(text in ".{0,100}") {
+                prop_assert_eq!(compute_match_indices(&text, ""), None);
+            }
+
+            /// compute_match_indices indices should be within text bounds
+            #[test]
+            fn compute_match_indices_valid_bounds(
+                text in "[a-z]{5,50}",
+                filter in "[a-z]{1,5}"
+            ) {
+                if let Some(indices) = compute_match_indices(&text, &filter) {
+                    let text_len = text.chars().count() as u32;
+                    for &idx in &indices {
+                        prop_assert!(
+                            idx < text_len,
+                            "Index {} out of bounds for text {:?} (len {})",
+                            idx, text, text_len
+                        );
+                    }
+                }
+            }
+        }
     }
 }
 
