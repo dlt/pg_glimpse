@@ -216,6 +216,7 @@ impl Theme {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     // Reset theme to default before each test to avoid cross-test pollution
     fn setup() {
@@ -228,6 +229,7 @@ mod tests {
     // ─────────────────────────────────────────────────────────────────────────────
 
     #[test]
+    #[serial]
     fn duration_color_below_warn() {
         setup();
         // Anything < 1.0 should be OK (green)
@@ -242,6 +244,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn duration_color_at_warn_boundary() {
         setup();
         // Exactly at warn threshold (1.0) should be warn
@@ -250,6 +253,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn duration_color_between_warn_and_danger() {
         setup();
         // Between 1.0 and 10.0 should be warn
@@ -264,6 +268,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn duration_color_at_danger_boundary() {
         setup();
         // At danger threshold (10.0) should be danger
@@ -272,6 +277,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn duration_color_above_danger() {
         setup();
         // Above 10.0 should be danger
@@ -286,6 +292,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn duration_color_with_custom_thresholds() {
         setup();
         set_duration_thresholds(5.0, 30.0);
@@ -301,6 +308,7 @@ mod tests {
     // ─────────────────────────────────────────────────────────────────────────────
 
     #[test]
+    #[serial]
     fn state_color_active() {
         setup();
         let color = Theme::state_color(Some("active"));
@@ -308,6 +316,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn state_color_idle_in_transaction() {
         setup();
         let color = Theme::state_color(Some("idle in transaction"));
@@ -315,6 +324,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn state_color_idle_in_transaction_aborted() {
         setup();
         let color = Theme::state_color(Some("idle in transaction (aborted)"));
@@ -322,6 +332,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn state_color_idle() {
         setup();
         // Plain idle should get default fg color
@@ -330,6 +341,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn state_color_none() {
         setup();
         let color = Theme::state_color(None);
@@ -337,6 +349,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn state_color_unknown() {
         setup();
         let color = Theme::state_color(Some("something else"));
@@ -348,6 +361,7 @@ mod tests {
     // ─────────────────────────────────────────────────────────────────────────────
 
     #[test]
+    #[serial]
     fn hit_ratio_color_excellent() {
         setup();
         // >= 0.99 should be OK (green)
@@ -357,6 +371,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn hit_ratio_color_good() {
         setup();
         // >= 0.90 but < 0.99 should be warn
@@ -366,6 +381,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn hit_ratio_color_bad() {
         setup();
         // < 0.90 should be danger
@@ -379,6 +395,7 @@ mod tests {
     // ─────────────────────────────────────────────────────────────────────────────
 
     #[test]
+    #[serial]
     fn dead_ratio_color_ok() {
         setup();
         // <= 5% should be OK
@@ -388,6 +405,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn dead_ratio_color_warn() {
         setup();
         // > 5% but <= 20% should be warn
@@ -397,6 +415,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn dead_ratio_color_danger() {
         setup();
         // > 20% should be danger
@@ -410,6 +429,7 @@ mod tests {
     // ─────────────────────────────────────────────────────────────────────────────
 
     #[test]
+    #[serial]
     fn bloat_color_ok() {
         setup();
         // <= 20% should be OK
@@ -419,6 +439,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn bloat_color_warn() {
         setup();
         // > 20% but <= 50% should be warn
@@ -428,6 +449,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn bloat_color_danger() {
         setup();
         // > 50% should be danger
@@ -441,6 +463,7 @@ mod tests {
     // ─────────────────────────────────────────────────────────────────────────────
 
     #[test]
+    #[serial]
     fn wraparound_color_ok() {
         setup();
         // <= 50% should be OK
@@ -450,6 +473,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn wraparound_color_warn() {
         setup();
         // > 50% but <= 75% should be warn
@@ -459,6 +483,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn wraparound_color_danger() {
         setup();
         // > 75% should be danger
@@ -472,6 +497,7 @@ mod tests {
     // ─────────────────────────────────────────────────────────────────────────────
 
     #[test]
+    #[serial]
     fn index_usage_color_unused() {
         setup();
         // 0 scans = danger (unused index)
@@ -479,6 +505,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn index_usage_color_used() {
         setup();
         // Any scans > 0 = OK
@@ -492,12 +519,14 @@ mod tests {
     // ─────────────────────────────────────────────────────────────────────────────
 
     #[test]
+    #[serial]
     fn lag_color_none() {
         setup();
         assert_eq!(Theme::lag_color(None), Theme::fg());
     }
 
     #[test]
+    #[serial]
     fn lag_color_low() {
         setup();
         // <= 1.0 sec is fine
@@ -507,6 +536,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn lag_color_medium() {
         setup();
         // > 1.0 but <= 10.0 is warn
@@ -516,6 +546,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn lag_color_high() {
         setup();
         // > 10.0 is danger
@@ -552,6 +583,7 @@ mod tests {
     // ─────────────────────────────────────────────────────────────────────────────
 
     #[test]
+    #[serial]
     fn theme_accessors_return_colors() {
         setup();
         // Just verify accessors don't panic and return some color
@@ -580,6 +612,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn title_style_is_bold() {
         setup();
         let style = Theme::title_style();
@@ -587,6 +620,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn border_style_applies_color() {
         setup();
         let style = Theme::border_style(Color::Red);

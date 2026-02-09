@@ -435,6 +435,16 @@ fn redact_timestamps(s: &str) -> String {
             result.push_str("XX:XX:");
             i += 6;
         }
+        // Look for uptime pattern: "up XXXd YYh" (e.g., "up 756d 10h")
+        else if is_uptime_start(&chars, i) {
+            if let Some((replacement, skip)) = extract_uptime(&chars, i) {
+                result.push_str(&replacement);
+                i += skip;
+            } else {
+                result.push(chars[i]);
+                i += 1;
+            }
+        }
         // Look for relative time patterns like "18152h 24m ago" or "5m ago"
         else if is_relative_time_start(&chars, i) {
             // Find the end of the relative time expression (ends with " ago")
@@ -451,6 +461,56 @@ fn redact_timestamps(s: &str) -> String {
         }
     }
     result
+}
+
+/// Check if position i starts an uptime pattern "up XXXd YYh"
+fn is_uptime_start(chars: &[char], i: usize) -> bool {
+    // Look for "up " followed by digits and "d"
+    if i + 4 >= chars.len() {
+        return false;
+    }
+    if chars[i] == 'u' && chars[i + 1] == 'p' && chars[i + 2] == ' ' {
+        // Check for digits followed by 'd'
+        let mut j = i + 3;
+        while j < chars.len() && chars[j].is_ascii_digit() {
+            j += 1;
+        }
+        if j > i + 3 && j < chars.len() && chars[j] == 'd' {
+            return true;
+        }
+    }
+    false
+}
+
+/// Extract uptime pattern and return (placeholder, chars_to_skip)
+fn extract_uptime(chars: &[char], start: usize) -> Option<(String, usize)> {
+    // Pattern: "up XXXd YYh" or "up XXXd"
+    let mut end = start + 3; // Skip "up "
+
+    // Skip digits for days
+    while end < chars.len() && chars[end].is_ascii_digit() {
+        end += 1;
+    }
+    // Skip 'd'
+    if end < chars.len() && chars[end] == 'd' {
+        end += 1;
+    } else {
+        return None;
+    }
+
+    // Check for optional " XXh" part
+    if end + 1 < chars.len() && chars[end] == ' ' {
+        let hour_start = end + 1;
+        let mut hour_end = hour_start;
+        while hour_end < chars.len() && chars[hour_end].is_ascii_digit() {
+            hour_end += 1;
+        }
+        if hour_end > hour_start && hour_end < chars.len() && chars[hour_end] == 'h' {
+            end = hour_end + 1;
+        }
+    }
+
+    Some(("up XXXd XXh".to_string(), end - start))
 }
 
 /// Check if position i starts a relative time pattern (digits followed by h/m/s)

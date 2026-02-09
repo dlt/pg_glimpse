@@ -39,6 +39,7 @@ tempfile = "3"
 filetime = "0.2"
 insta = "1.42"
 proptest = "1.5"
+serial_test = "3.3.1"
 
 [profile.release]
 lto = true

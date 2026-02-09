@@ -3,7 +3,7 @@ source: src/ui/snapshot_tests.rs
 expression: buffer_to_string(&terminal)
 ---
 ╭ Server Stats ────────────────────────╮
-│PG 15.4 · up 756d 10h                 │
+│PG 15.4 · up XXXd XXh                 │
 │DB: 0 B · 0/100 conn (0%)             │
 │────────────────────────────────────  │
 │Active: 0 ▁▃▅▆█▁▃▅▆█  Idle/Txn: 0  Wai│

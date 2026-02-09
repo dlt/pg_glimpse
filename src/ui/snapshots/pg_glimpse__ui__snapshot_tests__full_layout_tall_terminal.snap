@@ -4,7 +4,7 @@ expression: buffer_to_string(&terminal)
 ---
  pg_glimpse   ◆ localhost:5432/production  as postgres  25/100 conns  ⟳ 1s                                    XX:XX:XX  
 ╭ Connections ── 29 ───────────────────────────────────────╮╭ Server Stats ────────────────────────────────────────────╮
-│                                                          ││PG 15.4 · up 756d 10h                                     │
+│                                                          ││PG 15.4 · up XXXd XXh                                     │
 │                                                          ││DB: 10.0 GB · 25/100 conn (25%)                           │
 │                                                          ││────────────────────────────────────────────────────────  │
 │                                                          ││Active: 5 ▁▃▅▆█▁▃▅▆█  Idle/Txn: 2  Wait: 1  AV: 1         │
