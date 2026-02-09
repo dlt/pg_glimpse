@@ -1,0 +1,19 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                  ╭  Terminate Backends  ────────────────────╮                  
+                  │                                          │                  
+                  │  Terminate 3 backends?                   │                  
+                  │                                          │                  
+                  │  PIDs: 12345, 12346, 12347               │                  
+                  │                                          │                  
+                  │  ⚠ This will kill the connections entirel│                  
+                  ╰──────────────────────────────────────────╯

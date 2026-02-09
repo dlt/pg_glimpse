@@ -1,0 +1,38 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+               ╭  Query Details  [j/k] scroll  [y] copy query  [C] cancel  [K] kill ╮               
+               │No query selected                                                   │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               ╰────────────────────────────────────────────────────────────────────╯

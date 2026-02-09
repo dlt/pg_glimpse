@@ -1,0 +1,52 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+                                                                                                              
+                                                                                                              
+                                                                                                              
+                                                                                                              
+                                                                                                              
+                                                                                                              
+                                                                                                              
+             ╭  Table Details  [j/k] scroll  [y] copy name  [Esc] close  ──────────────────────╮              
+             │                                                                                 │              
+             │  Table Info ────────────────────────────────────────                            │              
+             │  Schema:        public     Table: orders                                        │              
+             │                                                                                 │              
+             │  Size ────────────────────────────────────────                                  │              
+             │  Total:         1.0 GB                                                          │              
+             │  Table:         819.2 MB     Indexes: 204.8 MB                                  │              
+             │                                                                                 │              
+             │  Row Stats ────────────────────────────────────────                             │              
+             │  Live:          100.0K     Dead: 5.0K (5.0%)                                    │              
+             │                                                                                 │              
+             │  Scan Activity ────────────────────────────────────────                         │              
+             │  Seq Scans:     150     Rows Read: 50.0K                                        │              
+             │  Idx Scans:     25.0K     Rows Fetch: 24.5K                                     │              
+             │                                                                                 │              
+             │  DML Activity ────────────────────────────────────────                          │              
+             │  Inserts:       1.0K     Updates: 500     Deletes: 100                          │              
+             │  HOT Updates:   200 (40%)                                                       │              
+             │                                                                                 │              
+             │  Maintenance ────────────────────────────────────────                           │              
+             │  Last Vacuum:   -                                                               │              
+             │  Last AutoVac:  2024-01-15 XX:XX:XX                                             │              
+             │  Last Analyze:  -                                                               │              
+             │  Last AutoAnly: 2024-01-15 XX:XX:XX                                             │              
+             │  Vacuum Count:  5     AutoVac: 20                                               │              
+             │                                                                                 │              
+             │  Indexes (2) ────────────────────────────────────────                           │              
+             │  orders_pkey                    50.0 MB 50000 scans                             │              
+             │  orders_user_id_idx             25.0 MB 0 scans                                 │              
+             │                                                                                 │              
+             │                                                                                 │              
+             │                                                                                 │              
+             │                                                                                 │              
+             │                                                                                 │              
+             │                                                                                 │              
+             │                                                                                 │              
+             │                                                                                 │              
+             │                                                                                 │              
+             │                                                                                 │              
+             ╰─────────────────────────────────────────────────────────────────────────────────╯

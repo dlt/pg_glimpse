@@ -1,0 +1,32 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+               ╭  Vacuum Progress  [j/k] scroll  [y] copy table  [Esc] close  ──────╮               
+               │                                                                    │               
+               │  Vacuum Target ────────────────────────────────────────            │               
+               │  Table:         public.large_table                                 │               
+               │  Database:      production     PID: 34567                          │               
+               │                                                                    │               
+               │  Progress ────────────────────────────────────────                 │               
+               │  Phase:         scanning heap                                      │               
+               │                 Reading table pages to find dead tuples            │               
+               │                                                                    │               
+               │  [██████████████████░░░░░░░░░░░░░░░░░░░░░░] 45.0%                  │               
+               │                                                                    │               
+               │  Heap Blocks:   45.0K / 100.0K                                     │               
+               │  Dead Tuples:   12.5K                                              │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               ╰────────────────────────────────────────────────────────────────────╯

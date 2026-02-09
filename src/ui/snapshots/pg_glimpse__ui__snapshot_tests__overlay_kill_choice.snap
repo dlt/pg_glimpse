@@ -1,0 +1,17 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                  ╭  Terminate Backend  ─────────────────────╮                  
+                  │                                          │                  
+                  │  Filter 'SELECT' matches 3 queries       │                  
+                  │                                          │                  
+                  │   1  Kill this backend (PID 12345)       │                  
+                  │                                          │                  
+                  ╰──────────────────────────────────────────╯

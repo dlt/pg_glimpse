@@ -1,0 +1,17 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                  ╭  Cancel Queries  ────────────────────────╮                  
+                  │                                          │                  
+                  │  Cancel 3 queries?                       │                  
+                  │                                          │                  
+                  │  PIDs: 12345, 12346, 12347               │                  
+                  │                                          │                  
+                  ╰──────────────────────────────────────────╯

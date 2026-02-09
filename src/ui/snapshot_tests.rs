@@ -8,7 +8,7 @@ use chrono::{TimeZone, Utc};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
-use crate::app::{App, BottomPanel, ViewMode};
+use crate::app::{App, BottomPanel, SortColumn, ViewMode};
 use crate::config::AppConfig;
 use crate::db::models::*;
 
@@ -1033,6 +1033,348 @@ fn stats_panel_no_snapshot() {
 
     terminal.draw(|frame| {
         super::stats_panel::render(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Overlay Inspect Tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn overlay_query_inspect() {
+    let backend = TestBackend::new(100, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+    app.view_mode = ViewMode::Inspect;
+    app.query_table_state.select(Some(0));
+
+    terminal.draw(|frame| {
+        super::overlay::render_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_query_inspect_no_selection() {
+    let backend = TestBackend::new(100, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_empty_snapshot()));
+    app.view_mode = ViewMode::Inspect;
+
+    terminal.draw(|frame| {
+        super::overlay::render_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_index_inspect() {
+    let backend = TestBackend::new(100, 35);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+    app.bottom_panel = BottomPanel::Indexes;
+    app.view_mode = ViewMode::Inspect;
+    app.index_table_state.select(Some(0));
+
+    terminal.draw(|frame| {
+        super::overlay::render_index_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_index_inspect_unused() {
+    let backend = TestBackend::new(100, 35);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+    app.bottom_panel = BottomPanel::Indexes;
+    app.view_mode = ViewMode::Inspect;
+    // Select the second index which has 0 scans (unused)
+    app.index_table_state.select(Some(1));
+
+    terminal.draw(|frame| {
+        super::overlay::render_index_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_statement_inspect() {
+    let backend = TestBackend::new(110, 50);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+    app.bottom_panel = BottomPanel::Statements;
+    app.view_mode = ViewMode::Inspect;
+    app.stmt_table_state.select(Some(0));
+
+    terminal.draw(|frame| {
+        super::overlay::render_statement_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_table_inspect() {
+    let backend = TestBackend::new(110, 55);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+    app.bottom_panel = BottomPanel::TableStats;
+    app.view_mode = ViewMode::Inspect;
+    app.table_stat_table_state.select(Some(0));
+
+    terminal.draw(|frame| {
+        super::overlay::render_table_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_replication_inspect() {
+    let backend = TestBackend::new(100, 45);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+    app.bottom_panel = BottomPanel::Replication;
+    app.view_mode = ViewMode::Inspect;
+    app.replication_table_state.select(Some(0));
+
+    terminal.draw(|frame| {
+        super::overlay::render_replication_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_blocking_inspect() {
+    let backend = TestBackend::new(110, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+    app.bottom_panel = BottomPanel::Blocking;
+    app.view_mode = ViewMode::Inspect;
+    app.blocking_table_state.select(Some(0));
+
+    terminal.draw(|frame| {
+        super::overlay::render_blocking_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_vacuum_inspect() {
+    let backend = TestBackend::new(100, 35);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+    app.bottom_panel = BottomPanel::VacuumProgress;
+    app.view_mode = ViewMode::Inspect;
+    app.vacuum_table_state.select(Some(0));
+
+    terminal.draw(|frame| {
+        super::overlay::render_vacuum_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_wraparound_inspect() {
+    let backend = TestBackend::new(100, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+    app.bottom_panel = BottomPanel::Wraparound;
+    app.view_mode = ViewMode::Inspect;
+    app.wraparound_table_state.select(Some(0));
+
+    terminal.draw(|frame| {
+        super::overlay::render_wraparound_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_wraparound_inspect_warning() {
+    let backend = TestBackend::new(100, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    // Create snapshot with high wraparound percentage
+    let mut snapshot = make_snapshot();
+    snapshot.wraparound = vec![WraparoundInfo {
+        datname: "critical_db".to_string(),
+        xid_age: 1_500_000_000,
+        xids_remaining: 647_000_000,
+        pct_towards_wraparound: 70.0,
+    }];
+
+    let mut app = make_app(Some(snapshot));
+    app.bottom_panel = BottomPanel::Wraparound;
+    app.view_mode = ViewMode::Inspect;
+    app.wraparound_table_state.select(Some(0));
+
+    terminal.draw(|frame| {
+        super::overlay::render_wraparound_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Overlay Choice/Batch Dialog Tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn overlay_cancel_choice() {
+    let backend = TestBackend::new(80, 20);
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    terminal.draw(|frame| {
+        super::overlay::render_cancel_choice(frame, 12345, &[12345, 12346, 12347], "SELECT", frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_kill_choice() {
+    let backend = TestBackend::new(80, 20);
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    terminal.draw(|frame| {
+        super::overlay::render_kill_choice(frame, 12345, &[12345, 12346, 12347], "SELECT", frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_confirm_cancel_batch() {
+    let backend = TestBackend::new(80, 20);
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    terminal.draw(|frame| {
+        super::overlay::render_confirm_cancel_batch(frame, &[12345, 12346, 12347], frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_confirm_cancel_batch_many() {
+    let backend = TestBackend::new(80, 20);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let many_pids: Vec<i32> = (1..=15).map(|i| 12340 + i).collect();
+
+    terminal.draw(|frame| {
+        super::overlay::render_confirm_cancel_batch(frame, &many_pids, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_confirm_kill_batch() {
+    let backend = TestBackend::new(80, 22);
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    terminal.draw(|frame| {
+        super::overlay::render_confirm_kill_batch(frame, &[12345, 12346, 12347], frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Active Queries Panel Tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn panel_active_queries_with_data() {
+    let backend = TestBackend::new(140, 12);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+
+    terminal.draw(|frame| {
+        super::active_queries::render(frame, &mut app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn panel_active_queries_empty() {
+    let backend = TestBackend::new(140, 12);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_empty_snapshot()));
+
+    terminal.draw(|frame| {
+        super::active_queries::render(frame, &mut app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn panel_active_queries_no_snapshot() {
+    let backend = TestBackend::new(140, 12);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(None);
+
+    terminal.draw(|frame| {
+        super::active_queries::render(frame, &mut app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn panel_active_queries_with_filter() {
+    let backend = TestBackend::new(140, 12);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+    app.filter_text = "SELECT".to_string();
+    app.filter_active = true;
+    app.bottom_panel = BottomPanel::Queries;
+
+    terminal.draw(|frame| {
+        super::active_queries::render(frame, &mut app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn panel_active_queries_sorted_by_duration() {
+    let backend = TestBackend::new(140, 12);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+    app.sort_column = SortColumn::Duration;
+    app.sort_ascending = false;
+
+    terminal.draw(|frame| {
+        super::active_queries::render(frame, &mut app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn panel_active_queries_sorted_ascending() {
+    let backend = TestBackend::new(140, 12);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+    app.sort_column = SortColumn::Duration;
+    app.sort_ascending = true;
+
+    terminal.draw(|frame| {
+        super::active_queries::render(frame, &mut app, frame.area());
     }).unwrap();
 
     insta::assert_snapshot!(buffer_to_string(&terminal));

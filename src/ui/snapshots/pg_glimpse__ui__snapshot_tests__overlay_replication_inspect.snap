@@ -1,0 +1,42 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+               ╭  Replication Details  [j/k] scroll  [y] copy app  [Esc] close  ────╮               
+               │                                                                    │               
+               │  Connection                                                        │               
+               │  PID:             23456                                            │               
+               │  User:            replicator      User SysID:    16384             │               
+               │  Application:     replica1                                         │               
+               │  Client Addr:     10.0.1.50      Port:          54321              │               
+               │  Client Hostname: -                                                │               
+               │  Backend Start:   2024-01-14 XX:XX:XX UTC                          │               
+               │                                                                    │               
+               │  Replication State                                                 │               
+               │  State:           streaming                                        │               
+               │  Sync State:      async      Sync Priority: 1                      │               
+               │  Backend Xmin:    -                                                │               
+               │                                                                    │               
+               │  WAL Positions                                                     │               
+               │  Sent LSN:        0/5000000                                        │               
+               │  Write LSN:       0/4FFFFFF                                        │               
+               │  Flush LSN:       0/4FFFFFE                                        │               
+               │  Replay LSN:      0/4FFFFFD                                        │               
+               │                                                                    │               
+               │  Replication Lag                                                   │               
+               │  Write Lag:       0.001s                                           │               
+               │  Flush Lag:       0.002s                                           │               
+               │  Replay Lag:      0.005s                                           │               
+               │                                                                    │               
+               │  Reply Time:      2024-01-15 XX:XX:XX UTC                          │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               ╰────────────────────────────────────────────────────────────────────╯

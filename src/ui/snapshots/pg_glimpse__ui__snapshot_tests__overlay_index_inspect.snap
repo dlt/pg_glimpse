@@ -1,0 +1,32 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+            ╭  Index Details  [j/k] scroll  [y] copy definition  [Esc] close  ────────╮             
+            │                                                                         │             
+            │  Index Info ────────────────────────────────────────                    │             
+            │  Schema:      public     Table: orders                                  │             
+            │  Index:       orders_user_id_idx                                        │             
+            │  Size:        25.0 MB                                                   │             
+            │                                                                         │             
+            │  Usage Stats ────────────────────────────────────────                   │             
+            │  Scans:        0   ← unused index                                       │             
+            │  Tup Read:    0     Tup Fetch: 0                                        │             
+            │                                                                         │             
+            │  Definition ────────────────────────────────────────                    │             
+            │  CREATE INDEX orders_user_id_idx ON public.orders USING btree (user_id) │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            ╰─────────────────────────────────────────────────────────────────────────╯

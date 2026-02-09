@@ -1,0 +1,38 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+                                                                                                              
+                                                                                                              
+                                                                                                              
+                                                                                                              
+                                                                                                              
+                                                                                                              
+           ╭  Lock Details  [j/k] scroll  [y] copy query  [Esc] close  ───────────────────────────╮           
+           │                                                                                      │           
+           │  Blocked Process ────────────────────────────────────────                            │           
+           │  PID:           12347     User: app_user                                             │           
+           │  Waiting:       8.5s                                                                 │           
+           │                                                                                      │           
+           │  Query:                                                                              │           
+           │  DELETE FROM orders WHERE id = 100                                                   │           
+           │                                                                                      │           
+           │  Blocking Process ────────────────────────────────────────                           │           
+           │  PID:           12346     User: admin                                                │           
+           │  State:         idle in transaction                                                  │           
+           │                                                                                      │           
+           │  Query:                                                                              │           
+           │  UPDATE orders SET status = 'shipped'                                                │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           ╰──────────────────────────────────────────────────────────────────────────────────────╯

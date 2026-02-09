@@ -1,0 +1,16 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+╭ Queries [2] ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│PID      Query                                              User             Database          Duration State             Wait            │
+│12345    SELECT * FROM users WHERE id = $1                  app_user         production        5.5s     active            DataFileRead    │
+│12346    UPDATE orders SET status = 'shipped'               admin            production        3m45s    idle-txn          ClientRead      │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯

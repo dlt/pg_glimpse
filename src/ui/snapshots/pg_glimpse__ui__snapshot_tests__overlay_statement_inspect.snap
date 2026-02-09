@@ -1,0 +1,49 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+                                                                                                              
+                                                                                                              
+                                                                                                              
+                                                                                                              
+                                                                                                              
+           ╭  Statement Details  [j/k] scroll  [y] copy query  [Esc] close  ──────────────────────╮           
+           │  Query ID:        123456789                                                          │           
+           │                                                                                      │           
+           │  Query                                                                               │           
+           │  SELECT * FROM users WHERE email = $1                                                │           
+           │                                                                                      │           
+           │  Execution                                                                           │           
+           │  Calls:           10000      Rows:          10000      Rows/Call:     1.0            │           
+           │  Total Time:      5.00 s                                                             │           
+           │  Mean Time:       0.500 ms      Min Time:      0.100 ms                              │           
+           │  Max Time:        25.0 ms      Stddev:        2.5 ms                                 │           
+           │                                                                                      │           
+           │  Shared Buffers                                                                      │           
+           │  Hit:             45000      Read:          500                                      │           
+           │  Dirtied:         0      Written:       0                                            │           
+           │  Hit Ratio:       9890.00%                                                           │           
+           │                                                                                      │           
+           │  Local Buffers                                                                       │           
+           │  Hit:             0      Read:          0                                            │           
+           │  Dirtied:         0      Written:       0                                            │           
+           │                                                                                      │           
+           │  Temp & I/O                                                                          │           
+           │  Temp Read:       0      Temp Written:  0                                            │           
+           │  Blk Read Time:   50.0 ms      Blk Write Time: 0.000 ms                              │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           ╰──────────────────────────────────────────────────────────────────────────────────────╯
