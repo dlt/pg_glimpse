@@ -422,6 +422,19 @@ fn redact_timestamps(s: &str) -> String {
             result.push_str("XX:XX:XX");
             i += 8;
         }
+        // Handle truncated timestamp DD:DD: at end of line (tiny terminals)
+        else if i + 5 < chars.len()
+            && chars[i].is_ascii_digit()
+            && chars[i + 1].is_ascii_digit()
+            && chars[i + 2] == ':'
+            && chars[i + 3].is_ascii_digit()
+            && chars[i + 4].is_ascii_digit()
+            && chars[i + 5] == ':'
+            && (i + 6 >= chars.len() || chars[i + 6] == '\n' || chars[i + 6] == ' ')
+        {
+            result.push_str("XX:XX:");
+            i += 6;
+        }
         // Look for relative time patterns like "18152h 24m ago" or "5m ago"
         else if is_relative_time_start(&chars, i) {
             // Find the end of the relative time expression (ends with " ago")
