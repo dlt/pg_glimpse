@@ -74,6 +74,72 @@ impl ServerCertVerifier for NoVerifier {
     }
 }
 
+/// SSL connection mode
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum SslMode {
+    None,
+    Verified,
+    Insecure,
+}
+
+impl SslMode {
+    fn label(&self) -> &'static str {
+        match self {
+            SslMode::None => "No TLS",
+            SslMode::Verified => "SSL",
+            SslMode::Insecure => "SSL (unverified)",
+        }
+    }
+}
+
+/// Spawn the connection handler task
+fn spawn_connection<S, T>(connection: tokio_postgres::Connection<S, T>)
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+    T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            eprintln!("PostgreSQL connection error: {}", e);
+        }
+    });
+}
+
+/// Try to connect with a specific SSL mode
+async fn try_connect(
+    pg_config: &tokio_postgres::Config,
+    ssl_mode: SslMode,
+) -> Result<tokio_postgres::Client, tokio_postgres::Error> {
+    match ssl_mode {
+        SslMode::None => {
+            let (client, connection) = pg_config.connect(tokio_postgres::NoTls).await?;
+            spawn_connection(connection);
+            Ok(client)
+        }
+        SslMode::Verified => {
+            let tls_config = rustls::ClientConfig::builder()
+                .with_root_certificates(rustls::RootCertStore::from_iter(
+                    webpki_roots::TLS_SERVER_ROOTS.iter().cloned(),
+                ))
+                .with_no_client_auth();
+            let tls = tokio_postgres_rustls::MakeRustlsConnect::new(tls_config);
+            let (client, connection) = pg_config.connect(tls).await?;
+            spawn_connection(connection);
+            Ok(client)
+        }
+        SslMode::Insecure => {
+            let tls_config = rustls::ClientConfig::builder()
+                .dangerous()
+                .with_custom_certificate_verifier(Arc::new(NoVerifier))
+                .with_no_client_auth();
+            let tls = tokio_postgres_rustls::MakeRustlsConnect::new(tls_config);
+            let (client, connection) = pg_config.connect(tls).await?;
+            spawn_connection(connection);
+            Ok(client)
+        }
+    }
+}
+
 fn main() -> Result<()> {
     color_eyre::install()?;
     let cli = Cli::parse();
@@ -102,62 +168,61 @@ async fn run(cli: Cli) -> Result<()> {
             std::process::exit(1);
         }
     };
-    let client = if cli.ssl || cli.ssl_insecure {
-        let tls_config = if cli.ssl_insecure {
-            rustls::ClientConfig::builder()
-                .dangerous()
-                .with_custom_certificate_verifier(Arc::new(NoVerifier))
-                .with_no_client_auth()
+
+    // Determine connection mode: explicit flags or auto-detect
+    let (client, ssl_mode) = if cli.ssl || cli.ssl_insecure {
+        // User explicitly specified SSL mode - use it directly
+        let mode = if cli.ssl_insecure {
+            SslMode::Insecure
         } else {
-            rustls::ClientConfig::builder()
-                .with_root_certificates(rustls::RootCertStore::from_iter(
-                    webpki_roots::TLS_SERVER_ROOTS.iter().cloned(),
-                ))
-                .with_no_client_auth()
+            SslMode::Verified
         };
-        let tls = tokio_postgres_rustls::MakeRustlsConnect::new(tls_config);
-        match pg_config.connect(tls).await {
-            Ok((client, connection)) => {
-                tokio::spawn(async move {
-                    if let Err(e) = connection.await {
-                        eprintln!("PostgreSQL connection error: {}", e);
-                    }
-                });
-                client
-            }
+        match try_connect(&pg_config, mode).await {
+            Ok(client) => (client, mode),
             Err(e) => {
                 let info = cli.connection_info();
-                eprintln!("Error: could not connect to PostgreSQL (SSL): {:?}\n", e);
+                eprintln!("Error: could not connect to PostgreSQL ({}): {:?}\n", mode.label(), e);
                 eprintln!(
                     "Connection: {}:{}/{}",
                     info.host, info.port, info.dbname
                 );
-                eprintln!("\nTry: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword --ssl");
+                eprintln!("\nTry: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword");
                 eprintln!("See: pg_glimpse --help");
                 std::process::exit(1);
             }
         }
     } else {
-        match pg_config.connect(tokio_postgres::NoTls).await {
-            Ok((client, connection)) => {
-                tokio::spawn(async move {
-                    if let Err(e) = connection.await {
-                        eprintln!("PostgreSQL connection error: {}", e);
-                    }
-                });
-                client
+        // Auto-detect: try connection modes in order
+        let modes = [SslMode::None, SslMode::Verified, SslMode::Insecure];
+        let mut last_error = None;
+        let mut result = None;
+
+        for mode in modes {
+            match try_connect(&pg_config, mode).await {
+                Ok(client) => {
+                    result = Some((client, mode));
+                    break;
+                }
+                Err(e) => {
+                    last_error = Some(e);
+                }
             }
-            Err(e) => {
+        }
+
+        match result {
+            Some(r) => r,
+            None => {
                 let info = cli.connection_info();
-                eprintln!("Error: could not connect to PostgreSQL: {:?}\n", e);
+                eprintln!(
+                    "Error: could not connect to PostgreSQL with any SSL mode: {:?}\n",
+                    last_error.unwrap()
+                );
                 eprintln!(
                     "Connection: {}:{}/{}",
                     info.host, info.port, info.dbname
                 );
-                if format!("{:?}", e).contains("no encryption") {
-                    eprintln!("\nHint: This server may require SSL. Try adding --ssl");
-                }
-                eprintln!("\nTry: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword");
+                eprintln!("\nTried: No TLS, SSL (verified), SSL (insecure)");
+                eprintln!("Try: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword");
                 eprintln!("See: pg_glimpse --help");
                 std::process::exit(1);
             }
@@ -195,6 +260,7 @@ async fn run(cli: Cli) -> Result<()> {
         config,
         server_info,
     );
+    app.set_ssl_mode_label(ssl_mode.label());
 
     let extensions = app.server_info.extensions.clone();
     let pg_major_version = app.server_info.major_version();

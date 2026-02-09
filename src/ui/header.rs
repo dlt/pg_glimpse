@@ -49,6 +49,17 @@ fn render_live(frame: &mut Frame, app: &App, area: Rect) {
         Span::styled("  ", dim_style),
         Span::styled("as ", label_style),
         Span::styled(&app.user, normal_style),
+    ];
+
+    // Show SSL mode if set (only show for SSL connections, not "No TLS")
+    if let Some(ref ssl_label) = app.ssl_mode_label {
+        if ssl_label != "No TLS" {
+            spans.push(Span::styled("  ", dim_style));
+            spans.push(Span::styled(ssl_label.as_str(), label_style));
+        }
+    }
+
+    spans.extend([
         Span::styled("  ", dim_style),
         Span::styled(
             format!("{}/{}", conns, max_conns),
@@ -61,7 +72,7 @@ fn render_live(frame: &mut Frame, app: &App, area: Rect) {
             format!("{}s", app.refresh_interval_secs),
             normal_style,
         ),
-    ];
+    ]);
 
     if app.paused {
         spans.push(Span::styled("  ", dim_style));

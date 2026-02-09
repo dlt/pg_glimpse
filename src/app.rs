@@ -279,6 +279,7 @@ pub struct App {
     pub replay_speed: f64,
     pub replay_playing: bool,
     pub overlay_scroll: u16,
+    pub ssl_mode_label: Option<String>,
 }
 
 impl App {
@@ -350,7 +351,12 @@ impl App {
             replay_speed: 1.0,
             replay_playing: false,
             overlay_scroll: 0,
+            ssl_mode_label: None,
         }
+    }
+
+    pub fn set_ssl_mode_label(&mut self, label: &str) {
+        self.ssl_mode_label = Some(label.to_string());
     }
 
     #[allow(clippy::too_many_arguments)]
