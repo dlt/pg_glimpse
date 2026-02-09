@@ -398,7 +398,41 @@ fn buffer_to_string(terminal: &Terminal<TestBackend>) -> String {
 
     // Replace timestamps (HH:MM:SS format) with placeholder for reproducibility
     // This simple approach replaces any sequence that looks like a time
-    redact_timestamps(&result)
+    let result = redact_timestamps(&result);
+    // Replace version numbers to avoid snapshot churn on version bumps
+    redact_version(&result)
+}
+
+/// Replace version numbers with placeholder for reproducible snapshots
+fn redact_version(s: &str) -> String {
+    // Replace "Version:    X.Y.Z" pattern with "Version:    X.X.X"
+    let mut result = s.to_string();
+
+    // Find "Version:" followed by spaces and a semver-like pattern
+    if let Some(idx) = result.find("Version:") {
+        let after_version = &result[idx + 8..];
+        // Skip whitespace
+        let trimmed = after_version.trim_start();
+        let whitespace_len = after_version.len() - trimmed.len();
+
+        // Find the version number (digits and dots)
+        let mut version_end = 0;
+        for (i, c) in trimmed.chars().enumerate() {
+            if c.is_ascii_digit() || c == '.' {
+                version_end = i + 1;
+            } else {
+                break;
+            }
+        }
+
+        if version_end > 0 {
+            let start = idx + 8 + whitespace_len;
+            let end = start + version_end;
+            result.replace_range(start..end, "X.X.X");
+        }
+    }
+
+    result
 }
 
 /// Replace timestamps and relative times with placeholders for reproducible snapshots
