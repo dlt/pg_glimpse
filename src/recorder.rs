@@ -414,4 +414,440 @@ mod tests {
         assert!(!sanitized.contains('/'));
         assert!(!sanitized.contains('\\'));
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Recording/Replay roundtrip test
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn roundtrip_record_and_replay() {
+        use crate::db::models::{
+            ActiveQuery, BlockingInfo, CheckpointStats, DatabaseStats, IndexInfo, ReplicationInfo,
+            ReplicationSlot, StatStatement, Subscription, TableStat, VacuumProgress,
+            WaitEventCount, WraparoundInfo,
+        };
+        use crate::replay::ReplaySession;
+
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("roundtrip.jsonl");
+
+        let server_info = ServerInfo {
+            version: "PostgreSQL 15.3 on x86_64-pc-linux-gnu".to_string(),
+            start_time: chrono::Utc::now(),
+            max_connections: 200,
+            extensions: DetectedExtensions {
+                pg_stat_statements: true,
+                pg_stat_statements_version: Some("1.10".to_string()),
+                pg_stat_kcache: false,
+                pg_wait_sampling: true,
+                pg_buffercache: true,
+            },
+            settings: vec![],
+        };
+
+        // Create a complex snapshot with data in all fields
+        let snapshot = PgSnapshot {
+            timestamp: chrono::Utc::now(),
+            active_queries: vec![
+                ActiveQuery {
+                    pid: 12345,
+                    usename: Some("testuser".to_string()),
+                    datname: Some("testdb".to_string()),
+                    state: Some("active".to_string()),
+                    wait_event_type: Some("IO".to_string()),
+                    wait_event: Some("DataFileRead".to_string()),
+                    query_start: Some(chrono::Utc::now()),
+                    duration_secs: 5.5,
+                    query: Some("SELECT * FROM large_table".to_string()),
+                    backend_type: Some("client backend".to_string()),
+                },
+                ActiveQuery {
+                    pid: 12346,
+                    usename: Some("admin".to_string()),
+                    datname: Some("postgres".to_string()),
+                    state: Some("idle in transaction".to_string()),
+                    wait_event_type: None,
+                    wait_event: None,
+                    query_start: Some(chrono::Utc::now()),
+                    duration_secs: 120.0,
+                    query: Some("BEGIN; UPDATE users SET x = 1".to_string()),
+                    backend_type: Some("client backend".to_string()),
+                },
+            ],
+            wait_events: vec![WaitEventCount {
+                wait_event_type: "Lock".to_string(),
+                wait_event: "relation".to_string(),
+                count: 5,
+            }],
+            blocking_info: vec![BlockingInfo {
+                blocked_pid: 100,
+                blocked_user: Some("user1".to_string()),
+                blocked_query: Some("UPDATE t SET x = 1".to_string()),
+                blocked_duration_secs: 10.5,
+                blocker_pid: 200,
+                blocker_user: Some("user2".to_string()),
+                blocker_query: Some("SELECT * FROM t FOR UPDATE".to_string()),
+                blocker_state: Some("idle in transaction".to_string()),
+            }],
+            buffer_cache: BufferCacheStats {
+                blks_hit: 99000,
+                blks_read: 1000,
+                hit_ratio: 0.99,
+            },
+            summary: ActivitySummary {
+                total_backends: 25,
+                active_query_count: 5,
+                idle_in_transaction_count: 2,
+                waiting_count: 1,
+                lock_count: 10,
+                oldest_xact_secs: Some(300.5),
+                autovacuum_count: 1,
+            },
+            table_stats: vec![TableStat {
+                schemaname: "public".to_string(),
+                relname: "users".to_string(),
+                total_size_bytes: 10000000,
+                table_size_bytes: 8000000,
+                indexes_size_bytes: 2000000,
+                seq_scan: 100,
+                seq_tup_read: 50000,
+                idx_scan: 5000,
+                idx_tup_fetch: 45000,
+                n_live_tup: 10000,
+                n_dead_tup: 500,
+                dead_ratio: 5.0,
+                n_tup_ins: 1000,
+                n_tup_upd: 500,
+                n_tup_del: 100,
+                n_tup_hot_upd: 200,
+                last_vacuum: None,
+                last_autovacuum: Some(chrono::Utc::now()),
+                last_analyze: None,
+                last_autoanalyze: Some(chrono::Utc::now()),
+                vacuum_count: 5,
+                autovacuum_count: 10,
+                bloat_bytes: Some(500000),
+                bloat_pct: Some(6.25),
+            }],
+            replication: vec![ReplicationInfo {
+                pid: 9999,
+                usesysid: Some(10),
+                usename: Some("replicator".to_string()),
+                application_name: Some("replica1".to_string()),
+                client_addr: Some("192.168.1.100".to_string()),
+                client_hostname: None,
+                client_port: Some(54321),
+                backend_start: Some(chrono::Utc::now()),
+                backend_xmin: None,
+                state: Some("streaming".to_string()),
+                sent_lsn: Some("0/1234567".to_string()),
+                write_lsn: Some("0/1234560".to_string()),
+                flush_lsn: Some("0/1234550".to_string()),
+                replay_lsn: Some("0/1234540".to_string()),
+                write_lag_secs: Some(0.001),
+                flush_lag_secs: Some(0.002),
+                replay_lag_secs: Some(0.005),
+                sync_priority: Some(1),
+                sync_state: Some("async".to_string()),
+                reply_time: Some(chrono::Utc::now()),
+            }],
+            replication_slots: vec![ReplicationSlot {
+                slot_name: "my_slot".to_string(),
+                slot_type: "logical".to_string(),
+                database: Some("testdb".to_string()),
+                active: true,
+                restart_lsn: Some("0/1234000".to_string()),
+                confirmed_flush_lsn: Some("0/1234500".to_string()),
+                wal_retained_bytes: Some(1048576),
+                temporary: false,
+                spill_txns: Some(0),
+                spill_count: Some(0),
+                spill_bytes: Some(0),
+            }],
+            subscriptions: vec![Subscription {
+                subname: "my_sub".to_string(),
+                pid: Some(8888),
+                relcount: 5,
+                received_lsn: Some("0/5555555".to_string()),
+                last_msg_send_time: Some(chrono::Utc::now()),
+                last_msg_receipt_time: Some(chrono::Utc::now()),
+                latest_end_lsn: Some("0/5555550".to_string()),
+                latest_end_time: Some(chrono::Utc::now()),
+                enabled: true,
+            }],
+            vacuum_progress: vec![VacuumProgress {
+                pid: 7777,
+                datname: Some("testdb".to_string()),
+                table_name: "public.large_table".to_string(),
+                phase: "scanning heap".to_string(),
+                heap_blks_total: 10000,
+                heap_blks_vacuumed: 2500,
+                progress_pct: 25.0,
+                num_dead_tuples: 5000,
+            }],
+            wraparound: vec![WraparoundInfo {
+                datname: "testdb".to_string(),
+                xid_age: 500000000,
+                xids_remaining: 1647483648,
+                pct_towards_wraparound: 23.28,
+            }],
+            indexes: vec![IndexInfo {
+                schemaname: "public".to_string(),
+                table_name: "users".to_string(),
+                index_name: "users_pkey".to_string(),
+                index_size_bytes: 500000,
+                idx_scan: 10000,
+                idx_tup_read: 50000,
+                idx_tup_fetch: 48000,
+                index_definition: "CREATE UNIQUE INDEX users_pkey ON public.users USING btree (id)"
+                    .to_string(),
+                bloat_bytes: Some(25000),
+                bloat_pct: Some(5.0),
+            }],
+            stat_statements: vec![StatStatement {
+                queryid: 123456789,
+                query: "SELECT * FROM users WHERE id = $1".to_string(),
+                calls: 10000,
+                total_exec_time: 5000.0,
+                min_exec_time: 0.1,
+                mean_exec_time: 0.5,
+                max_exec_time: 10.0,
+                stddev_exec_time: 0.25,
+                rows: 10000,
+                shared_blks_hit: 50000,
+                shared_blks_read: 500,
+                shared_blks_dirtied: 100,
+                shared_blks_written: 50,
+                local_blks_hit: 0,
+                local_blks_read: 0,
+                local_blks_dirtied: 0,
+                local_blks_written: 0,
+                temp_blks_read: 0,
+                temp_blks_written: 0,
+                blk_read_time: 10.5,
+                blk_write_time: 5.2,
+                hit_ratio: 0.99,
+            }],
+            stat_statements_error: None,
+            extensions: DetectedExtensions {
+                pg_stat_statements: true,
+                pg_stat_statements_version: Some("1.10".to_string()),
+                pg_stat_kcache: false,
+                pg_wait_sampling: true,
+                pg_buffercache: true,
+            },
+            db_size: 5000000000,
+            checkpoint_stats: Some(CheckpointStats {
+                checkpoints_timed: 100,
+                checkpoints_req: 5,
+                checkpoint_write_time: 50000.0,
+                checkpoint_sync_time: 1000.0,
+                buffers_checkpoint: 10000,
+                buffers_backend: 500,
+            }),
+            wal_stats: Some(crate::db::models::WalStats {
+                wal_records: 1000000,
+                wal_fpi: 5000,
+                wal_bytes: 1073741824,
+                wal_buffers_full: 10,
+                wal_write: 50000,
+                wal_sync: 50000,
+                wal_write_time: 100.5,
+                wal_sync_time: 50.2,
+            }),
+            archiver_stats: Some(crate::db::models::ArchiverStats {
+                archived_count: 1000,
+                failed_count: 2,
+                last_archived_wal: Some("000000010000000000000064".to_string()),
+                last_archived_time: Some(chrono::Utc::now()),
+                last_failed_wal: Some("000000010000000000000050".to_string()),
+                last_failed_time: Some(chrono::Utc::now()),
+            }),
+            bgwriter_stats: Some(crate::db::models::BgwriterStats {
+                buffers_clean: 5000,
+                maxwritten_clean: 10,
+                buffers_alloc: 100000,
+            }),
+            db_stats: Some(DatabaseStats {
+                xact_commit: 500000,
+                xact_rollback: 100,
+                blks_read: 10000,
+            }),
+        };
+
+        // Record the session
+        let mut recorder = Recorder::new_with_path(
+            path.clone(),
+            "testhost",
+            5432,
+            "testdb",
+            "testuser",
+            &server_info,
+        )
+        .unwrap();
+
+        recorder.record(&snapshot).unwrap();
+        drop(recorder); // Ensure file is flushed
+
+        // Load via ReplaySession
+        let session = ReplaySession::load(&path).unwrap();
+
+        // Verify header data
+        assert_eq!(session.host, "testhost");
+        assert_eq!(session.port, 5432);
+        assert_eq!(session.dbname, "testdb");
+        assert_eq!(session.user, "testuser");
+        assert!(session.server_info.version.contains("15.3"));
+        assert_eq!(session.server_info.max_connections, 200);
+        assert!(session.server_info.extensions.pg_stat_statements);
+        assert!(session.server_info.extensions.pg_buffercache);
+
+        // Verify snapshot data
+        assert_eq!(session.len(), 1);
+        let loaded = session.current().unwrap();
+
+        // Verify active queries
+        assert_eq!(loaded.active_queries.len(), 2);
+        assert_eq!(loaded.active_queries[0].pid, 12345);
+        assert_eq!(
+            loaded.active_queries[0].usename,
+            Some("testuser".to_string())
+        );
+        assert_eq!(
+            loaded.active_queries[0].query,
+            Some("SELECT * FROM large_table".to_string())
+        );
+        assert_eq!(loaded.active_queries[1].pid, 12346);
+        assert!((loaded.active_queries[1].duration_secs - 120.0).abs() < 0.001);
+
+        // Verify summary
+        assert_eq!(loaded.summary.total_backends, 25);
+        assert_eq!(loaded.summary.active_query_count, 5);
+        assert_eq!(loaded.summary.idle_in_transaction_count, 2);
+        assert!((loaded.summary.oldest_xact_secs.unwrap() - 300.5).abs() < 0.001);
+
+        // Verify buffer cache
+        assert_eq!(loaded.buffer_cache.blks_hit, 99000);
+        assert!((loaded.buffer_cache.hit_ratio - 0.99).abs() < 0.001);
+
+        // Verify table stats with bloat
+        assert_eq!(loaded.table_stats.len(), 1);
+        assert_eq!(loaded.table_stats[0].schemaname, "public");
+        assert_eq!(loaded.table_stats[0].relname, "users");
+        assert_eq!(loaded.table_stats[0].bloat_bytes, Some(500000));
+        assert!((loaded.table_stats[0].bloat_pct.unwrap() - 6.25).abs() < 0.001);
+
+        // Verify indexes with bloat
+        assert_eq!(loaded.indexes.len(), 1);
+        assert_eq!(loaded.indexes[0].index_name, "users_pkey");
+        assert_eq!(loaded.indexes[0].bloat_bytes, Some(25000));
+
+        // Verify replication
+        assert_eq!(loaded.replication.len(), 1);
+        assert_eq!(
+            loaded.replication[0].application_name,
+            Some("replica1".to_string())
+        );
+        assert!(loaded.replication[0].replay_lag_secs.is_some());
+
+        // Verify replication slots
+        assert_eq!(loaded.replication_slots.len(), 1);
+        assert_eq!(loaded.replication_slots[0].slot_name, "my_slot");
+        assert!(loaded.replication_slots[0].active);
+
+        // Verify subscriptions
+        assert_eq!(loaded.subscriptions.len(), 1);
+        assert_eq!(loaded.subscriptions[0].subname, "my_sub");
+
+        // Verify vacuum progress
+        assert_eq!(loaded.vacuum_progress.len(), 1);
+        assert!((loaded.vacuum_progress[0].progress_pct - 25.0).abs() < 0.001);
+
+        // Verify wraparound
+        assert_eq!(loaded.wraparound.len(), 1);
+        assert_eq!(loaded.wraparound[0].xid_age, 500000000);
+
+        // Verify stat_statements
+        assert_eq!(loaded.stat_statements.len(), 1);
+        assert_eq!(loaded.stat_statements[0].calls, 10000);
+        assert!((loaded.stat_statements[0].hit_ratio - 0.99).abs() < 0.001);
+
+        // Verify other stats
+        assert!(loaded.checkpoint_stats.is_some());
+        assert_eq!(loaded.checkpoint_stats.as_ref().unwrap().checkpoints_timed, 100);
+
+        assert!(loaded.wal_stats.is_some());
+        assert_eq!(loaded.wal_stats.as_ref().unwrap().wal_records, 1000000);
+
+        assert!(loaded.archiver_stats.is_some());
+        assert_eq!(loaded.archiver_stats.as_ref().unwrap().archived_count, 1000);
+
+        assert!(loaded.bgwriter_stats.is_some());
+        assert_eq!(loaded.bgwriter_stats.as_ref().unwrap().buffers_clean, 5000);
+
+        assert!(loaded.db_stats.is_some());
+        assert_eq!(loaded.db_stats.as_ref().unwrap().xact_commit, 500000);
+
+        assert_eq!(loaded.db_size, 5000000000);
+        assert!(loaded.extensions.pg_stat_statements);
+    }
+
+    #[test]
+    fn roundtrip_multiple_snapshots() {
+        use crate::replay::ReplaySession;
+
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("multi.jsonl");
+
+        let server_info = make_server_info();
+
+        let mut recorder =
+            Recorder::new_with_path(path.clone(), "host", 5432, "db", "user", &server_info)
+                .unwrap();
+
+        // Record multiple snapshots with different values
+        for i in 0..5 {
+            let mut snap = make_snapshot();
+            snap.summary.total_backends = (10 + i * 5) as i64;
+            snap.buffer_cache.hit_ratio = 0.90 + (i as f64 * 0.02);
+            recorder.record(&snap).unwrap();
+        }
+        drop(recorder);
+
+        let session = ReplaySession::load(&path).unwrap();
+        assert_eq!(session.len(), 5);
+
+        // Verify each snapshot has correct values
+        for (i, snap) in session.snapshots.iter().enumerate() {
+            assert_eq!(snap.summary.total_backends, (10 + i * 5) as i64);
+            let expected_ratio = 0.90 + (i as f64 * 0.02);
+            assert!((snap.buffer_cache.hit_ratio - expected_ratio).abs() < 0.001);
+        }
+    }
+
+    #[test]
+    fn roundtrip_preserves_timestamps() {
+        use crate::replay::ReplaySession;
+
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("timestamps.jsonl");
+
+        let server_info = make_server_info();
+        let mut recorder =
+            Recorder::new_with_path(path.clone(), "host", 5432, "db", "user", &server_info)
+                .unwrap();
+
+        let mut snap = make_snapshot();
+        let original_timestamp = chrono::Utc::now();
+        snap.timestamp = original_timestamp;
+        recorder.record(&snap).unwrap();
+        drop(recorder);
+
+        let session = ReplaySession::load(&path).unwrap();
+        let loaded = session.current().unwrap();
+
+        // Timestamps should match (within microsecond precision due to serialization)
+        let diff = (loaded.timestamp - original_timestamp).num_microseconds().unwrap_or(0).abs();
+        assert!(diff < 1000); // Allow 1ms tolerance for serialization rounding
+    }
 }

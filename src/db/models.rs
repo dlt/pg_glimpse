@@ -313,3 +313,283 @@ pub struct PgSnapshot {
     pub bgwriter_stats: Option<BgwriterStats>,
     pub db_stats: Option<DatabaseStats>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // ServerInfo::major_version tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    fn server_info_with_version(version: &str) -> ServerInfo {
+        ServerInfo {
+            version: version.to_string(),
+            start_time: Utc::now(),
+            max_connections: 100,
+            extensions: DetectedExtensions::default(),
+            settings: vec![],
+        }
+    }
+
+    #[test]
+    fn major_version_pg14() {
+        let info = server_info_with_version("PostgreSQL 14.5 on x86_64-pc-linux-gnu");
+        assert_eq!(info.major_version(), 14);
+    }
+
+    #[test]
+    fn major_version_pg11() {
+        let info = server_info_with_version("PostgreSQL 11.21 on x86_64-pc-linux-gnu");
+        assert_eq!(info.major_version(), 11);
+    }
+
+    #[test]
+    fn major_version_pg17() {
+        let info = server_info_with_version("PostgreSQL 17.0 on x86_64-apple-darwin");
+        assert_eq!(info.major_version(), 17);
+    }
+
+    #[test]
+    fn major_version_pg9_6() {
+        let info = server_info_with_version("PostgreSQL 9.6.24 on x86_64-pc-linux-gnu");
+        assert_eq!(info.major_version(), 9);
+    }
+
+    #[test]
+    fn major_version_with_devel_suffix() {
+        let info = server_info_with_version("PostgreSQL 18devel on x86_64");
+        // "18devel".parse() will fail, should return default 11
+        assert_eq!(info.major_version(), 11);
+    }
+
+    #[test]
+    fn major_version_aurora() {
+        let info =
+            server_info_with_version("PostgreSQL 15.4 on x86_64-pc-linux-gnu, compiled by gcc");
+        assert_eq!(info.major_version(), 15);
+    }
+
+    #[test]
+    fn major_version_empty_string() {
+        let info = server_info_with_version("");
+        assert_eq!(info.major_version(), 11); // Default fallback
+    }
+
+    #[test]
+    fn major_version_garbage() {
+        let info = server_info_with_version("not a version string at all");
+        assert_eq!(info.major_version(), 11); // Default fallback
+    }
+
+    #[test]
+    fn major_version_just_postgresql() {
+        let info = server_info_with_version("PostgreSQL");
+        assert_eq!(info.major_version(), 11); // Default fallback
+    }
+
+    #[test]
+    fn major_version_no_minor() {
+        let info = server_info_with_version("PostgreSQL 16 on linux");
+        assert_eq!(info.major_version(), 16);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // DetectedExtensions default
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn detected_extensions_default() {
+        let ext = DetectedExtensions::default();
+        assert!(!ext.pg_stat_statements);
+        assert!(!ext.pg_stat_kcache);
+        assert!(!ext.pg_wait_sampling);
+        assert!(!ext.pg_buffercache);
+        assert!(ext.pg_stat_statements_version.is_none());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Serde roundtrip tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn server_info_serde_roundtrip() {
+        let info = ServerInfo {
+            version: "PostgreSQL 15.2".to_string(),
+            start_time: Utc::now(),
+            max_connections: 200,
+            extensions: DetectedExtensions {
+                pg_stat_statements: true,
+                pg_stat_statements_version: Some("1.10".to_string()),
+                pg_stat_kcache: false,
+                pg_wait_sampling: true,
+                pg_buffercache: false,
+            },
+            settings: vec![PgSetting {
+                name: "max_connections".to_string(),
+                setting: "200".to_string(),
+                unit: None,
+                category: "Connections".to_string(),
+                short_desc: "Max connections".to_string(),
+                context: "postmaster".to_string(),
+                source: "configuration file".to_string(),
+                pending_restart: false,
+            }],
+        };
+
+        let json = serde_json::to_string(&info).unwrap();
+        let parsed: ServerInfo = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed.version, info.version);
+        assert_eq!(parsed.max_connections, info.max_connections);
+        assert_eq!(
+            parsed.extensions.pg_stat_statements,
+            info.extensions.pg_stat_statements
+        );
+        assert_eq!(parsed.settings.len(), 1);
+        assert_eq!(parsed.settings[0].name, "max_connections");
+    }
+
+    #[test]
+    fn activity_summary_default_values() {
+        let summary = ActivitySummary {
+            active_query_count: 5,
+            idle_in_transaction_count: 2,
+            total_backends: 10,
+            lock_count: 3,
+            waiting_count: 1,
+            oldest_xact_secs: Some(120.5),
+            autovacuum_count: 0,
+        };
+
+        let json = serde_json::to_string(&summary).unwrap();
+        let parsed: ActivitySummary = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed.active_query_count, 5);
+        assert_eq!(parsed.oldest_xact_secs, Some(120.5));
+    }
+
+    #[test]
+    fn active_query_with_nulls() {
+        let query = ActiveQuery {
+            pid: 12345,
+            usename: None,
+            datname: None,
+            state: Some("active".to_string()),
+            wait_event_type: None,
+            wait_event: None,
+            query_start: None,
+            duration_secs: 5.5,
+            query: None,
+            backend_type: None,
+        };
+
+        let json = serde_json::to_string(&query).unwrap();
+        let parsed: ActiveQuery = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed.pid, 12345);
+        assert!(parsed.usename.is_none());
+        assert_eq!(parsed.state, Some("active".to_string()));
+        assert_eq!(parsed.duration_secs, 5.5);
+    }
+
+    #[test]
+    fn buffer_cache_stats_serde() {
+        let stats = BufferCacheStats {
+            blks_hit: 9900,
+            blks_read: 100,
+            hit_ratio: 0.99,
+        };
+
+        let json = serde_json::to_string(&stats).unwrap();
+        let parsed: BufferCacheStats = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed.blks_hit, 9900);
+        assert_eq!(parsed.blks_read, 100);
+        assert!((parsed.hit_ratio - 0.99).abs() < 0.001);
+    }
+
+    #[test]
+    fn table_stat_bloat_fields_default() {
+        // Test that bloat fields default to None when missing from JSON
+        let json = r#"{
+            "schemaname": "public",
+            "relname": "users",
+            "total_size_bytes": 1000000,
+            "table_size_bytes": 800000,
+            "indexes_size_bytes": 200000,
+            "seq_scan": 100,
+            "seq_tup_read": 5000,
+            "idx_scan": 500,
+            "idx_tup_fetch": 2000,
+            "n_live_tup": 1000,
+            "n_dead_tup": 50,
+            "dead_ratio": 5.0,
+            "n_tup_ins": 100,
+            "n_tup_upd": 50,
+            "n_tup_del": 10,
+            "n_tup_hot_upd": 20,
+            "last_vacuum": null,
+            "last_autovacuum": null,
+            "last_analyze": null,
+            "last_autoanalyze": null,
+            "vacuum_count": 5,
+            "autovacuum_count": 10
+        }"#;
+
+        let parsed: TableStat = serde_json::from_str(json).unwrap();
+        assert!(parsed.bloat_bytes.is_none());
+        assert!(parsed.bloat_pct.is_none());
+    }
+
+    #[test]
+    fn index_info_bloat_fields_default() {
+        // Test that bloat fields default to None when missing from JSON
+        let json = r#"{
+            "schemaname": "public",
+            "table_name": "users",
+            "index_name": "users_pkey",
+            "index_size_bytes": 50000,
+            "idx_scan": 1000,
+            "idx_tup_read": 5000,
+            "idx_tup_fetch": 4500,
+            "index_definition": "CREATE UNIQUE INDEX users_pkey ON public.users USING btree (id)"
+        }"#;
+
+        let parsed: IndexInfo = serde_json::from_str(json).unwrap();
+        assert!(parsed.bloat_bytes.is_none());
+        assert!(parsed.bloat_pct.is_none());
+    }
+
+    #[test]
+    fn wal_stats_default() {
+        let stats = WalStats::default();
+        assert_eq!(stats.wal_records, 0);
+        assert_eq!(stats.wal_bytes, 0);
+        assert_eq!(stats.wal_write_time, 0.0);
+    }
+
+    #[test]
+    fn replication_slot_serde() {
+        let slot = ReplicationSlot {
+            slot_name: "my_slot".to_string(),
+            slot_type: "logical".to_string(),
+            database: Some("mydb".to_string()),
+            active: true,
+            restart_lsn: Some("0/1234567".to_string()),
+            confirmed_flush_lsn: Some("0/1234000".to_string()),
+            wal_retained_bytes: Some(1048576),
+            temporary: false,
+            spill_txns: Some(0),
+            spill_count: Some(0),
+            spill_bytes: Some(0),
+        };
+
+        let json = serde_json::to_string(&slot).unwrap();
+        let parsed: ReplicationSlot = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed.slot_name, "my_slot");
+        assert!(parsed.active);
+        assert_eq!(parsed.wal_retained_bytes, Some(1048576));
+    }
+}

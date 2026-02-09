@@ -212,3 +212,384 @@ impl Theme {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Reset theme to default before each test to avoid cross-test pollution
+    fn setup() {
+        set_theme(ThemeColors::TOKYO_NIGHT);
+        set_duration_thresholds(1.0, 10.0);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // duration_color boundary tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn duration_color_below_warn() {
+        setup();
+        // Anything < 1.0 should be OK (green)
+        let color = Theme::duration_color(0.0);
+        assert_eq!(color, Theme::duration_ok());
+
+        let color = Theme::duration_color(0.5);
+        assert_eq!(color, Theme::duration_ok());
+
+        let color = Theme::duration_color(0.999);
+        assert_eq!(color, Theme::duration_ok());
+    }
+
+    #[test]
+    fn duration_color_at_warn_boundary() {
+        setup();
+        // Exactly at warn threshold (1.0) should be warn
+        let color = Theme::duration_color(1.0);
+        assert_eq!(color, Theme::duration_warn());
+    }
+
+    #[test]
+    fn duration_color_between_warn_and_danger() {
+        setup();
+        // Between 1.0 and 10.0 should be warn
+        let color = Theme::duration_color(1.5);
+        assert_eq!(color, Theme::duration_warn());
+
+        let color = Theme::duration_color(5.0);
+        assert_eq!(color, Theme::duration_warn());
+
+        let color = Theme::duration_color(9.999);
+        assert_eq!(color, Theme::duration_warn());
+    }
+
+    #[test]
+    fn duration_color_at_danger_boundary() {
+        setup();
+        // At danger threshold (10.0) should be danger
+        let color = Theme::duration_color(10.0);
+        assert_eq!(color, Theme::duration_danger());
+    }
+
+    #[test]
+    fn duration_color_above_danger() {
+        setup();
+        // Above 10.0 should be danger
+        let color = Theme::duration_color(10.1);
+        assert_eq!(color, Theme::duration_danger());
+
+        let color = Theme::duration_color(100.0);
+        assert_eq!(color, Theme::duration_danger());
+
+        let color = Theme::duration_color(f64::MAX);
+        assert_eq!(color, Theme::duration_danger());
+    }
+
+    #[test]
+    fn duration_color_with_custom_thresholds() {
+        setup();
+        set_duration_thresholds(5.0, 30.0);
+
+        assert_eq!(Theme::duration_color(4.9), Theme::duration_ok());
+        assert_eq!(Theme::duration_color(5.0), Theme::duration_warn());
+        assert_eq!(Theme::duration_color(29.9), Theme::duration_warn());
+        assert_eq!(Theme::duration_color(30.0), Theme::duration_danger());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // state_color tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn state_color_active() {
+        setup();
+        let color = Theme::state_color(Some("active"));
+        assert_eq!(color, Theme::state_active());
+    }
+
+    #[test]
+    fn state_color_idle_in_transaction() {
+        setup();
+        let color = Theme::state_color(Some("idle in transaction"));
+        assert_eq!(color, Theme::state_idle_txn());
+    }
+
+    #[test]
+    fn state_color_idle_in_transaction_aborted() {
+        setup();
+        let color = Theme::state_color(Some("idle in transaction (aborted)"));
+        assert_eq!(color, Theme::state_idle_txn());
+    }
+
+    #[test]
+    fn state_color_idle() {
+        setup();
+        // Plain idle should get default fg color
+        let color = Theme::state_color(Some("idle"));
+        assert_eq!(color, Theme::fg());
+    }
+
+    #[test]
+    fn state_color_none() {
+        setup();
+        let color = Theme::state_color(None);
+        assert_eq!(color, Theme::fg());
+    }
+
+    #[test]
+    fn state_color_unknown() {
+        setup();
+        let color = Theme::state_color(Some("something else"));
+        assert_eq!(color, Theme::fg());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // hit_ratio_color boundary tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn hit_ratio_color_excellent() {
+        setup();
+        // >= 0.99 should be OK (green)
+        assert_eq!(Theme::hit_ratio_color(1.0), Theme::border_ok());
+        assert_eq!(Theme::hit_ratio_color(0.999), Theme::border_ok());
+        assert_eq!(Theme::hit_ratio_color(0.99), Theme::border_ok());
+    }
+
+    #[test]
+    fn hit_ratio_color_good() {
+        setup();
+        // >= 0.90 but < 0.99 should be warn
+        assert_eq!(Theme::hit_ratio_color(0.989), Theme::border_warn());
+        assert_eq!(Theme::hit_ratio_color(0.95), Theme::border_warn());
+        assert_eq!(Theme::hit_ratio_color(0.90), Theme::border_warn());
+    }
+
+    #[test]
+    fn hit_ratio_color_bad() {
+        setup();
+        // < 0.90 should be danger
+        assert_eq!(Theme::hit_ratio_color(0.899), Theme::border_danger());
+        assert_eq!(Theme::hit_ratio_color(0.5), Theme::border_danger());
+        assert_eq!(Theme::hit_ratio_color(0.0), Theme::border_danger());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // dead_ratio_color boundary tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn dead_ratio_color_ok() {
+        setup();
+        // <= 5% should be OK
+        assert_eq!(Theme::dead_ratio_color(0.0), Theme::border_ok());
+        assert_eq!(Theme::dead_ratio_color(2.5), Theme::border_ok());
+        assert_eq!(Theme::dead_ratio_color(5.0), Theme::border_ok());
+    }
+
+    #[test]
+    fn dead_ratio_color_warn() {
+        setup();
+        // > 5% but <= 20% should be warn
+        assert_eq!(Theme::dead_ratio_color(5.1), Theme::border_warn());
+        assert_eq!(Theme::dead_ratio_color(10.0), Theme::border_warn());
+        assert_eq!(Theme::dead_ratio_color(20.0), Theme::border_warn());
+    }
+
+    #[test]
+    fn dead_ratio_color_danger() {
+        setup();
+        // > 20% should be danger
+        assert_eq!(Theme::dead_ratio_color(20.1), Theme::border_danger());
+        assert_eq!(Theme::dead_ratio_color(50.0), Theme::border_danger());
+        assert_eq!(Theme::dead_ratio_color(100.0), Theme::border_danger());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // bloat_color boundary tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn bloat_color_ok() {
+        setup();
+        // <= 20% should be OK
+        assert_eq!(Theme::bloat_color(0.0), Theme::border_ok());
+        assert_eq!(Theme::bloat_color(10.0), Theme::border_ok());
+        assert_eq!(Theme::bloat_color(20.0), Theme::border_ok());
+    }
+
+    #[test]
+    fn bloat_color_warn() {
+        setup();
+        // > 20% but <= 50% should be warn
+        assert_eq!(Theme::bloat_color(20.1), Theme::border_warn());
+        assert_eq!(Theme::bloat_color(35.0), Theme::border_warn());
+        assert_eq!(Theme::bloat_color(50.0), Theme::border_warn());
+    }
+
+    #[test]
+    fn bloat_color_danger() {
+        setup();
+        // > 50% should be danger
+        assert_eq!(Theme::bloat_color(50.1), Theme::border_danger());
+        assert_eq!(Theme::bloat_color(75.0), Theme::border_danger());
+        assert_eq!(Theme::bloat_color(100.0), Theme::border_danger());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // wraparound_color boundary tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn wraparound_color_ok() {
+        setup();
+        // <= 50% should be OK
+        assert_eq!(Theme::wraparound_color(0.0), Theme::border_ok());
+        assert_eq!(Theme::wraparound_color(25.0), Theme::border_ok());
+        assert_eq!(Theme::wraparound_color(50.0), Theme::border_ok());
+    }
+
+    #[test]
+    fn wraparound_color_warn() {
+        setup();
+        // > 50% but <= 75% should be warn
+        assert_eq!(Theme::wraparound_color(50.1), Theme::border_warn());
+        assert_eq!(Theme::wraparound_color(60.0), Theme::border_warn());
+        assert_eq!(Theme::wraparound_color(75.0), Theme::border_warn());
+    }
+
+    #[test]
+    fn wraparound_color_danger() {
+        setup();
+        // > 75% should be danger
+        assert_eq!(Theme::wraparound_color(75.1), Theme::border_danger());
+        assert_eq!(Theme::wraparound_color(90.0), Theme::border_danger());
+        assert_eq!(Theme::wraparound_color(100.0), Theme::border_danger());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // index_usage_color tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn index_usage_color_unused() {
+        setup();
+        // 0 scans = danger (unused index)
+        assert_eq!(Theme::index_usage_color(0), Theme::border_danger());
+    }
+
+    #[test]
+    fn index_usage_color_used() {
+        setup();
+        // Any scans > 0 = OK
+        assert_eq!(Theme::index_usage_color(1), Theme::border_ok());
+        assert_eq!(Theme::index_usage_color(100), Theme::border_ok());
+        assert_eq!(Theme::index_usage_color(1000000), Theme::border_ok());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // lag_color tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn lag_color_none() {
+        setup();
+        assert_eq!(Theme::lag_color(None), Theme::fg());
+    }
+
+    #[test]
+    fn lag_color_low() {
+        setup();
+        // <= 1.0 sec is fine
+        assert_eq!(Theme::lag_color(Some(0.0)), Theme::fg());
+        assert_eq!(Theme::lag_color(Some(0.5)), Theme::fg());
+        assert_eq!(Theme::lag_color(Some(1.0)), Theme::fg());
+    }
+
+    #[test]
+    fn lag_color_medium() {
+        setup();
+        // > 1.0 but <= 10.0 is warn
+        assert_eq!(Theme::lag_color(Some(1.1)), Theme::border_warn());
+        assert_eq!(Theme::lag_color(Some(5.0)), Theme::border_warn());
+        assert_eq!(Theme::lag_color(Some(10.0)), Theme::border_warn());
+    }
+
+    #[test]
+    fn lag_color_high() {
+        setup();
+        // > 10.0 is danger
+        assert_eq!(Theme::lag_color(Some(10.1)), Theme::border_danger());
+        assert_eq!(Theme::lag_color(Some(30.0)), Theme::border_danger());
+        assert_eq!(Theme::lag_color(Some(100.0)), Theme::border_danger());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // wait_event_color tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn wait_event_color_known_types() {
+        assert_eq!(Theme::wait_event_color("Lock"), Color::Red);
+        assert_eq!(Theme::wait_event_color("IO"), Color::Yellow);
+        assert_eq!(Theme::wait_event_color("IPC"), Color::Magenta);
+        assert_eq!(Theme::wait_event_color("LWLock"), Color::Cyan);
+        assert_eq!(Theme::wait_event_color("Client"), Color::White);
+        assert_eq!(Theme::wait_event_color("BufferPin"), Color::LightBlue);
+        assert_eq!(Theme::wait_event_color("CPU/Running"), Color::Green);
+        assert_eq!(Theme::wait_event_color("Activity"), Color::DarkGray);
+    }
+
+    #[test]
+    fn wait_event_color_unknown() {
+        assert_eq!(Theme::wait_event_color("Unknown"), Color::Gray);
+        assert_eq!(Theme::wait_event_color(""), Color::Gray);
+        assert_eq!(Theme::wait_event_color("SomethingNew"), Color::Gray);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Theme accessors
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn theme_accessors_return_colors() {
+        setup();
+        // Just verify accessors don't panic and return some color
+        let _ = Theme::header_bg();
+        let _ = Theme::fg();
+        let _ = Theme::fg_dim();
+        let _ = Theme::border_active();
+        let _ = Theme::border_warn();
+        let _ = Theme::border_danger();
+        let _ = Theme::border_ok();
+        let _ = Theme::border_dim();
+        let _ = Theme::graph_connections();
+        let _ = Theme::graph_cache();
+        let _ = Theme::graph_latency();
+        let _ = Theme::duration_ok();
+        let _ = Theme::duration_warn();
+        let _ = Theme::duration_danger();
+        let _ = Theme::state_active();
+        let _ = Theme::state_idle_txn();
+        let _ = Theme::overlay_bg();
+        let _ = Theme::highlight_bg();
+        let _ = Theme::sql_keyword();
+        let _ = Theme::sql_string();
+        let _ = Theme::sql_number();
+        let _ = Theme::sql_comment();
+    }
+
+    #[test]
+    fn title_style_is_bold() {
+        setup();
+        let style = Theme::title_style();
+        assert!(style.add_modifier.contains(Modifier::BOLD));
+    }
+
+    #[test]
+    fn border_style_applies_color() {
+        setup();
+        let style = Theme::border_style(Color::Red);
+        assert_eq!(style.fg, Some(Color::Red));
+    }
+}

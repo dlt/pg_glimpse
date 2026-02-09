@@ -657,4 +657,215 @@ mod tests {
             }
         }
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Config deserialization error handling
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn deserialize_invalid_toml_returns_default() {
+        let invalid_toml = "this is not { valid toml at all [[";
+        let result: Result<AppConfig, _> = toml::from_str(invalid_toml);
+        // When parsing fails, we should use default
+        assert!(result.is_err());
+
+        // The load() function handles this gracefully
+        let config: AppConfig = toml::from_str(invalid_toml).unwrap_or_default();
+        assert_eq!(config, AppConfig::default());
+    }
+
+    #[test]
+    fn deserialize_wrong_types_returns_default() {
+        // String where number expected
+        let wrong_type = r#"
+            refresh_interval_secs = "not a number"
+        "#;
+        let result: Result<AppConfig, _> = toml::from_str(wrong_type);
+        assert!(result.is_err());
+
+        let config: AppConfig = toml::from_str(wrong_type).unwrap_or_default();
+        assert_eq!(config, AppConfig::default());
+    }
+
+    #[test]
+    fn deserialize_invalid_enum_variant() {
+        let invalid_enum = r#"
+            graph_marker = "InvalidMarker"
+        "#;
+        let result: Result<AppConfig, _> = toml::from_str(invalid_enum);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn deserialize_negative_numbers() {
+        // Negative where unsigned expected - TOML will fail
+        let negative = r#"
+            refresh_interval_secs = -5
+        "#;
+        let result: Result<AppConfig, _> = toml::from_str(negative);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn deserialize_extra_unknown_fields() {
+        // Extra fields should be ignored
+        let extra_fields = r#"
+            refresh_interval_secs = 5
+            unknown_field = "should be ignored"
+            another_unknown = 123
+        "#;
+        let config: AppConfig = toml::from_str(extra_fields).unwrap();
+        assert_eq!(config.refresh_interval_secs, 5);
+        // Other fields should have defaults
+        assert_eq!(config.graph_marker, GraphMarkerStyle::Braille);
+    }
+
+    #[test]
+    fn deserialize_partial_config() {
+        // Only some fields specified
+        let partial = r#"
+            color_theme = "Nord"
+            warn_duration_secs = 2.5
+        "#;
+        let config: AppConfig = toml::from_str(partial).unwrap();
+        assert_eq!(config.color_theme, ColorTheme::Nord);
+        assert_eq!(config.warn_duration_secs, 2.5);
+        // Unspecified fields should have defaults
+        assert_eq!(config.refresh_interval_secs, 2);
+        assert_eq!(config.graph_marker, GraphMarkerStyle::Braille);
+    }
+
+    #[test]
+    fn deserialize_large_values() {
+        // Large but valid numbers (within i64 range for TOML compatibility)
+        let large = r#"
+            refresh_interval_secs = 9223372036854775807
+            warn_duration_secs = 999999999.99
+            danger_duration_secs = 999999999.99
+            recording_retention_secs = 9223372036854775807
+        "#;
+        let config: AppConfig = toml::from_str(large).unwrap();
+        assert_eq!(config.refresh_interval_secs, i64::MAX as u64);
+        assert!(config.warn_duration_secs > 999999999.0);
+    }
+
+    #[test]
+    fn deserialize_extreme_values_fails() {
+        // u64::MAX is larger than i64::MAX, which TOML can't handle
+        let extreme = r#"
+            refresh_interval_secs = 18446744073709551615
+        "#;
+        let result: Result<AppConfig, _> = toml::from_str(extreme);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn deserialize_zero_values() {
+        let zeros = r#"
+            refresh_interval_secs = 0
+            warn_duration_secs = 0.0
+            danger_duration_secs = 0.0
+            recording_retention_secs = 0
+        "#;
+        let config: AppConfig = toml::from_str(zeros).unwrap();
+        assert_eq!(config.refresh_interval_secs, 0);
+        assert_eq!(config.warn_duration_secs, 0.0);
+    }
+
+    #[test]
+    fn deserialize_float_precision() {
+        let floats = r#"
+            warn_duration_secs = 0.123456789
+            danger_duration_secs = 1.987654321
+        "#;
+        let config: AppConfig = toml::from_str(floats).unwrap();
+        assert!((config.warn_duration_secs - 0.123456789).abs() < 1e-9);
+        assert!((config.danger_duration_secs - 1.987654321).abs() < 1e-9);
+    }
+
+    #[test]
+    fn serialize_produces_valid_toml() {
+        let config = AppConfig {
+            graph_marker: GraphMarkerStyle::HalfBlock,
+            color_theme: ColorTheme::Dracula,
+            refresh_interval_secs: 5,
+            warn_duration_secs: 2.5,
+            danger_duration_secs: 15.0,
+            recording_retention_secs: 7200,
+        };
+
+        let toml_str = toml::to_string_pretty(&config).unwrap();
+
+        // Verify it's valid TOML that can be parsed back
+        let parsed: AppConfig = toml::from_str(&toml_str).unwrap();
+        assert_eq!(parsed, config);
+
+        // Verify string contains expected content
+        assert!(toml_str.contains("graph_marker"));
+        assert!(toml_str.contains("HalfBlock"));
+        assert!(toml_str.contains("Dracula"));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // GraphMarkerStyle serialization
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn graph_marker_serialization() {
+        for marker in [
+            GraphMarkerStyle::Braille,
+            GraphMarkerStyle::HalfBlock,
+            GraphMarkerStyle::Block,
+        ] {
+            let json = serde_json::to_string(&marker).unwrap();
+            let parsed: GraphMarkerStyle = serde_json::from_str(&json).unwrap();
+            assert_eq!(parsed, marker);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // ColorTheme serialization
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn color_theme_serialization() {
+        for theme in [
+            ColorTheme::TokyoNight,
+            ColorTheme::Dracula,
+            ColorTheme::Nord,
+            ColorTheme::SolarizedDark,
+            ColorTheme::SolarizedLight,
+            ColorTheme::CatppuccinLatte,
+        ] {
+            let json = serde_json::to_string(&theme).unwrap();
+            let parsed: ColorTheme = serde_json::from_str(&json).unwrap();
+            assert_eq!(parsed, theme);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // AppConfig::load behavior (without filesystem mocking)
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn config_path_returns_option() {
+        // This just verifies the function doesn't panic
+        let path = AppConfig::config_path();
+        // On most systems, config_dir should exist
+        if let Some(p) = path {
+            assert!(p.to_string_lossy().contains("pg_glimpse"));
+            assert!(p.to_string_lossy().contains("config.toml"));
+        }
+    }
+
+    #[test]
+    fn load_returns_default_when_config_missing() {
+        // Since we can't guarantee the config file exists, just verify
+        // that load() returns a valid config (either loaded or default)
+        let config = AppConfig::load();
+
+        // Should be a valid config with reasonable values
+        assert!(config.refresh_interval_secs >= 1);
+        assert!(config.danger_duration_secs >= config.warn_duration_secs);
+    }
 }

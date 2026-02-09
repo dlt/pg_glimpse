@@ -2570,4 +2570,568 @@ mod tests {
         assert!(!BottomPanel::Wraparound.supports_filter());
         assert!(!BottomPanel::WalIo.supports_filter());
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // App::update edge cases
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn update_with_empty_snapshot() {
+        let mut app = make_app();
+        let mut snap = make_snapshot();
+        snap.active_queries.clear();
+        snap.summary.total_backends = 0;
+        snap.summary.active_query_count = 0;
+
+        app.update(snap);
+
+        assert!(app.snapshot.is_some());
+        assert_eq!(app.snapshot.as_ref().unwrap().active_queries.len(), 0);
+        // History should still be updated
+        assert!(!app.connection_history.as_vec().is_empty());
+    }
+
+    #[test]
+    fn update_clears_last_error() {
+        let mut app = make_app();
+        app.last_error = Some("Previous error".to_string());
+
+        app.update(make_snapshot());
+
+        assert!(app.last_error.is_none());
+    }
+
+    #[test]
+    fn update_populates_histories() {
+        let mut app = make_app();
+        assert!(app.connection_history.as_vec().is_empty());
+        assert!(app.hit_ratio_history.as_vec().is_empty());
+
+        let mut snap = make_snapshot();
+        snap.summary.total_backends = 25;
+        snap.buffer_cache.hit_ratio = 0.95;
+        app.update(snap);
+
+        assert_eq!(app.connection_history.as_vec().len(), 1);
+        assert_eq!(app.hit_ratio_history.as_vec().len(), 1);
+    }
+
+    #[test]
+    fn update_calculates_avg_query_time() {
+        let mut app = make_app();
+        let mut snap = make_snapshot();
+        snap.active_queries = vec![
+            ActiveQuery {
+                pid: 1,
+                usename: None,
+                datname: None,
+                state: Some("active".into()),
+                query: None,
+                duration_secs: 2.0,
+                wait_event_type: None,
+                wait_event: None,
+                query_start: None,
+                backend_type: None,
+            },
+            ActiveQuery {
+                pid: 2,
+                usename: None,
+                datname: None,
+                state: Some("active".into()),
+                query: None,
+                duration_secs: 4.0,
+                wait_event_type: None,
+                wait_event: None,
+                query_start: None,
+                backend_type: None,
+            },
+        ];
+
+        app.update(snap);
+
+        // Average of 2.0 and 4.0 = 3.0 seconds = 3000ms
+        let last_avg = app.avg_query_time_history.last().unwrap();
+        assert_eq!(last_avg, 3000);
+    }
+
+    #[test]
+    fn update_handles_no_active_queries() {
+        let mut app = make_app();
+        let mut snap = make_snapshot();
+        // Only idle queries (not "active" or "idle in transaction")
+        snap.active_queries = vec![ActiveQuery {
+            pid: 1,
+            usename: None,
+            datname: None,
+            state: Some("idle".into()),
+            query: None,
+            duration_secs: 100.0,
+            wait_event_type: None,
+            wait_event: None,
+            query_start: None,
+            backend_type: None,
+        }];
+
+        app.update(snap);
+
+        // No active queries, so avg should be 0
+        let last_avg = app.avg_query_time_history.last().unwrap();
+        assert_eq!(last_avg, 0);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // sorted_*_indices edge cases
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn sorted_query_indices_no_snapshot() {
+        let app = make_app();
+        assert!(app.snapshot.is_none());
+        assert!(app.sorted_query_indices().is_empty());
+    }
+
+    #[test]
+    fn sorted_query_indices_empty_queries() {
+        let mut app = make_app();
+        let mut snap = make_snapshot();
+        snap.active_queries.clear();
+        app.update(snap);
+
+        assert!(app.sorted_query_indices().is_empty());
+    }
+
+    #[test]
+    fn sorted_index_indices_no_snapshot() {
+        let app = make_app();
+        assert!(app.sorted_index_indices().is_empty());
+    }
+
+    #[test]
+    fn sorted_stmt_indices_no_snapshot() {
+        let app = make_app();
+        assert!(app.sorted_stmt_indices().is_empty());
+    }
+
+    #[test]
+    fn sorted_table_stat_indices_no_snapshot() {
+        let app = make_app();
+        assert!(app.sorted_table_stat_indices().is_empty());
+    }
+
+    #[test]
+    fn sorted_settings_indices_no_snapshot() {
+        let app = make_app();
+        assert!(app.sorted_settings_indices().is_empty());
+    }
+
+    #[test]
+    fn selected_query_pid_no_snapshot() {
+        let app = make_app();
+        assert!(app.selected_query_pid().is_none());
+    }
+
+    #[test]
+    fn selected_query_pid_no_selection() {
+        let mut app = make_app();
+        app.update(make_snapshot());
+        app.query_table_state.select(None);
+
+        assert!(app.selected_query_pid().is_none());
+    }
+
+    #[test]
+    fn get_filtered_pids_no_snapshot() {
+        let app = make_app();
+        assert!(app.get_filtered_pids().is_empty());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Filter edge cases
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn filter_with_no_matches() {
+        let mut app = make_app();
+        app.update(make_snapshot());
+        app.bottom_panel = BottomPanel::Queries;
+        app.filter_text = "xyznonexistent123".to_string();
+        app.filter_active = true;
+
+        let indices = app.sorted_query_indices();
+        assert!(indices.is_empty());
+    }
+
+    #[test]
+    fn filter_with_special_characters() {
+        let mut app = make_app();
+        let mut snap = make_snapshot();
+        snap.active_queries[0].query = Some("SELECT * FROM \"table-with-dashes\"".into());
+        app.update(snap);
+
+        app.bottom_panel = BottomPanel::Queries;
+        app.filter_text = "table-with".to_string();
+        app.filter_active = true;
+
+        let indices = app.sorted_query_indices();
+        assert!(!indices.is_empty());
+    }
+
+    #[test]
+    fn filter_inactive_ignores_filter_text() {
+        let mut app = make_app();
+        app.update(make_snapshot());
+        app.bottom_panel = BottomPanel::Queries;
+        app.filter_text = "xyznonexistent123".to_string();
+        app.filter_active = false;
+        app.view_mode = ViewMode::Normal;
+
+        // When filter is not active, all queries should be returned
+        let indices = app.sorted_query_indices();
+        assert!(!indices.is_empty());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // config_adjust bounds checking
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn config_adjust_refresh_interval_lower_bound() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Config;
+        app.config_selected = ConfigItem::ALL
+            .iter()
+            .position(|&i| i == ConfigItem::RefreshInterval)
+            .unwrap();
+
+        app.config.refresh_interval_secs = 1; // At minimum
+        app.config_adjust(-1); // Try to go below
+
+        assert_eq!(app.config.refresh_interval_secs, 1); // Should stay at 1
+    }
+
+    #[test]
+    fn config_adjust_refresh_interval_upper_bound() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Config;
+        app.config_selected = ConfigItem::ALL
+            .iter()
+            .position(|&i| i == ConfigItem::RefreshInterval)
+            .unwrap();
+
+        app.config.refresh_interval_secs = 60; // At maximum
+        app.config_adjust(1); // Try to go above
+
+        assert_eq!(app.config.refresh_interval_secs, 60); // Should stay at 60
+    }
+
+    #[test]
+    fn config_adjust_warn_duration_lower_bound() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Config;
+        app.config_selected = ConfigItem::ALL
+            .iter()
+            .position(|&i| i == ConfigItem::WarnDuration)
+            .unwrap();
+
+        app.config.warn_duration_secs = 0.1;
+        app.config_adjust(-1); // Try to go below 0.1
+
+        assert!(app.config.warn_duration_secs >= 0.1);
+    }
+
+    #[test]
+    fn config_adjust_warn_duration_clamped_to_danger() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Config;
+        app.config_selected = ConfigItem::ALL
+            .iter()
+            .position(|&i| i == ConfigItem::WarnDuration)
+            .unwrap();
+
+        app.config.danger_duration_secs = 5.0;
+        app.config.warn_duration_secs = 5.0;
+        app.config_adjust(1); // Try to go above danger
+
+        assert!(app.config.warn_duration_secs <= app.config.danger_duration_secs);
+    }
+
+    #[test]
+    fn config_adjust_danger_duration_clamped_to_warn() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Config;
+        app.config_selected = ConfigItem::ALL
+            .iter()
+            .position(|&i| i == ConfigItem::DangerDuration)
+            .unwrap();
+
+        app.config.warn_duration_secs = 5.0;
+        app.config.danger_duration_secs = 5.0;
+        app.config_adjust(-1); // Try to go below warn
+
+        assert!(app.config.danger_duration_secs >= app.config.warn_duration_secs);
+    }
+
+    #[test]
+    fn config_adjust_danger_duration_upper_bound() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Config;
+        app.config_selected = ConfigItem::ALL
+            .iter()
+            .position(|&i| i == ConfigItem::DangerDuration)
+            .unwrap();
+
+        app.config.danger_duration_secs = 300.0; // At maximum
+        app.config_adjust(1); // Try to go above
+
+        assert_eq!(app.config.danger_duration_secs, 300.0);
+    }
+
+    #[test]
+    fn config_adjust_recording_retention_lower_bound() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Config;
+        app.config_selected = ConfigItem::ALL
+            .iter()
+            .position(|&i| i == ConfigItem::RecordingRetention)
+            .unwrap();
+
+        app.config.recording_retention_secs = 600; // At minimum (10 min)
+        app.config_adjust(-1);
+
+        assert_eq!(app.config.recording_retention_secs, 600);
+    }
+
+    #[test]
+    fn config_adjust_recording_retention_upper_bound() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Config;
+        app.config_selected = ConfigItem::ALL
+            .iter()
+            .position(|&i| i == ConfigItem::RecordingRetention)
+            .unwrap();
+
+        app.config.recording_retention_secs = 86400; // At maximum (24 hours)
+        app.config_adjust(1);
+
+        assert_eq!(app.config.recording_retention_secs, 86400);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Rate calculation edge cases
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn rate_calculation_with_counter_reset() {
+        use crate::db::models::DatabaseStats;
+
+        let mut app = make_app();
+
+        // First snapshot with high counter values
+        let mut snap1 = make_snapshot();
+        snap1.db_stats = Some(DatabaseStats {
+            xact_commit: 1000000,
+            xact_rollback: 100,
+            blks_read: 50000,
+        });
+        app.update(snap1);
+
+        // Second snapshot with lower values (simulating server restart)
+        let mut snap2 = make_snapshot();
+        snap2.timestamp = chrono::Utc::now() + chrono::Duration::seconds(2);
+        snap2.db_stats = Some(DatabaseStats {
+            xact_commit: 100, // Lower than before - counter reset
+            xact_rollback: 0,
+            blks_read: 100,
+        });
+        app.update(snap2);
+
+        // TPS should not be calculated when counters go backwards
+        // (the rate calculation guards against negative values)
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Bloat preservation during update
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn update_preserves_bloat_data() {
+        use crate::db::models::TableStat;
+
+        let mut app = make_app();
+
+        // First update with bloat data
+        let mut snap1 = make_snapshot();
+        snap1.table_stats = vec![TableStat {
+            schemaname: "public".into(),
+            relname: "users".into(),
+            total_size_bytes: 1000000,
+            table_size_bytes: 800000,
+            indexes_size_bytes: 200000,
+            seq_scan: 100,
+            seq_tup_read: 5000,
+            idx_scan: 500,
+            idx_tup_fetch: 4500,
+            n_live_tup: 10000,
+            n_dead_tup: 500,
+            dead_ratio: 5.0,
+            n_tup_ins: 100,
+            n_tup_upd: 50,
+            n_tup_del: 10,
+            n_tup_hot_upd: 20,
+            last_vacuum: None,
+            last_autovacuum: None,
+            last_analyze: None,
+            last_autoanalyze: None,
+            vacuum_count: 0,
+            autovacuum_count: 0,
+            bloat_bytes: Some(100000),
+            bloat_pct: Some(12.5),
+        }];
+        app.update(snap1);
+
+        // Second update without bloat data
+        let mut snap2 = make_snapshot();
+        snap2.table_stats = vec![TableStat {
+            schemaname: "public".into(),
+            relname: "users".into(),
+            total_size_bytes: 1000100, // Slightly different
+            table_size_bytes: 800100,
+            indexes_size_bytes: 200000,
+            seq_scan: 110,
+            seq_tup_read: 5500,
+            idx_scan: 510,
+            idx_tup_fetch: 4600,
+            n_live_tup: 10050,
+            n_dead_tup: 480,
+            dead_ratio: 4.8,
+            n_tup_ins: 150,
+            n_tup_upd: 60,
+            n_tup_del: 15,
+            n_tup_hot_upd: 25,
+            last_vacuum: None,
+            last_autovacuum: None,
+            last_analyze: None,
+            last_autoanalyze: None,
+            vacuum_count: 0,
+            autovacuum_count: 0,
+            bloat_bytes: None, // No bloat in new snapshot
+            bloat_pct: None,
+        }];
+        app.update(snap2);
+
+        // Bloat data should be preserved from previous snapshot
+        let snap = app.snapshot.as_ref().unwrap();
+        assert_eq!(snap.table_stats[0].bloat_bytes, Some(100000));
+        assert_eq!(snap.table_stats[0].bloat_pct, Some(12.5));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Navigation with empty data
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn navigate_queries_with_empty_list() {
+        let mut app = make_app();
+        let mut snap = make_snapshot();
+        snap.active_queries.clear();
+        app.update(snap);
+
+        // Navigating should not panic
+        app.handle_key(key(KeyCode::Down));
+        app.handle_key(key(KeyCode::Up));
+        app.handle_key(key(KeyCode::Enter)); // Inspect on empty list
+    }
+
+    #[test]
+    fn navigate_indexes_with_empty_list() {
+        let mut app = make_app();
+        app.update(make_snapshot());
+        app.bottom_panel = BottomPanel::Indexes;
+
+        // Navigating should not panic
+        app.handle_key(key(KeyCode::Down));
+        app.handle_key(key(KeyCode::Up));
+        app.handle_key(key(KeyCode::Enter)); // Inspect on empty list
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Replay mode specific
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn replay_mode_state() {
+        let app = make_replay_app();
+        assert!(app.replay_mode);
+        assert_eq!(app.replay_filename, Some("test.jsonl".to_string()));
+        assert_eq!(app.replay_total, 10);
+    }
+
+    #[test]
+    fn replay_mode_disables_cancel_kill() {
+        let mut app = make_replay_app();
+        app.update(make_snapshot());
+        app.query_table_state.select(Some(0));
+
+        // C and K should be ignored in replay mode
+        app.handle_key(key(KeyCode::Char('C')));
+        assert_eq!(app.view_mode, ViewMode::Normal);
+
+        app.handle_key(key(KeyCode::Char('K')));
+        assert_eq!(app.view_mode, ViewMode::Normal);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // BottomPanel::label
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn bottom_panel_labels() {
+        assert_eq!(BottomPanel::Queries.label(), "Queries");
+        assert_eq!(BottomPanel::Blocking.label(), "Blocking");
+        assert_eq!(BottomPanel::WaitEvents.label(), "Wait Events");
+        assert_eq!(BottomPanel::TableStats.label(), "Table Stats");
+        assert_eq!(BottomPanel::Replication.label(), "Replication");
+        assert_eq!(BottomPanel::VacuumProgress.label(), "Vacuum Progress");
+        assert_eq!(BottomPanel::Wraparound.label(), "Wraparound");
+        assert_eq!(BottomPanel::Indexes.label(), "Indexes");
+        assert_eq!(BottomPanel::Statements.label(), "Statements");
+        assert_eq!(BottomPanel::WalIo.label(), "WAL & I/O");
+        assert_eq!(BottomPanel::Settings.label(), "Settings");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Sort column labels
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn sort_column_labels() {
+        assert_eq!(SortColumn::Pid.label(), "PID");
+        assert_eq!(SortColumn::Duration.label(), "Duration");
+        assert_eq!(SortColumn::State.label(), "State");
+        assert_eq!(SortColumn::User.label(), "User");
+    }
+
+    #[test]
+    fn table_stat_sort_column_labels() {
+        assert_eq!(TableStatSortColumn::DeadTuples.label(), "Dead Tuples");
+        assert_eq!(TableStatSortColumn::Size.label(), "Size");
+        assert_eq!(TableStatSortColumn::Name.label(), "Name");
+        assert_eq!(TableStatSortColumn::SeqScan.label(), "Seq Scan");
+        assert_eq!(TableStatSortColumn::IdxScan.label(), "Idx Scan");
+        assert_eq!(TableStatSortColumn::DeadRatio.label(), "Dead %");
+    }
+
+    #[test]
+    fn statement_sort_column_labels() {
+        assert_eq!(StatementSortColumn::TotalTime.label(), "Total Time");
+        assert_eq!(StatementSortColumn::MeanTime.label(), "Mean Time");
+        assert_eq!(StatementSortColumn::MaxTime.label(), "Max Time");
+        assert_eq!(StatementSortColumn::Stddev.label(), "Stddev");
+        assert_eq!(StatementSortColumn::Calls.label(), "Calls");
+        assert_eq!(StatementSortColumn::Rows.label(), "Rows");
+        assert_eq!(StatementSortColumn::HitRatio.label(), "Hit %");
+        assert_eq!(StatementSortColumn::SharedReads.label(), "Reads");
+        assert_eq!(StatementSortColumn::IoTime.label(), "I/O Time");
+        assert_eq!(StatementSortColumn::Temp.label(), "Temp");
+    }
 }
