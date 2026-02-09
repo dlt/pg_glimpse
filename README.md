@@ -9,7 +9,21 @@
                         Real-time PostgreSQL monitoring in your terminal
 ```
 
-[Install](#install) • [Features](#features) • [Usage](#usage) • [Keys](#keyboard-reference) • [Replay](#recording--replay)
+<p align="center">
+  <a href="https://github.com/dlt/pg_glimpse/actions/workflows/ci.yml"><img src="https://github.com/dlt/pg_glimpse/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://crates.io/crates/pg_glimpse"><img src="https://img.shields.io/crates/v/pg_glimpse.svg" alt="Crates.io"></a>
+  <a href="https://crates.io/crates/pg_glimpse"><img src="https://img.shields.io/crates/d/pg_glimpse.svg" alt="Downloads"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/crates/l/pg_glimpse.svg" alt="License"></a>
+  <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/rust-1.74%2B-blue.svg" alt="Rust"></a>
+</p>
+
+<p align="center">
+  <a href="#install">Install</a> •
+  <a href="#features">Features</a> •
+  <a href="#usage">Usage</a> •
+  <a href="#keyboard-reference">Keys</a> •
+  <a href="#recording--replay">Replay</a>
+</p>
 
 ---
 
