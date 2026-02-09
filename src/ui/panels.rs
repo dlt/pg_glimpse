@@ -812,7 +812,26 @@ pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
     }
 
     if snap.stat_statements.is_empty() {
-        frame.render_widget(empty_state("No statement data collected yet", block), area);
+        if let Some(ref err) = snap.stat_statements_error {
+            let lines = vec![
+                Line::from(""),
+                Line::from(Span::styled(
+                    "  Error reading pg_stat_statements:",
+                    Style::default()
+                        .fg(Theme::border_danger())
+                        .add_modifier(Modifier::BOLD),
+                )),
+                Line::from(""),
+                Line::from(Span::styled(
+                    format!("  {}", err),
+                    Style::default().fg(Theme::fg()),
+                )),
+            ];
+            let paragraph = Paragraph::new(lines).block(block);
+            frame.render_widget(paragraph, area);
+        } else {
+            frame.render_widget(empty_state("No statement data collected yet", block), area);
+        }
         return;
     }
 

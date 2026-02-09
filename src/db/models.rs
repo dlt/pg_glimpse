@@ -304,6 +304,7 @@ pub struct PgSnapshot {
     pub wraparound: Vec<WraparoundInfo>,
     pub indexes: Vec<IndexInfo>,
     pub stat_statements: Vec<StatStatement>,
+    pub stat_statements_error: Option<String>,
     pub extensions: DetectedExtensions,
     pub db_size: i64,
     pub checkpoint_stats: Option<CheckpointStats>,

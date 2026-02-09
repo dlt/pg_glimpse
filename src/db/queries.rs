@@ -286,8 +286,9 @@ ORDER BY total_exec_time DESC
 LIMIT 100
 ";
 
-/// pg_stat_statements query for PG15+: uses total_exec_time, shared_blk_read_time
-const STAT_STATEMENTS_SQL_V15: &str = "
+/// pg_stat_statements query for PG17+: uses total_exec_time, shared_blk_read_time
+/// Note: The blk_read_time → shared_blk_read_time rename happened in PG17, not the extension
+const STAT_STATEMENTS_SQL_V17: &str = "
 SELECT
     COALESCE(queryid, 0) AS queryid,
     query,
@@ -331,21 +332,6 @@ fn parse_ext_version(v: &str) -> Option<(u32, u32)> {
     }
 }
 
-fn stat_statements_sql(ext_version: Option<&str>) -> &'static str {
-    // pg_stat_statements 1.9+ (PG15+) renamed blk_read_time -> shared_blk_read_time
-    // pg_stat_statements 1.8 (PG13-14) uses total_exec_time, blk_read_time
-    // pg_stat_statements < 1.8 (PG11-12) uses total_time, blk_read_time
-    let version = ext_version.and_then(parse_ext_version);
-    match version {
-        Some((major, minor)) if major > 1 || (major == 1 && minor >= 9) => {
-            STAT_STATEMENTS_SQL_V15
-        }
-        Some((major, minor)) if major == 1 && minor >= 8 => {
-            STAT_STATEMENTS_SQL_V13
-        }
-        _ => STAT_STATEMENTS_SQL_V11,
-    }
-}
 
 const ACTIVITY_SUMMARY_SQL: &str = "
 SELECT
@@ -865,47 +851,138 @@ pub async fn fetch_indexes(client: &Client) -> Result<Vec<IndexInfo>> {
     Ok(results)
 }
 
+/// Returns (statements, error_message)
 pub async fn fetch_stat_statements(
     client: &Client,
     extensions: &DetectedExtensions,
-) -> (Vec<StatStatement>, bool) {
+    pg_major_version: u32,
+) -> (Vec<StatStatement>, Option<String>) {
     if !extensions.pg_stat_statements {
-        return (vec![], false);
+        return (vec![], None);
     }
     let ext_version = extensions.pg_stat_statements_version.as_deref();
-    let sql = stat_statements_sql(ext_version);
-    let rows = match client.query(sql, &[]).await {
-        Ok(rows) => rows,
-        Err(_) => return (vec![], false),
-    };
-    let mut results = Vec::with_capacity(rows.len());
-    for row in rows {
-        results.push(StatStatement {
-            queryid: row.get("queryid"),
-            query: row.get("query"),
-            calls: row.get("calls"),
-            total_exec_time: row.get("total_exec_time"),
-            min_exec_time: row.get("min_exec_time"),
-            mean_exec_time: row.get("mean_exec_time"),
-            max_exec_time: row.get("max_exec_time"),
-            stddev_exec_time: row.get("stddev_exec_time"),
-            rows: row.get("rows"),
-            shared_blks_hit: row.get("shared_blks_hit"),
-            shared_blks_read: row.get("shared_blks_read"),
-            shared_blks_dirtied: row.get("shared_blks_dirtied"),
-            shared_blks_written: row.get("shared_blks_written"),
-            local_blks_hit: row.get("local_blks_hit"),
-            local_blks_read: row.get("local_blks_read"),
-            local_blks_dirtied: row.get("local_blks_dirtied"),
-            local_blks_written: row.get("local_blks_written"),
-            temp_blks_read: row.get("temp_blks_read"),
-            temp_blks_written: row.get("temp_blks_written"),
-            blk_read_time: row.get("blk_read_time"),
-            blk_write_time: row.get("blk_write_time"),
-            hit_ratio: row.get("hit_ratio"),
-        });
+
+    // First, check if we can access the view and get row count
+    let count_check = client
+        .query_one("SELECT COUNT(*)::bigint AS cnt FROM pg_stat_statements", &[])
+        .await;
+
+    match count_check {
+        Err(e) => {
+            // Can't even count rows - permission or access issue
+            let msg = if let Some(db_err) = e.as_db_error() {
+                let mut parts = vec![db_err.message().to_string()];
+                if let Some(detail) = db_err.detail() {
+                    parts.push(format!("Detail: {}", detail));
+                }
+                if let Some(hint) = db_err.hint() {
+                    parts.push(format!("Hint: {}", hint));
+                }
+                parts.join(" - ")
+            } else {
+                e.to_string()
+            };
+            let hint = if msg.contains("permission denied") {
+                format!("{} (Try: GRANT pg_read_all_stats TO your_user;)", msg)
+            } else if msg.contains("does not exist") {
+                format!("{} (Extension may be in a different schema)", msg)
+            } else {
+                msg
+            };
+            return (vec![], Some(hint));
+        }
+        Ok(row) => {
+            let cnt: i64 = row.get("cnt");
+            if cnt == 0 {
+                // View is accessible but empty - this is expected for fresh installs
+                return (vec![], None);
+            }
+        }
     }
-    (results, true)
+
+    // Try queries in order: version-appropriate first, then fallbacks
+    // Important: blk_read_time → shared_blk_read_time rename happened in PG17 (server version),
+    // while total_time → total_exec_time happened in extension version 1.8 (PG13)
+    let queries_to_try = if pg_major_version >= 17 {
+        // PG17+ uses shared_blk_read_time
+        vec![STAT_STATEMENTS_SQL_V17, STAT_STATEMENTS_SQL_V13, STAT_STATEMENTS_SQL_V11]
+    } else {
+        // PG13-16: uses total_exec_time but old blk_read_time
+        match ext_version.and_then(parse_ext_version) {
+            Some((major, minor)) if major > 1 || (major == 1 && minor >= 8) => {
+                vec![STAT_STATEMENTS_SQL_V13, STAT_STATEMENTS_SQL_V11]
+            }
+            _ => vec![STAT_STATEMENTS_SQL_V11],
+        }
+    };
+
+    let mut last_error = String::new();
+    for sql in queries_to_try {
+        match client.query(sql, &[]).await {
+            Ok(rows) => {
+                let mut results = Vec::with_capacity(rows.len());
+                for row in rows {
+                    results.push(StatStatement {
+                        queryid: row.get("queryid"),
+                        query: row.get("query"),
+                        calls: row.get("calls"),
+                        total_exec_time: row.get("total_exec_time"),
+                        min_exec_time: row.get("min_exec_time"),
+                        mean_exec_time: row.get("mean_exec_time"),
+                        max_exec_time: row.get("max_exec_time"),
+                        stddev_exec_time: row.get("stddev_exec_time"),
+                        rows: row.get("rows"),
+                        shared_blks_hit: row.get("shared_blks_hit"),
+                        shared_blks_read: row.get("shared_blks_read"),
+                        shared_blks_dirtied: row.get("shared_blks_dirtied"),
+                        shared_blks_written: row.get("shared_blks_written"),
+                        local_blks_hit: row.get("local_blks_hit"),
+                        local_blks_read: row.get("local_blks_read"),
+                        local_blks_dirtied: row.get("local_blks_dirtied"),
+                        local_blks_written: row.get("local_blks_written"),
+                        temp_blks_read: row.get("temp_blks_read"),
+                        temp_blks_written: row.get("temp_blks_written"),
+                        blk_read_time: row.get("blk_read_time"),
+                        blk_write_time: row.get("blk_write_time"),
+                        hit_ratio: row.get("hit_ratio"),
+                    });
+                }
+                return (results, None);
+            }
+            Err(e) => {
+                // If it's a column error, try next query variant
+                let msg = e.to_string();
+                if msg.contains("column") && msg.contains("does not exist") {
+                    last_error = msg;
+                    continue;
+                }
+                // For other errors, return immediately
+                let detailed = if let Some(db_err) = e.as_db_error() {
+                    let mut parts = vec![db_err.message().to_string()];
+                    if let Some(detail) = db_err.detail() {
+                        parts.push(format!("Detail: {}", detail));
+                    }
+                    if let Some(hint) = db_err.hint() {
+                        parts.push(format!("Hint: {}", hint));
+                    }
+                    parts.join(" - ")
+                } else {
+                    msg
+                };
+                let version_info = ext_version.unwrap_or("unknown");
+                let hint = if detailed.contains("permission denied") {
+                    format!("{} (Try: GRANT pg_read_all_stats TO your_user;)", detailed)
+                } else {
+                    format!("{} (PG{}, ext {})", detailed, pg_major_version, version_info)
+                };
+                return (vec![], Some(hint));
+            }
+        }
+    }
+
+    // All queries failed with column errors
+    let version_info = ext_version.unwrap_or("unknown");
+    (vec![], Some(format!("{} (PG{}, ext {}, tried all query variants)", last_error, pg_major_version, version_info)))
 }
 
 use std::collections::HashMap;
@@ -1016,7 +1093,7 @@ pub async fn fetch_snapshot(
             fetch_vacuum_progress(client, version),
             fetch_wraparound(client),
             fetch_indexes(client),
-            async { Ok(fetch_stat_statements(client, &ext).await) },
+            async { Ok(fetch_stat_statements(client, &ext, version).await) },
             fetch_db_size(client),
             async { Ok(fetch_checkpoint_stats(client, version).await.ok()) },
             async {
@@ -1031,7 +1108,7 @@ pub async fn fetch_snapshot(
             async { Ok(fetch_bgwriter_stats(client).await.ok()) },
             async { Ok(fetch_database_stats(client).await.ok()) },
         )?;
-    let (stat_statements, _) = ss;
+    let (stat_statements, stat_statements_error) = ss;
     Ok(PgSnapshot {
         timestamp: chrono::Utc::now(),
         active_queries: active,
@@ -1047,6 +1124,7 @@ pub async fn fetch_snapshot(
         wraparound: wrap,
         indexes,
         stat_statements,
+        stat_statements_error,
         extensions: ext,
         db_size,
         checkpoint_stats: chkpt,
