@@ -292,7 +292,7 @@ impl ThemeColors {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {
     pub graph_marker: GraphMarkerStyle,
@@ -372,6 +372,289 @@ impl ConfigItem {
             Self::WarnDuration => "Warn Duration",
             Self::DangerDuration => "Danger Duration",
             Self::RecordingRetention => "Recording Retention",
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // GraphMarkerStyle tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn graph_marker_next_cycles() {
+        assert_eq!(GraphMarkerStyle::Braille.next(), GraphMarkerStyle::HalfBlock);
+        assert_eq!(GraphMarkerStyle::HalfBlock.next(), GraphMarkerStyle::Block);
+        assert_eq!(GraphMarkerStyle::Block.next(), GraphMarkerStyle::Braille);
+    }
+
+    #[test]
+    fn graph_marker_prev_cycles() {
+        assert_eq!(GraphMarkerStyle::Braille.prev(), GraphMarkerStyle::Block);
+        assert_eq!(GraphMarkerStyle::HalfBlock.prev(), GraphMarkerStyle::Braille);
+        assert_eq!(GraphMarkerStyle::Block.prev(), GraphMarkerStyle::HalfBlock);
+    }
+
+    #[test]
+    fn graph_marker_next_prev_inverse() {
+        for style in [
+            GraphMarkerStyle::Braille,
+            GraphMarkerStyle::HalfBlock,
+            GraphMarkerStyle::Block,
+        ] {
+            assert_eq!(style.next().prev(), style);
+            assert_eq!(style.prev().next(), style);
+        }
+    }
+
+    #[test]
+    fn graph_marker_labels_not_empty() {
+        assert!(!GraphMarkerStyle::Braille.label().is_empty());
+        assert!(!GraphMarkerStyle::HalfBlock.label().is_empty());
+        assert!(!GraphMarkerStyle::Block.label().is_empty());
+    }
+
+    #[test]
+    fn graph_marker_to_marker() {
+        assert!(matches!(
+            GraphMarkerStyle::Braille.to_marker(),
+            Marker::Braille
+        ));
+        assert!(matches!(
+            GraphMarkerStyle::HalfBlock.to_marker(),
+            Marker::HalfBlock
+        ));
+        assert!(matches!(GraphMarkerStyle::Block.to_marker(), Marker::Block));
+    }
+
+    #[test]
+    fn graph_marker_default() {
+        assert_eq!(GraphMarkerStyle::default(), GraphMarkerStyle::Braille);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // ColorTheme tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn color_theme_next_cycles() {
+        assert_eq!(ColorTheme::TokyoNight.next(), ColorTheme::Dracula);
+        assert_eq!(ColorTheme::Dracula.next(), ColorTheme::Nord);
+        assert_eq!(ColorTheme::Nord.next(), ColorTheme::SolarizedDark);
+        assert_eq!(ColorTheme::SolarizedDark.next(), ColorTheme::SolarizedLight);
+        assert_eq!(ColorTheme::SolarizedLight.next(), ColorTheme::CatppuccinLatte);
+        assert_eq!(ColorTheme::CatppuccinLatte.next(), ColorTheme::TokyoNight);
+    }
+
+    #[test]
+    fn color_theme_prev_cycles() {
+        assert_eq!(ColorTheme::TokyoNight.prev(), ColorTheme::CatppuccinLatte);
+        assert_eq!(ColorTheme::CatppuccinLatte.prev(), ColorTheme::SolarizedLight);
+        assert_eq!(ColorTheme::SolarizedLight.prev(), ColorTheme::SolarizedDark);
+        assert_eq!(ColorTheme::SolarizedDark.prev(), ColorTheme::Nord);
+        assert_eq!(ColorTheme::Nord.prev(), ColorTheme::Dracula);
+        assert_eq!(ColorTheme::Dracula.prev(), ColorTheme::TokyoNight);
+    }
+
+    #[test]
+    fn color_theme_next_prev_inverse() {
+        for theme in [
+            ColorTheme::TokyoNight,
+            ColorTheme::Dracula,
+            ColorTheme::Nord,
+            ColorTheme::SolarizedDark,
+            ColorTheme::SolarizedLight,
+            ColorTheme::CatppuccinLatte,
+        ] {
+            assert_eq!(theme.next().prev(), theme);
+            assert_eq!(theme.prev().next(), theme);
+        }
+    }
+
+    #[test]
+    fn color_theme_labels_not_empty() {
+        for theme in [
+            ColorTheme::TokyoNight,
+            ColorTheme::Dracula,
+            ColorTheme::Nord,
+            ColorTheme::SolarizedDark,
+            ColorTheme::SolarizedLight,
+            ColorTheme::CatppuccinLatte,
+        ] {
+            assert!(!theme.label().is_empty(), "{:?} has empty label", theme);
+        }
+    }
+
+    #[test]
+    fn color_theme_colors_returns_valid_theme() {
+        // Just verify colors() doesn't panic and returns something
+        for theme in [
+            ColorTheme::TokyoNight,
+            ColorTheme::Dracula,
+            ColorTheme::Nord,
+            ColorTheme::SolarizedDark,
+            ColorTheme::SolarizedLight,
+            ColorTheme::CatppuccinLatte,
+        ] {
+            let colors = theme.colors();
+            // Verify some colors are set (not default/black)
+            assert!(!matches!(colors.fg, Color::Black));
+        }
+    }
+
+    #[test]
+    fn color_theme_default() {
+        assert_eq!(ColorTheme::default(), ColorTheme::TokyoNight);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // AppConfig tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn app_config_default_values() {
+        let config = AppConfig::default();
+        assert_eq!(config.graph_marker, GraphMarkerStyle::Braille);
+        assert_eq!(config.color_theme, ColorTheme::TokyoNight);
+        assert_eq!(config.refresh_interval_secs, 2);
+        assert_eq!(config.warn_duration_secs, 1.0);
+        assert_eq!(config.danger_duration_secs, 10.0);
+        assert_eq!(config.recording_retention_secs, 3600);
+    }
+
+    #[test]
+    fn app_config_serialization_roundtrip() {
+        let config = AppConfig {
+            graph_marker: GraphMarkerStyle::Block,
+            color_theme: ColorTheme::Nord,
+            refresh_interval_secs: 5,
+            warn_duration_secs: 2.5,
+            danger_duration_secs: 15.0,
+            recording_retention_secs: 7200,
+        };
+
+        let toml_str = toml::to_string_pretty(&config).unwrap();
+        let parsed: AppConfig = toml::from_str(&toml_str).unwrap();
+
+        assert_eq!(parsed.graph_marker, config.graph_marker);
+        assert_eq!(parsed.color_theme, config.color_theme);
+        assert_eq!(parsed.refresh_interval_secs, config.refresh_interval_secs);
+        assert_eq!(parsed.warn_duration_secs, config.warn_duration_secs);
+        assert_eq!(parsed.danger_duration_secs, config.danger_duration_secs);
+        assert_eq!(
+            parsed.recording_retention_secs,
+            config.recording_retention_secs
+        );
+    }
+
+    #[test]
+    fn app_config_deserialize_with_missing_fields() {
+        // Test that serde(default) works - missing fields get defaults
+        let toml_str = r#"
+            refresh_interval_secs = 10
+        "#;
+        let config: AppConfig = toml::from_str(toml_str).unwrap();
+
+        assert_eq!(config.refresh_interval_secs, 10);
+        // Other fields should have defaults
+        assert_eq!(config.graph_marker, GraphMarkerStyle::Braille);
+        assert_eq!(config.color_theme, ColorTheme::TokyoNight);
+    }
+
+    #[test]
+    fn app_config_deserialize_empty_string() {
+        let config: AppConfig = toml::from_str("").unwrap();
+        assert_eq!(config, AppConfig::default());
+    }
+
+    #[test]
+    fn app_config_json_roundtrip() {
+        let config = AppConfig {
+            graph_marker: GraphMarkerStyle::HalfBlock,
+            color_theme: ColorTheme::Dracula,
+            refresh_interval_secs: 3,
+            warn_duration_secs: 0.5,
+            danger_duration_secs: 5.0,
+            recording_retention_secs: 1800,
+        };
+
+        let json_str = serde_json::to_string(&config).unwrap();
+        let parsed: AppConfig = serde_json::from_str(&json_str).unwrap();
+
+        assert_eq!(parsed.graph_marker, config.graph_marker);
+        assert_eq!(parsed.color_theme, config.color_theme);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // ConfigItem tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn config_item_all_contains_all_variants() {
+        // Ensure ALL array has correct count
+        assert_eq!(ConfigItem::ALL.len(), 6);
+
+        // Ensure all variants are present
+        assert!(ConfigItem::ALL.contains(&ConfigItem::GraphMarker));
+        assert!(ConfigItem::ALL.contains(&ConfigItem::ColorTheme));
+        assert!(ConfigItem::ALL.contains(&ConfigItem::RefreshInterval));
+        assert!(ConfigItem::ALL.contains(&ConfigItem::WarnDuration));
+        assert!(ConfigItem::ALL.contains(&ConfigItem::DangerDuration));
+        assert!(ConfigItem::ALL.contains(&ConfigItem::RecordingRetention));
+    }
+
+    #[test]
+    fn config_item_labels_not_empty() {
+        for item in ConfigItem::ALL {
+            assert!(!item.label().is_empty(), "{:?} has empty label", item);
+        }
+    }
+
+    #[test]
+    fn config_item_labels_unique() {
+        let labels: Vec<_> = ConfigItem::ALL.iter().map(|i| i.label()).collect();
+        let mut unique = labels.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(labels.len(), unique.len(), "ConfigItem labels should be unique");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // ThemeColors tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn theme_colors_tokyo_night_is_const() {
+        // Verify the const is accessible and has expected structure
+        let colors = ThemeColors::TOKYO_NIGHT;
+        assert!(matches!(colors.header_bg, Color::Rgb(36, 40, 59)));
+    }
+
+    #[test]
+    fn theme_colors_all_themes_have_distinct_header_bg() {
+        let themes = [
+            ColorTheme::TokyoNight.colors().header_bg,
+            ColorTheme::Dracula.colors().header_bg,
+            ColorTheme::Nord.colors().header_bg,
+            ColorTheme::SolarizedDark.colors().header_bg,
+            ColorTheme::SolarizedLight.colors().header_bg,
+            ColorTheme::CatppuccinLatte.colors().header_bg,
+        ];
+
+        // Check all are distinct (simple pairwise comparison)
+        for i in 0..themes.len() {
+            for j in (i + 1)..themes.len() {
+                assert_ne!(
+                    format!("{:?}", themes[i]),
+                    format!("{:?}", themes[j]),
+                    "Themes {} and {} have same header_bg",
+                    i,
+                    j
+                );
+            }
         }
     }
 }
