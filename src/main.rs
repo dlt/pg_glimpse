@@ -1,12 +1,13 @@
 mod app;
 mod cli;
 mod config;
-mod db;
 mod event;
 mod history;
 mod recorder;
 mod replay;
 mod ui;
+
+use pg_glimpse::db;
 
 use app::AppAction;
 use clap::Parser;

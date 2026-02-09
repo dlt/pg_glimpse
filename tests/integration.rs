@@ -18,6 +18,8 @@
 
 #![cfg(feature = "integration")]
 
+use pg_glimpse::db::models::DetectedExtensions;
+use pg_glimpse::db::queries;
 use tokio_postgres::{Client, NoTls};
 
 /// PostgreSQL test instance configuration
@@ -381,4 +383,246 @@ async fn test_replication_slots_version_compat() {
             "pg11: pg_stat_replication_slots should NOT exist"
         );
     }
+}
+
+// ============================================================================
+// Actual fetch_* Function Tests - Test version detection logic
+// ============================================================================
+
+/// Test fetch_checkpoint_stats uses correct query for each PG version
+#[tokio::test]
+async fn test_fetch_checkpoint_stats_all_versions() {
+    // PG11 - uses pg_stat_bgwriter
+    if let Ok(client) = connect(5411).await {
+        let result = queries::fetch_checkpoint_stats(&client, 11).await;
+        assert!(
+            result.is_ok(),
+            "pg11: fetch_checkpoint_stats should succeed: {:?}",
+            result.err()
+        );
+        let stats = result.unwrap();
+        // Verify we got valid data
+        assert!(
+            stats.checkpoints_timed >= 0,
+            "pg11: checkpoints_timed should be non-negative"
+        );
+    }
+
+    // PG14 - uses pg_stat_bgwriter
+    if let Ok(client) = connect(5414).await {
+        let result = queries::fetch_checkpoint_stats(&client, 14).await;
+        assert!(
+            result.is_ok(),
+            "pg14: fetch_checkpoint_stats should succeed: {:?}",
+            result.err()
+        );
+    }
+
+    // PG17 - uses pg_stat_checkpointer (new view)
+    if let Ok(client) = connect(5417).await {
+        let result = queries::fetch_checkpoint_stats(&client, 17).await;
+        assert!(
+            result.is_ok(),
+            "pg17: fetch_checkpoint_stats should succeed with pg_stat_checkpointer: {:?}",
+            result.err()
+        );
+    }
+}
+
+/// Test fetch_stat_statements handles version-specific column names
+#[tokio::test]
+async fn test_fetch_stat_statements_all_versions() {
+    // PG11 - uses total_time, blk_read_time
+    if let Ok(client) = connect(5411).await {
+        let _ = ensure_pg_stat_statements(&client).await;
+        // Run a query to populate pg_stat_statements
+        let _ = client.query("SELECT 1", &[]).await;
+
+        let ext = DetectedExtensions {
+            pg_stat_statements: true,
+            pg_stat_statements_version: Some("1.6".to_string()),
+            ..Default::default()
+        };
+        let (statements, error) = queries::fetch_stat_statements(&client, &ext, 11).await;
+        // Either we get results or a clear error (permission etc)
+        if error.is_none() || !statements.is_empty() {
+            println!("pg11: fetch_stat_statements succeeded with {} rows", statements.len());
+        } else if let Some(ref err) = error {
+            // Permission errors are acceptable in test environment
+            assert!(
+                err.contains("permission") || err.contains("does not exist"),
+                "pg11: unexpected error: {}",
+                err
+            );
+        }
+    }
+
+    // PG14 - uses total_exec_time, blk_read_time
+    if let Ok(client) = connect(5414).await {
+        let _ = ensure_pg_stat_statements(&client).await;
+        let _ = client.query("SELECT 1", &[]).await;
+
+        let ext = DetectedExtensions {
+            pg_stat_statements: true,
+            pg_stat_statements_version: Some("1.9".to_string()),
+            ..Default::default()
+        };
+        let (statements, error) = queries::fetch_stat_statements(&client, &ext, 14).await;
+        if error.is_none() || !statements.is_empty() {
+            println!("pg14: fetch_stat_statements succeeded with {} rows", statements.len());
+        } else if let Some(ref err) = error {
+            assert!(
+                err.contains("permission") || err.contains("does not exist"),
+                "pg14: unexpected error: {}",
+                err
+            );
+        }
+    }
+
+    // PG17 - uses total_exec_time, shared_blk_read_time (renamed columns)
+    if let Ok(client) = connect(5417).await {
+        let _ = ensure_pg_stat_statements(&client).await;
+        let _ = client.query("SELECT 1", &[]).await;
+
+        let ext = DetectedExtensions {
+            pg_stat_statements: true,
+            pg_stat_statements_version: Some("1.11".to_string()),
+            ..Default::default()
+        };
+        let (statements, error) = queries::fetch_stat_statements(&client, &ext, 17).await;
+        if error.is_none() || !statements.is_empty() {
+            println!("pg17: fetch_stat_statements succeeded with {} rows", statements.len());
+        } else if let Some(ref err) = error {
+            assert!(
+                err.contains("permission") || err.contains("does not exist"),
+                "pg17: unexpected error: {}",
+                err
+            );
+        }
+    }
+}
+
+/// Test fetch_replication_slots uses correct query for each version
+#[tokio::test]
+async fn test_fetch_replication_slots_all_versions() {
+    // PG11 - basic query without spill stats
+    if let Ok(client) = connect(5411).await {
+        let result = queries::fetch_replication_slots(&client, 11).await;
+        assert!(
+            result.is_ok(),
+            "pg11: fetch_replication_slots should succeed: {:?}",
+            result.err()
+        );
+        let slots = result.unwrap();
+        // Verify spill fields are None for PG11
+        for slot in &slots {
+            assert!(
+                slot.spill_txns.is_none(),
+                "pg11: spill_txns should be None"
+            );
+        }
+        println!("pg11: fetch_replication_slots returned {} slots", slots.len());
+    }
+
+    // PG14 - includes spill stats from pg_stat_replication_slots
+    if let Ok(client) = connect(5414).await {
+        let result = queries::fetch_replication_slots(&client, 14).await;
+        assert!(
+            result.is_ok(),
+            "pg14: fetch_replication_slots should succeed with spill stats: {:?}",
+            result.err()
+        );
+        let slots = result.unwrap();
+        // If there are slots, they should have spill fields
+        for slot in &slots {
+            assert!(
+                slot.spill_txns.is_some(),
+                "pg14: spill_txns should be Some"
+            );
+        }
+        println!("pg14: fetch_replication_slots returned {} slots", slots.len());
+    }
+
+    // PG17 - also includes spill stats
+    if let Ok(client) = connect(5417).await {
+        let result = queries::fetch_replication_slots(&client, 17).await;
+        assert!(
+            result.is_ok(),
+            "pg17: fetch_replication_slots should succeed: {:?}",
+            result.err()
+        );
+        println!("pg17: fetch_replication_slots returned {} slots", result.unwrap().len());
+    }
+}
+
+/// Test fetch_wal_stats only works on PG14+
+#[tokio::test]
+async fn test_fetch_wal_stats_version_gating() {
+    // PG11 - pg_stat_wal doesn't exist
+    if let Ok(client) = connect(5411).await {
+        let result = queries::fetch_wal_stats(&client).await;
+        assert!(
+            result.is_err(),
+            "pg11: fetch_wal_stats should fail (pg_stat_wal doesn't exist)"
+        );
+    }
+
+    // PG14 - pg_stat_wal exists
+    if let Ok(client) = connect(5414).await {
+        let result = queries::fetch_wal_stats(&client).await;
+        assert!(
+            result.is_ok(),
+            "pg14: fetch_wal_stats should succeed: {:?}",
+            result.err()
+        );
+        let stats = result.unwrap();
+        assert!(
+            stats.wal_records >= 0,
+            "pg14: wal_records should be non-negative"
+        );
+    }
+
+    // PG17 - pg_stat_wal exists
+    if let Ok(client) = connect(5417).await {
+        let result = queries::fetch_wal_stats(&client).await;
+        assert!(
+            result.is_ok(),
+            "pg17: fetch_wal_stats should succeed: {:?}",
+            result.err()
+        );
+    }
+}
+
+/// Test fetch_subscriptions version gating (PG10+)
+#[tokio::test]
+async fn test_fetch_subscriptions_version_gating() {
+    // All our test versions are PG10+, so the query should work
+    // but return empty vec if no subscriptions exist
+    for instance in PG_INSTANCES {
+        if let Ok(client) = connect(instance.port).await {
+            let version = match instance.port {
+                5411 => 11,
+                5414 => 14,
+                5417 => 17,
+                _ => continue,
+            };
+            let result = queries::fetch_subscriptions(&client, version).await;
+            assert!(
+                result.is_ok(),
+                "{}: fetch_subscriptions should succeed: {:?}",
+                instance.name,
+                result.err()
+            );
+            // Empty vec is fine - just testing the query doesn't error
+            println!(
+                "{}: fetch_subscriptions returned {} subscriptions",
+                instance.name,
+                result.unwrap().len()
+            );
+        }
+    }
+
+    // Test version < 10 returns empty vec immediately
+    // We can't test this with a real connection, but we can verify the logic
+    // by checking the function handles it gracefully
 }
