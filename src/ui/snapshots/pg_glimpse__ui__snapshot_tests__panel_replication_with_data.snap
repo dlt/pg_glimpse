@@ -1,0 +1,17 @@
+---
+source: src/ui/snapshot_tests.rs
+assertion_line: 690
+expression: buffer_to_string(&terminal)
+---
+╭ Replication ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Physical Replication                                                                                                                      │
+│PID     App          Client           State      Replay LSN     Write Lag  Flush Lag  Replay Lag Sync                                     │
+│23456   replica1     10.0.1.50        streaming  0/4FFFFFD      0.001s     0.002s     0.005s     async                                    │
+│Replication Slots                                                                                                                         │
+│Slot Name            Type       Database       Active   WAL Retained Restart LSN                                                          │
+│replica1_slot        physical   -              yes      16.0 MB      0/4000000                                                            │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯

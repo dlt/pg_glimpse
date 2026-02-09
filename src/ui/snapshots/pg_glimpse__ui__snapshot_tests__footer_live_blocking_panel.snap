@@ -1,0 +1,7 @@
+---
+source: src/ui/snapshot_tests.rs
+assertion_line: 527
+expression: buffer_to_string(&terminal)
+---
+ Locks    ↑↓ nav · ⏎ inspect · Esc back                                                                                 
+ ⇥ locks · w waits · t tables · R repl · v vacuum · x xid · I idx · S stmts · A wal · P cfg  │  ? help · , config · q qu

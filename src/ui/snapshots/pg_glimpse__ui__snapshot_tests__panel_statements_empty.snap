@@ -1,0 +1,15 @@
+---
+source: src/ui/snapshot_tests.rs
+assertion_line: 821
+expression: buffer_to_string(&terminal)
+---
+╭ pg_stat_statements [0] ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                                                          │
+│  pg_stat_statements extension is not available                                                                                           │
+│                                                                                                                                          │
+│  To enable it:                                                                                                                           │
+│                                                                                                                                          │
+│  1. Add to postgresql.conf:                                                                                                              │
+│     shared_preload_libraries = 'pg_stat_statements'                                                                                      │
+│                                                                                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯

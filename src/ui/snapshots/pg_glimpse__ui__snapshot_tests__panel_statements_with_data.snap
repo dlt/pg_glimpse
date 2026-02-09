@@ -1,0 +1,15 @@
+---
+source: src/ui/snapshot_tests.rs
+assertion_line: 810
+expression: buffer_to_string(&terminal)
+---
+╭ pg_stat_statements [1] ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Query                                               Calls   Total ↓   Mean      Max       Stddev   Rows    Hit%  Reads   I/O       Temp   │
+│SELECT * FROM users WHERE email = $1                10.0K   5.00 s    0.500 ms  25.0 ms   2.5 ms   10.0K   9890% 500     50.0 ms   0      │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯

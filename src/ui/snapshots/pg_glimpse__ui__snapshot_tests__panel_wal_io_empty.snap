@@ -1,0 +1,20 @@
+---
+source: src/ui/snapshot_tests.rs
+assertion_line: 851
+expression: buffer_to_string(&terminal)
+---
+╭ WAL & I/O ───────────────────────────────────────────────────────────────────────────────────────╮
+│WAL Generation                   Checkpoints                     Archiver                         │
+│                                                                                                  │
+│N/A (PG14+)                      No data                         Archiving disabled               │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│Buffer I/O:                                                                                       │
+│                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

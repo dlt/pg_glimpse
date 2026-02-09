@@ -37,6 +37,7 @@ integration = []
 [dev-dependencies]
 tempfile = "3"
 filetime = "0.2"
+insta = "1.42"
 
 [profile.release]
 lto = true

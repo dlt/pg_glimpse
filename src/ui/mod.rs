@@ -15,6 +15,9 @@ use ratatui::Frame;
 use theme::Theme;
 use util::format_duration;
 
+#[cfg(test)]
+mod snapshot_tests;
+
 pub fn render(frame: &mut Frame, app: &mut App) {
     let areas = layout::compute_layout(frame.area());
     let marker = app.config.graph_marker.to_marker();

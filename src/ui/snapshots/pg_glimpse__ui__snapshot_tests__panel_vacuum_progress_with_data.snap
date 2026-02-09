@@ -1,0 +1,15 @@
+---
+source: src/ui/snapshot_tests.rs
+assertion_line: 718
+expression: buffer_to_string(&terminal)
+---
+╭ Vacuum Progress ─────────────────────────────────────────────────────────────────────────────────╮
+│PID      Table                                        Phase                Progress   Dead Tuples │
+│34567    public.large_table                           scanning heap        45.0%      12500       │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

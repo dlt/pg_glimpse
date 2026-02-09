@@ -1,0 +1,6 @@
+---
+source: src/ui/snapshot_tests.rs
+assertion_line: 460
+expression: buffer_to_string(&terminal)
+---
+ pg_glimpse   ◆ localhost:5432/production  as postgres  25/100 conns  ⟳ 1s   ⏸ PAUSED     XX:XX:XX

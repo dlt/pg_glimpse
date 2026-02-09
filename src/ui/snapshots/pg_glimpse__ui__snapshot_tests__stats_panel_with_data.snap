@@ -1,0 +1,25 @@
+---
+source: src/ui/snapshot_tests.rs
+assertion_line: 924
+expression: buffer_to_string(&terminal)
+---
+╭ Server Stats ────────────────────────╮
+│PG 15.4 · up 756d 10h                 │
+│DB: 10.0 GB · 25/100 conn (25%)       │
+│────────────────────────────────────  │
+│Active: 5 ▁▃▅▆█▁▃▅▆█  Idle/Txn: 2  Wai│
+│Locks: 3 █▁▅█▁▅█▁▅█ · Longest: 5.5s   │
+│Oldest Txn: 3m45s                     │
+│Cache: 9500.0% ▁▂▃▃▄▅▆▆▇█  Dead: 5.0% │
+│Blks/s: 650/s ▁▂▃▃▄▅▆▆▇█              │
+│────────────────────────────────────  │
+│TPS: 1.5K/s ▁▂▃▃▄▅▆▆▇█                │
+│WAL: 1.5 MB/s ▁▂▃▃▄▅▆▆▇█              │
+│────────────────────────────────────  │
+│XID: 7.0% (production)                │
+│Repl lag: 0.01s                       │
+│Chkpt: 105 (4.8% forced)              │
+│BufW: 10.0K ckpt / 500 backend        │
+│────────────────────────────────────  │
+│Ext: [ss] [bc]                        │
+╰──────────────────────────────────────╯

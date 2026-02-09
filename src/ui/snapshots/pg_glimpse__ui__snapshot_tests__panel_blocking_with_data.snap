@@ -1,0 +1,15 @@
+---
+source: src/ui/snapshot_tests.rs
+assertion_line: 587
+expression: buffer_to_string(&terminal)
+---
+╭ Blocking Chains ─────────────────────────────────────────────────────────────────────────────────╮
+│Blocker     Blocked  Duration  Blocker Query                                                      │
+│12346    →  12347    8.5s      UPDATE orders SET status = 'shipped'                               │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

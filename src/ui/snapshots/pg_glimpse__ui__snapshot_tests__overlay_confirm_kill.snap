@@ -1,0 +1,11 @@
+---
+source: src/ui/snapshot_tests.rs
+assertion_line: 909
+expression: buffer_to_string(&terminal)
+---
+                                                            
+                                                            
+                                                            
+                                                            
+               ╭  Terminate Backend  ───────╮               
+               ╰────────────────────────────╯

@@ -1,0 +1,15 @@
+---
+source: src/ui/snapshot_tests.rs
+assertion_line: 780
+expression: buffer_to_string(&terminal)
+---
+╭ Indexes [2] ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Table                                     Index                                    Size      Scans ↑    Tup Read     Tup Fetch    Bloat[b]│
+│public.orders                             orders_user_id_idx                       25.0 MB   0          0            0            20.0%   │
+│public.orders                             orders_pkey                              50.0 MB   50000      50000        49500        -       │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
