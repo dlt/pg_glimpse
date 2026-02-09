@@ -1603,12 +1603,12 @@ pub fn highlight_sql_inline(text: &str, max_len: usize) -> Vec<Span<'static>> {
     let number_style = Style::default().fg(Theme::sql_number());
     let default_style = Style::default().fg(Theme::fg());
 
-    // Collapse whitespace and truncate
+    // Collapse whitespace and truncate (Unicode-safe)
     let collapsed: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    let display = if collapsed.len() > max_len {
-        &collapsed[..max_len]
+    let display: String = if collapsed.chars().count() > max_len {
+        collapsed.chars().take(max_len).collect()
     } else {
-        &collapsed[..]
+        collapsed.clone()
     };
 
     let mut spans: Vec<Span<'static>> = Vec::new();

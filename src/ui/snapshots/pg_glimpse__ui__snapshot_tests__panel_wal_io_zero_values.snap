@@ -1,0 +1,19 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+╭ WAL & I/O ───────────────────────────────────────────────────────────────────────────────────────╮
+│WAL Generation                   Checkpoints                     Archiver                         │
+│                                                                                                  │
+│Rate:         1.5 MB/s           Total:        0                 Archived:     0                  │
+│Records:      0                  Timed:        0 (0%)            Failed:       0                  │
+│Total Size:   0 B                Forced:       0 (0%)                                             │
+│Buffers Full: 0                  Write Time:   0.000 ms                                           │
+│                                 Sync Time:    0.000 ms                                           │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│Buffer I/O: Checkpoint: 0   Backend: 0 (0.0%)   Clean: 0   Alloc: 0                               │
+│                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

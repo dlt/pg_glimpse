@@ -1,0 +1,38 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+               ╭  Query Details  [j/k] scroll  [y] copy query  [C] cancel  [K] kill ╮               
+               │                                                                    │               
+               │  Connection ────────────────────────────────────────               │               
+               │  PID:       1     User: user'; DROP TABLE--     DB: db             │               
+               │  Backend:   client backend                                         │               
+               │                                                                    │               
+               │  Status ────────────────────────────────────────                   │               
+               │  State:      active      Duration: 1.0s                            │               
+               │  Wait:      - / -                                                  │               
+               │                                                                    │               
+               │  Query ────────────────────────────────────────                    │               
+               │  SELECT * FROM users WHERE name = ''; DROP TABLE users; --'        │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               ╰────────────────────────────────────────────────────────────────────╯

@@ -1,0 +1,28 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+ pg_glimpse   ◆ localhost:5432/production  as postgres  25/100 conns  ⟳ 1s01:15:
+╭ Connections ── 29 ───────────────────╮╭ Server Stats ────────────────────────╮
+│                                      ││PG 15.4 · up 756d 10h                 │
+│⣠⣤⣤⣤⣤⣤⣴⣶⣶⣶⣶⣶⣦⣤⣤⣤⣤⣤⣤⣴⣶⣶⣶⣶⣶⣦⣠⣤⣤⣤⣤⣤⣴⣶⣶⣶⣶⣶││DB: 10.0 GB · 25/100 conn (25%)       │
+│⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││────────────────────────────────────  │
+╰──────────────────────────────────────╯╰──────────────────────────────────────╯
+╭ Cache Hit Ratio ── 92.9% ────────────╮╭ Avg Duration ── 390ms ───────────────╮
+│⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶││                               ⣀⣀⣀⣀⣀⣀⣤│
+│⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││       ⢀⣀⣀⣀⣀⣀⣠⣤⣤⣤⣤⣤⣴⣶⣶⣶⣶⣶⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│
+│⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││⣶⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│
+╰──────────────────────────────────────╯╰──────────────────────────────────────╯
+╭ Queries [2] ─────────────────────────────────────────────────────────────────╮
+│PID   Query                       User      Database  Dura State     Wait     │
+│12346 UPDATE orders SET status =  admin     productio 3m45 idle-txn  ClientRea│
+│12345 SELECT * FROM users WHERE i app_user  productio 5.5s active    DataFileR│
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ Queries    ↑↓ nav · ⏎ inspect · s sort · / filter · C/K cancel/kill            
+ ⇥ locks · w waits · t tables · R repl · v vacuum · x xid · I idx · S stmts · A

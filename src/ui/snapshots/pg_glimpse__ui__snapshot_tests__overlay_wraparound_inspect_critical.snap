@@ -1,0 +1,37 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+               ╭  XID Details  [j/k] scroll  [y] copy db  [Esc] close  ─────────────╮               
+               │                                                                    │               
+               │  Database ────────────────────────────────────────                 │               
+               │  Name:          critical     Status:  CRITICAL                     │               
+               │                                                                    │               
+               │  Transaction ID Age ────────────────────────────────────────       │               
+               │  XID Age:       2.0B transactions                                  │               
+               │  Remaining:     147.0M until wraparound                            │               
+               │                                                                    │               
+               │  [█████████████████████████████████████░░░] 93.2%                  │               
+               │                                                                    │               
+               │  What This Means ────────────────────────────────────────          │               
+               │  PostgreSQL uses 32-bit transaction IDs that wrap around after     │               
+               │  ~2 billion transactions. VACUUM must run to freeze old rows       │               
+               │  before wraparound occurs, or the database will shut down.         │               
+               │                                                                    │               
+               │  ⚠ Consider running VACUUM FREEZE on large tables                  │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               ╰────────────────────────────────────────────────────────────────────╯

@@ -1,0 +1,19 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+╭ Queries [3] ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│PID      Query                                              User             Database          Duration State             Wait            │
+│99999999 SELECT * FROM extremely_long_table_name_here WHERE a]very_long_user extremely_long_da 28h47m   active            WALWriteLock    │
+│12345    SELECT * FROM users WHERE name = '日 本 語 テ ス ト ' AN 用 户              デ ー タ ベ ー ス       1ms      idle-txn          -               │
+│1                                                           -                -                 0s       -                 -               │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯

@@ -1,0 +1,42 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+               ╭  Replication Details  [j/k] scroll  [y] copy app  [Esc] close  ────╮               
+               │                                                                    │               
+               │  Connection                                                        │               
+               │  PID:             1                                                │               
+               │  User:            -      User SysID:    -                          │               
+               │  Application:     -                                                │               
+               │  Client Addr:     -      Port:          -                          │               
+               │  Client Hostname: -                                                │               
+               │  Backend Start:   -                                                │               
+               │                                                                    │               
+               │  Replication State                                                 │               
+               │  State:           -                                                │               
+               │  Sync State:      -      Sync Priority: -                          │               
+               │  Backend Xmin:    -                                                │               
+               │                                                                    │               
+               │  WAL Positions                                                     │               
+               │  Sent LSN:        -                                                │               
+               │  Write LSN:       -                                                │               
+               │  Flush LSN:       -                                                │               
+               │  Replay LSN:      -                                                │               
+               │                                                                    │               
+               │  Replication Lag                                                   │               
+               │  Write Lag:       -                                                │               
+               │  Flush Lag:       -                                                │               
+               │  Replay Lag:      -                                                │               
+               │                                                                    │               
+               │  Reply Time:      -                                                │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               ╰────────────────────────────────────────────────────────────────────╯

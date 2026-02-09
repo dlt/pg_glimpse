@@ -358,7 +358,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
 
         // Line 8: Checkpoint stats (counts with forced percentage)
         if let Some(ref chkpt) = snap.checkpoint_stats {
-            let total = chkpt.checkpoints_timed + chkpt.checkpoints_req;
+            let total = chkpt.checkpoints_timed.saturating_add(chkpt.checkpoints_req);
             let forced_pct = if total > 0 {
                 chkpt.checkpoints_req as f64 / total as f64 * 100.0
             } else {

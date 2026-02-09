@@ -1497,3 +1497,750 @@ fn full_layout_no_snapshot() {
 
     insta::assert_snapshot!(buffer_to_string(&terminal));
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Edge Cases - Terminal Sizes
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn full_layout_tiny_terminal() {
+    // Classic 80x24 terminal - should not panic, may truncate
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+
+    terminal.draw(|frame| {
+        super::render(frame, &mut app);
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn full_layout_very_small_terminal() {
+    // Extremely small - should not panic
+    let backend = TestBackend::new(60, 15);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+
+    terminal.draw(|frame| {
+        super::render(frame, &mut app);
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn full_layout_wide_terminal() {
+    // Very wide terminal
+    let backend = TestBackend::new(200, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+
+    terminal.draw(|frame| {
+        super::render(frame, &mut app);
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn full_layout_tall_terminal() {
+    // Very tall terminal
+    let backend = TestBackend::new(120, 80);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+
+    terminal.draw(|frame| {
+        super::render(frame, &mut app);
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Edge Cases - Extreme Data Values
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Create a snapshot with extreme/edge case values
+fn make_extreme_snapshot() -> PgSnapshot {
+    PgSnapshot {
+        timestamp: Utc.with_ymd_and_hms(2024, 1, 15, 12, 30, 45).unwrap(),
+        active_queries: vec![
+            // Very long query
+            ActiveQuery {
+                pid: 99999999,
+                usename: Some("a]very_long_username_that_exceeds_normal_limits_and_should_be_truncated".to_string()),
+                datname: Some("extremely_long_database_name_that_is_way_too_long_for_display".to_string()),
+                state: Some("active".to_string()),
+                wait_event_type: Some("LWLock".to_string()),
+                wait_event: Some("WALWriteLock".to_string()),
+                query_start: Some(Utc.with_ymd_and_hms(2024, 1, 15, 12, 30, 40).unwrap()),
+                duration_secs: 99999.999,
+                query: Some("SELECT * FROM extremely_long_table_name_here WHERE column_one = 'value' AND column_two = 'another_value' AND column_three IN (SELECT id FROM other_table WHERE status = 'active' AND created_at > NOW() - INTERVAL '30 days' ORDER BY id DESC LIMIT 1000) AND column_four LIKE '%pattern%' ORDER BY column_five DESC NULLS LAST LIMIT 100 OFFSET 50".to_string()),
+                backend_type: Some("client backend".to_string()),
+            },
+            // Query with all None optional fields
+            ActiveQuery {
+                pid: 1,
+                usename: None,
+                datname: None,
+                state: None,
+                wait_event_type: None,
+                wait_event: None,
+                query_start: None,
+                duration_secs: 0.0,
+                query: None,
+                backend_type: None,
+            },
+            // Unicode in query
+            ActiveQuery {
+                pid: 12345,
+                usename: Some("用户".to_string()),
+                datname: Some("データベース".to_string()),
+                state: Some("idle in transaction".to_string()),
+                wait_event_type: None,
+                wait_event: None,
+                query_start: Some(Utc.with_ymd_and_hms(2024, 1, 15, 12, 28, 0).unwrap()),
+                duration_secs: 0.001,
+                query: Some("SELECT * FROM users WHERE name = '日本語テスト' AND emoji = '🎉🚀💻'".to_string()),
+                backend_type: Some("client backend".to_string()),
+            },
+        ],
+        wait_events: vec![],
+        blocking_info: vec![
+            // Blocking with None fields
+            BlockingInfo {
+                blocked_pid: 1,
+                blocked_user: None,
+                blocked_query: None,
+                blocked_duration_secs: 0.0,
+                blocker_pid: 2,
+                blocker_user: None,
+                blocker_query: None,
+                blocker_state: None,
+            },
+        ],
+        buffer_cache: BufferCacheStats {
+            blks_hit: i64::MAX,
+            blks_read: 0,
+            hit_ratio: 100.0,
+        },
+        summary: ActivitySummary {
+            active_query_count: 999999,
+            idle_in_transaction_count: 888888,
+            total_backends: 777777,
+            lock_count: 666666,
+            waiting_count: 555555,
+            oldest_xact_secs: Some(99999999.9),
+            autovacuum_count: 444444,
+        },
+        table_stats: vec![
+            // Table with extreme values
+            TableStat {
+                schemaname: "public".to_string(),
+                relname: "テーブル_with_unicode_名前".to_string(),
+                total_size_bytes: i64::MAX / 2,
+                table_size_bytes: i64::MAX / 4,
+                indexes_size_bytes: i64::MAX / 4,
+                seq_scan: i64::MAX,
+                seq_tup_read: i64::MAX,
+                idx_scan: 0,
+                idx_tup_fetch: 0,
+                n_live_tup: i64::MAX,
+                n_dead_tup: i64::MAX / 2,
+                dead_ratio: 99.99,
+                n_tup_ins: i64::MAX,
+                n_tup_upd: i64::MAX,
+                n_tup_del: i64::MAX,
+                n_tup_hot_upd: 0,
+                last_vacuum: None,
+                last_autovacuum: None,
+                last_analyze: None,
+                last_autoanalyze: None,
+                vacuum_count: 0,
+                autovacuum_count: 0,
+                bloat_bytes: Some(i64::MAX),
+                bloat_pct: Some(99.9),
+            },
+        ],
+        replication: vec![
+            // Replication with minimal data
+            ReplicationInfo {
+                pid: 1,
+                usesysid: None,
+                usename: None,
+                application_name: None,
+                client_addr: None,
+                client_hostname: None,
+                client_port: None,
+                backend_start: None,
+                backend_xmin: None,
+                state: None,
+                sent_lsn: None,
+                write_lsn: None,
+                flush_lsn: None,
+                replay_lsn: None,
+                write_lag_secs: None,
+                flush_lag_secs: None,
+                replay_lag_secs: None,
+                sync_priority: None,
+                sync_state: None,
+                reply_time: None,
+            },
+        ],
+        replication_slots: vec![],
+        subscriptions: vec![],
+        vacuum_progress: vec![
+            // Vacuum at 0%
+            VacuumProgress {
+                pid: 1,
+                datname: None,
+                table_name: "schema.table".to_string(),
+                phase: "initializing".to_string(),
+                heap_blks_total: i64::MAX,
+                heap_blks_vacuumed: 0,
+                progress_pct: 0.0,
+                num_dead_tuples: i64::MAX,
+            },
+        ],
+        wraparound: vec![
+            // Critical wraparound
+            WraparoundInfo {
+                datname: "critical".to_string(),
+                xid_age: 2_000_000_000,
+                xids_remaining: 147_000_000,
+                pct_towards_wraparound: 93.2,
+            },
+        ],
+        indexes: vec![
+            // Index with zero usage
+            IndexInfo {
+                schemaname: "public".to_string(),
+                table_name: "t".to_string(),
+                index_name: "unused_idx_with_very_long_name_that_should_be_truncated_in_display".to_string(),
+                index_size_bytes: 0,
+                idx_scan: 0,
+                idx_tup_read: 0,
+                idx_tup_fetch: 0,
+                index_definition: "CREATE INDEX unused_idx_with_very_long_name_that_should_be_truncated_in_display ON public.t USING btree (col1, col2, col3, col4, col5)".to_string(),
+                bloat_bytes: Some(0),
+                bloat_pct: Some(0.0),
+            },
+        ],
+        stat_statements: vec![
+            // Statement with extreme values
+            StatStatement {
+                queryid: i64::MAX,
+                query: "SELECT".to_string(),  // Very short
+                calls: i64::MAX,
+                total_exec_time: f64::MAX / 2.0,
+                min_exec_time: 0.0,
+                mean_exec_time: f64::MAX / 4.0,
+                max_exec_time: f64::MAX / 2.0,
+                stddev_exec_time: f64::MAX / 4.0,
+                rows: i64::MAX,
+                shared_blks_hit: 0,
+                shared_blks_read: i64::MAX,
+                shared_blks_dirtied: i64::MAX,
+                shared_blks_written: i64::MAX,
+                local_blks_hit: i64::MAX,
+                local_blks_read: i64::MAX,
+                local_blks_dirtied: i64::MAX,
+                local_blks_written: i64::MAX,
+                temp_blks_read: i64::MAX,
+                temp_blks_written: i64::MAX,
+                blk_read_time: f64::MAX / 2.0,
+                blk_write_time: f64::MAX / 2.0,
+                hit_ratio: 0.0,
+            },
+        ],
+        stat_statements_error: Some("Error: permission denied for view pg_stat_statements".to_string()),
+        extensions: DetectedExtensions::default(),
+        db_size: i64::MAX,
+        checkpoint_stats: Some(CheckpointStats {
+            checkpoints_timed: i64::MAX,
+            checkpoints_req: i64::MAX,
+            checkpoint_write_time: f64::MAX / 2.0,
+            checkpoint_sync_time: f64::MAX / 2.0,
+            buffers_checkpoint: i64::MAX,
+            buffers_backend: i64::MAX,
+        }),
+        wal_stats: None,
+        archiver_stats: None,
+        bgwriter_stats: None,
+        db_stats: None,
+    }
+}
+
+#[test]
+fn full_layout_extreme_values() {
+    let backend = TestBackend::new(140, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_extreme_snapshot()));
+
+    terminal.draw(|frame| {
+        super::render(frame, &mut app);
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn panel_queries_extreme_values() {
+    let backend = TestBackend::new(140, 15);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_extreme_snapshot()));
+
+    terminal.draw(|frame| {
+        super::active_queries::render(frame, &mut app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn panel_table_stats_extreme_values() {
+    let backend = TestBackend::new(140, 10);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_extreme_snapshot()));
+
+    terminal.draw(|frame| {
+        super::panels::render_table_stats(frame, &mut app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn panel_blocking_extreme_values() {
+    let backend = TestBackend::new(100, 10);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_extreme_snapshot()));
+
+    terminal.draw(|frame| {
+        super::panels::render_blocking(frame, &mut app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn panel_wraparound_critical() {
+    let backend = TestBackend::new(100, 10);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_extreme_snapshot()));
+
+    terminal.draw(|frame| {
+        super::panels::render_wraparound(frame, &mut app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_query_inspect_extreme_values() {
+    let backend = TestBackend::new(100, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_extreme_snapshot()));
+    app.view_mode = ViewMode::Inspect;
+    app.query_table_state.select(Some(0));
+
+    terminal.draw(|frame| {
+        super::overlay::render_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_query_inspect_all_none_fields() {
+    let backend = TestBackend::new(100, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_extreme_snapshot()));
+    app.view_mode = ViewMode::Inspect;
+    // Select the query with all None fields
+    app.query_table_state.select(Some(1));
+
+    terminal.draw(|frame| {
+        super::overlay::render_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_query_inspect_unicode() {
+    let backend = TestBackend::new(100, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_extreme_snapshot()));
+    app.view_mode = ViewMode::Inspect;
+    // Select the Unicode query
+    app.query_table_state.select(Some(2));
+
+    terminal.draw(|frame| {
+        super::overlay::render_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_replication_inspect_all_none() {
+    let backend = TestBackend::new(100, 45);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_extreme_snapshot()));
+    app.bottom_panel = BottomPanel::Replication;
+    app.view_mode = ViewMode::Inspect;
+    app.replication_table_state.select(Some(0));
+
+    terminal.draw(|frame| {
+        super::overlay::render_replication_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_blocking_inspect_all_none() {
+    let backend = TestBackend::new(110, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_extreme_snapshot()));
+    app.bottom_panel = BottomPanel::Blocking;
+    app.view_mode = ViewMode::Inspect;
+    app.blocking_table_state.select(Some(0));
+
+    terminal.draw(|frame| {
+        super::overlay::render_blocking_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_wraparound_inspect_critical() {
+    let backend = TestBackend::new(100, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_extreme_snapshot()));
+    app.bottom_panel = BottomPanel::Wraparound;
+    app.view_mode = ViewMode::Inspect;
+    app.wraparound_table_state.select(Some(0));
+
+    terminal.draw(|frame| {
+        super::overlay::render_wraparound_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn stats_panel_extreme_values() {
+    let backend = TestBackend::new(40, 20);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let app = make_app(Some(make_extreme_snapshot()));
+
+    terminal.draw(|frame| {
+        super::stats_panel::render(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Edge Cases - Special Characters in SQL
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn make_special_chars_snapshot() -> PgSnapshot {
+    let mut snapshot = make_empty_snapshot();
+    snapshot.active_queries = vec![
+        // SQL injection attempt (should be safely displayed)
+        ActiveQuery {
+            pid: 1,
+            usename: Some("user'; DROP TABLE--".to_string()),
+            datname: Some("db".to_string()),
+            state: Some("active".to_string()),
+            wait_event_type: None,
+            wait_event: None,
+            query_start: Some(Utc.with_ymd_and_hms(2024, 1, 15, 12, 30, 40).unwrap()),
+            duration_secs: 1.0,
+            query: Some("SELECT * FROM users WHERE name = ''; DROP TABLE users; --'".to_string()),
+            backend_type: Some("client backend".to_string()),
+        },
+        // Newlines and tabs in query
+        ActiveQuery {
+            pid: 2,
+            usename: Some("user".to_string()),
+            datname: Some("db".to_string()),
+            state: Some("active".to_string()),
+            wait_event_type: None,
+            wait_event: None,
+            query_start: Some(Utc.with_ymd_and_hms(2024, 1, 15, 12, 30, 40).unwrap()),
+            duration_secs: 1.0,
+            query: Some("SELECT\n\t*\nFROM\n\tusers\nWHERE\n\tid = 1".to_string()),
+            backend_type: Some("client backend".to_string()),
+        },
+        // ANSI escape sequences (should not affect terminal)
+        ActiveQuery {
+            pid: 3,
+            usename: Some("user".to_string()),
+            datname: Some("db".to_string()),
+            state: Some("active".to_string()),
+            wait_event_type: None,
+            wait_event: None,
+            query_start: Some(Utc.with_ymd_and_hms(2024, 1, 15, 12, 30, 40).unwrap()),
+            duration_secs: 1.0,
+            query: Some("SELECT '\x1b[31mRED\x1b[0m' AS color".to_string()),
+            backend_type: Some("client backend".to_string()),
+        },
+        // Empty string query
+        ActiveQuery {
+            pid: 4,
+            usename: Some("".to_string()),
+            datname: Some("".to_string()),
+            state: Some("".to_string()),
+            wait_event_type: Some("".to_string()),
+            wait_event: Some("".to_string()),
+            query_start: None,
+            duration_secs: 0.0,
+            query: Some("".to_string()),
+            backend_type: Some("".to_string()),
+        },
+    ];
+    snapshot
+}
+
+#[test]
+fn panel_queries_special_characters() {
+    let backend = TestBackend::new(140, 15);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_special_chars_snapshot()));
+
+    terminal.draw(|frame| {
+        super::active_queries::render(frame, &mut app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_query_inspect_sql_injection() {
+    let backend = TestBackend::new(100, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_special_chars_snapshot()));
+    app.view_mode = ViewMode::Inspect;
+    app.query_table_state.select(Some(0));
+
+    terminal.draw(|frame| {
+        super::overlay::render_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_query_inspect_newlines_tabs() {
+    let backend = TestBackend::new(100, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_special_chars_snapshot()));
+    app.view_mode = ViewMode::Inspect;
+    app.query_table_state.select(Some(1));
+
+    terminal.draw(|frame| {
+        super::overlay::render_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_query_inspect_ansi_escapes() {
+    let backend = TestBackend::new(100, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_special_chars_snapshot()));
+    app.view_mode = ViewMode::Inspect;
+    app.query_table_state.select(Some(2));
+
+    terminal.draw(|frame| {
+        super::overlay::render_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_query_inspect_empty_strings() {
+    let backend = TestBackend::new(100, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_special_chars_snapshot()));
+    app.view_mode = ViewMode::Inspect;
+    app.query_table_state.select(Some(3));
+
+    terminal.draw(|frame| {
+        super::overlay::render_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Edge Cases - Zero and Boundary Values
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn make_zero_values_snapshot() -> PgSnapshot {
+    PgSnapshot {
+        timestamp: Utc.with_ymd_and_hms(2024, 1, 15, 12, 30, 45).unwrap(),
+        active_queries: vec![],
+        wait_events: vec![],
+        blocking_info: vec![],
+        buffer_cache: BufferCacheStats {
+            blks_hit: 0,
+            blks_read: 0,
+            hit_ratio: 0.0,  // 0/0 case
+        },
+        summary: ActivitySummary {
+            active_query_count: 0,
+            idle_in_transaction_count: 0,
+            total_backends: 0,
+            lock_count: 0,
+            waiting_count: 0,
+            oldest_xact_secs: Some(0.0),
+            autovacuum_count: 0,
+        },
+        table_stats: vec![
+            TableStat {
+                schemaname: "public".to_string(),
+                relname: "empty_table".to_string(),
+                total_size_bytes: 0,
+                table_size_bytes: 0,
+                indexes_size_bytes: 0,
+                seq_scan: 0,
+                seq_tup_read: 0,
+                idx_scan: 0,
+                idx_tup_fetch: 0,
+                n_live_tup: 0,
+                n_dead_tup: 0,
+                dead_ratio: 0.0,
+                n_tup_ins: 0,
+                n_tup_upd: 0,
+                n_tup_del: 0,
+                n_tup_hot_upd: 0,
+                last_vacuum: None,
+                last_autovacuum: None,
+                last_analyze: None,
+                last_autoanalyze: None,
+                vacuum_count: 0,
+                autovacuum_count: 0,
+                bloat_bytes: Some(0),
+                bloat_pct: Some(0.0),
+            },
+        ],
+        replication: vec![],
+        replication_slots: vec![],
+        subscriptions: vec![],
+        vacuum_progress: vec![],
+        wraparound: vec![
+            WraparoundInfo {
+                datname: "db".to_string(),
+                xid_age: 0,
+                xids_remaining: 2_147_483_647,
+                pct_towards_wraparound: 0.0,
+            },
+        ],
+        indexes: vec![],
+        stat_statements: vec![],
+        stat_statements_error: None,
+        extensions: DetectedExtensions::default(),
+        db_size: 0,
+        checkpoint_stats: Some(CheckpointStats {
+            checkpoints_timed: 0,
+            checkpoints_req: 0,
+            checkpoint_write_time: 0.0,
+            checkpoint_sync_time: 0.0,
+            buffers_checkpoint: 0,
+            buffers_backend: 0,
+        }),
+        wal_stats: Some(WalStats {
+            wal_records: 0,
+            wal_fpi: 0,
+            wal_bytes: 0,
+            wal_buffers_full: 0,
+            wal_write: 0,
+            wal_sync: 0,
+            wal_write_time: 0.0,
+            wal_sync_time: 0.0,
+        }),
+        archiver_stats: Some(ArchiverStats {
+            archived_count: 0,
+            failed_count: 0,
+            last_archived_wal: None,
+            last_archived_time: None,
+            last_failed_wal: None,
+            last_failed_time: None,
+        }),
+        bgwriter_stats: Some(BgwriterStats {
+            buffers_clean: 0,
+            maxwritten_clean: 0,
+            buffers_alloc: 0,
+        }),
+        db_stats: Some(DatabaseStats {
+            xact_commit: 0,
+            xact_rollback: 0,
+            blks_read: 0,
+        }),
+    }
+}
+
+#[test]
+fn full_layout_zero_values() {
+    let backend = TestBackend::new(140, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_zero_values_snapshot()));
+
+    terminal.draw(|frame| {
+        super::render(frame, &mut app);
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn panel_wal_io_zero_values() {
+    let backend = TestBackend::new(100, 15);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let app = make_app(Some(make_zero_values_snapshot()));
+
+    terminal.draw(|frame| {
+        super::panels::render_wal_io(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn stats_panel_zero_values() {
+    let backend = TestBackend::new(40, 20);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let app = make_app(Some(make_zero_values_snapshot()));
+
+    terminal.draw(|frame| {
+        super::stats_panel::render(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_table_inspect_zero_values() {
+    let backend = TestBackend::new(110, 55);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_zero_values_snapshot()));
+    app.bottom_panel = BottomPanel::TableStats;
+    app.view_mode = ViewMode::Inspect;
+    app.table_stat_table_state.select(Some(0));
+
+    terminal.draw(|frame| {
+        super::overlay::render_table_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}

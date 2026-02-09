@@ -1,0 +1,19 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+ pg_glimpse   ◆ localhost:5432/production  as postgres  25/1
+╭ Connections ── 29 ─────────╮╭ Server Stats ──────────────╮
+╭ Cache Hit Ratio ── 92.9% ──╮╭ Avg Duration ── 390ms ─────╮
+╭ Queries [2] ─────────────────────────────────────────────╮
+│PID Query                User   Databas Dur State   Wait  │
+│123 UPDATE orders SET st admin  product 3m4 idle-tx Client│
+│123 SELECT * FROM users  app_us product 5.5 active  DataFi│
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+ Queries    ↑↓ nav · ⏎ inspect · s sort · / filter · C/K can
+ ⇥ locks · w waits · t tables · R repl · v vacuum · x xid ·

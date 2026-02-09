@@ -1,0 +1,38 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+                                                                                                              
+                                                                                                              
+                                                                                                              
+                                                                                                              
+                                                                                                              
+                                                                                                              
+           ╭  Lock Details  [j/k] scroll  [y] copy query  [Esc] close  ───────────────────────────╮           
+           │                                                                                      │           
+           │  Blocked Process ────────────────────────────────────────                            │           
+           │  PID:           1     User: -                                                        │           
+           │  Waiting:       0.0s                                                                 │           
+           │                                                                                      │           
+           │  Query:                                                                              │           
+           │  <no query>                                                                          │           
+           │                                                                                      │           
+           │  Blocking Process ────────────────────────────────────────                           │           
+           │  PID:           2     User: -                                                        │           
+           │  State:         -                                                                    │           
+           │                                                                                      │           
+           │  Query:                                                                              │           
+           │  <no query>                                                                          │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           │                                                                                      │           
+           ╰──────────────────────────────────────────────────────────────────────────────────────╯

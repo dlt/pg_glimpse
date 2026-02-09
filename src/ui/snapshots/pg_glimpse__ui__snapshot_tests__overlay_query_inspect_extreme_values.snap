@@ -1,0 +1,38 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+               ╭  Query Details  [j/k] scroll  [y] copy query  [C] cancel  [K] kill ╮               
+               │                                                                    │               
+               │  Connection ────────────────────────────────────────               │               
+               │  PID:       99999999     User:                                     │               
+               │a]very_long_username_that_exceeds_normal_limits_and_should_be_trunca│               
+               │ted     DB:                                                         │               
+               │extremely_long_database_name_that_is_way_too_long_for_display       │               
+               │  Backend:   client backend                                         │               
+               │                                                                    │               
+               │  Status ────────────────────────────────────────                   │               
+               │  State:      active      Duration: 28h47m                          │               
+               │  Wait:      LWLock / WALWriteLock                                  │               
+               │                                                                    │               
+               │  Query ────────────────────────────────────────                    │               
+               │  SELECT * FROM extremely_long_table_name_here WHERE column_one =   │               
+               │'value' AND column_two = 'another_value' AND column_three IN (SELECT│               
+               │id FROM other_table WHERE status = 'active' AND created_at > NOW() -│               
+               │INTERVAL '30 days' ORDER BY id DESC LIMIT 1000) AND column_four LIKE│               
+               │'%pattern%' ORDER BY column_five DESC NULLS LAST LIMIT 100 OFFSET 50│               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               │                                                                    │               
+               ╰────────────────────────────────────────────────────────────────────╯
