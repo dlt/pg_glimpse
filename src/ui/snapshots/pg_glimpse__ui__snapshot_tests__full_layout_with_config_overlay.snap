@@ -24,7 +24,7 @@ expression: buffer_to_string(&terminal)
 │⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│    Warn Duration       ◀  1.0s  ▶                                                              │⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│
 ╰────────────────────│    Danger Duration     ◀  10.0s  ▶                                                             │────────────────────╯
 ╭ Queries [2] ───────│    Recording Retention ◀  1h  ▶                                                                │────────────────────╮
-│PID      Query      │    Recordings Dir      ◀  <RECORDINGS_DIR> ▶      │    Wait            │
+│PID      Query      │    Recordings Dir      ◀  <RECORDINGS_DIR> ▶ │    Wait            │
 │12346    UPDATE orde│                                                                                                │    ClientRead      │
 │12345    SELECT * FR│  About ────────────────────────────────────────                                                │    DataFileRead    │
 │                    │    Version:    X.X.X                                                                           │                    │

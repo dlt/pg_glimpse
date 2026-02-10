@@ -426,7 +426,15 @@ fn redact_recordings_dir(s: &str) -> String {
                 // Skip to end of path (find closing ▶ or end of meaningful content)
                 let rest = &line[idx..];
                 if let Some(end_idx) = rest.find(" ▶") {
-                    result.push_str(&rest[end_idx..]);
+                    // Find content after " ▶" and normalize whitespace before next │
+                    let after_arrow = &rest[end_idx..];
+                    if let Some(border_idx) = after_arrow.find('│') {
+                        // Keep " ▶" then single space then │ and rest
+                        result.push_str(" ▶ ");
+                        result.push_str(&after_arrow[border_idx..]);
+                    } else {
+                        result.push_str(after_arrow);
+                    }
                 } else if let Some(end_idx) = rest.find("│") {
                     // Handle truncated paths that end at border
                     result.push_str(&rest[end_idx..]);
