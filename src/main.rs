@@ -280,9 +280,8 @@ async fn run(cli: Cli) -> Result<()> {
         std::collections::HashMap<String, db::queries::IndexBloat>,
     );
 
-    #[allow(clippy::large_enum_variant)]
     enum DbResult {
-        Snapshot(Result<PgSnapshot, String>),
+        Snapshot(Box<Result<PgSnapshot, String>>),
         CancelQuery(i32, Result<bool, String>),
         TerminateBackend(i32, Result<bool, String>),
         CancelQueries(Vec<(i32, bool)>),
@@ -300,11 +299,11 @@ async fn run(cli: Cli) -> Result<()> {
         while let Some(cmd) = cmd_rx.recv().await {
             let result = match cmd {
                 DbCommand::FetchSnapshot => {
-                    DbResult::Snapshot(
+                    DbResult::Snapshot(Box::new(
                         db::queries::fetch_snapshot(&db_client, &extensions, pg_major_version)
                             .await
                             .map_err(|e| e.to_string()),
-                    )
+                    ))
                 }
                 DbCommand::CancelQuery(pid) => {
                     DbResult::CancelQuery(
@@ -377,14 +376,16 @@ async fn run(cli: Cli) -> Result<()> {
             result = result_rx.recv() => {
                 if let Some(res) = result {
                     match res {
-                        DbResult::Snapshot(Ok(snap)) => {
-                            if let Some(ref mut rec) = recorder {
-                                let _ = rec.record(&snap);
+                        DbResult::Snapshot(result) => match *result {
+                            Ok(snap) => {
+                                if let Some(ref mut rec) = recorder {
+                                    let _ = rec.record(&snap);
+                                }
+                                app.update(snap);
                             }
-                            app.update(snap);
-                        }
-                        DbResult::Snapshot(Err(e)) => {
-                            app.update_error(e);
+                            Err(e) => {
+                                app.update_error(e);
+                            }
                         }
                         DbResult::CancelQuery(pid, Ok(true)) => {
                             app.status_message = Some(format!("Cancelled query on PID {}", pid));
