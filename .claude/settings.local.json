@@ -21,7 +21,8 @@
       "Bash(cargo update:*)",
       "Bash(curl:*)",
       "Bash(shasum:*)",
-      "Bash(gh release view:*)"
+      "Bash(gh release view:*)",
+      "Bash(cargo insta test:*)"
     ]
   }
 }
