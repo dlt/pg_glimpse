@@ -14,47 +14,6 @@ jobs:
   # Run all tests before building release artifacts
   test:
     runs-on: ubuntu-latest
-    services:
-      pg11:
-        image: postgres:11-alpine
-        ports:
-          - 5411:5432
-        env:
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: test
-        options: >-
-          --health-cmd "pg_isready -U test"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-      pg14:
-        image: postgres:14-alpine
-        ports:
-          - 5414:5432
-        env:
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: test
-        options: >-
-          --health-cmd "pg_isready -U test"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-      pg17:
-        image: postgres:17-alpine
-        ports:
-          - 5417:5432
-        env:
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: test
-        options: >-
-          --health-cmd "pg_isready -U test"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -62,8 +21,13 @@ jobs:
       - run: cargo check --all-targets
       - run: cargo clippy -- -D warnings
       - run: cargo test
+      - name: Start test databases
+        run: docker compose -f tests/docker-compose.yml up -d --wait
       - name: Run integration tests
         run: cargo test --features integration --test integration
+      - name: Stop test databases
+        if: always()
+        run: docker compose -f tests/docker-compose.yml down -v
 
   build:
     needs: test
