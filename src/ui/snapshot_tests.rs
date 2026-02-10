@@ -115,7 +115,7 @@ fn make_snapshot() -> PgSnapshot {
                 seq_tup_read: 50000,
                 idx_scan: 25000,
                 idx_tup_fetch: 24500,
-                n_live_tup: 100000,
+                n_live_tup: 100_000,
                 n_dead_tup: 5000,
                 dead_ratio: 5.0,
                 n_tup_ins: 1000,
@@ -199,7 +199,7 @@ fn make_snapshot() -> PgSnapshot {
             datname: Some("production".to_string()),
             table_name: "public.large_table".to_string(),
             phase: "scanning heap".to_string(),
-            heap_blks_total: 100000,
+            heap_blks_total: 100_000,
             heap_blks_vacuumed: 45000,
             progress_pct: 45.0,
             num_dead_tuples: 12500,
@@ -245,7 +245,7 @@ fn make_snapshot() -> PgSnapshot {
             },
         ],
         stat_statements: vec![StatStatement {
-            queryid: 123456789,
+            queryid: 123_456_789,
             query: "SELECT * FROM users WHERE email = $1".to_string(),
             calls: 10000,
             total_exec_time: 5000.0,
@@ -310,7 +310,7 @@ fn make_snapshot() -> PgSnapshot {
             buffers_alloc: 50000,
         }),
         db_stats: Some(DatabaseStats {
-            xact_commit: 100000,
+            xact_commit: 100_000,
             xact_rollback: 50,
             blks_read: 5000,
         }),
@@ -1686,7 +1686,7 @@ fn make_extreme_snapshot() -> PgSnapshot {
         active_queries: vec![
             // Very long query
             ActiveQuery {
-                pid: 99999999,
+                pid: 99_999_999,
                 usename: Some("a]very_long_username_that_exceeds_normal_limits_and_should_be_truncated".to_string()),
                 datname: Some("extremely_long_database_name_that_is_way_too_long_for_display".to_string()),
                 state: Some("active".to_string()),
@@ -1744,13 +1744,13 @@ fn make_extreme_snapshot() -> PgSnapshot {
             hit_ratio: 100.0,
         },
         summary: ActivitySummary {
-            active_query_count: 999999,
-            idle_in_transaction_count: 888888,
-            total_backends: 777777,
-            lock_count: 666666,
-            waiting_count: 555555,
-            oldest_xact_secs: Some(99999999.9),
-            autovacuum_count: 444444,
+            active_query_count: 999_999,
+            idle_in_transaction_count: 888_888,
+            total_backends: 777_777,
+            lock_count: 666_666,
+            waiting_count: 555_555,
+            oldest_xact_secs: Some(99_999_999.9),
+            autovacuum_count: 444_444,
         },
         table_stats: vec![
             // Table with extreme values

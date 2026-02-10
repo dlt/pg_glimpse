@@ -508,9 +508,9 @@ mod tests {
             table_stats: vec![TableStat {
                 schemaname: "public".to_string(),
                 relname: "users".to_string(),
-                total_size_bytes: 10000000,
-                table_size_bytes: 8000000,
-                indexes_size_bytes: 2000000,
+                total_size_bytes: 10_000_000,
+                table_size_bytes: 8_000_000,
+                indexes_size_bytes: 2_000_000,
                 seq_scan: 100,
                 seq_tup_read: 50000,
                 idx_scan: 5000,
@@ -528,7 +528,7 @@ mod tests {
                 last_autoanalyze: Some(chrono::Utc::now()),
                 vacuum_count: 5,
                 autovacuum_count: 10,
-                bloat_bytes: Some(500000),
+                bloat_bytes: Some(500_000),
                 bloat_pct: Some(6.25),
             }],
             replication: vec![ReplicationInfo {
@@ -560,7 +560,7 @@ mod tests {
                 active: true,
                 restart_lsn: Some("0/1234000".to_string()),
                 confirmed_flush_lsn: Some("0/1234500".to_string()),
-                wal_retained_bytes: Some(1048576),
+                wal_retained_bytes: Some(1_048_576),
                 temporary: false,
                 spill_txns: Some(0),
                 spill_count: Some(0),
@@ -589,15 +589,15 @@ mod tests {
             }],
             wraparound: vec![WraparoundInfo {
                 datname: "testdb".to_string(),
-                xid_age: 500000000,
-                xids_remaining: 1647483648,
+                xid_age: 500_000_000,
+                xids_remaining: 1_647_483_648,
                 pct_towards_wraparound: 23.28,
             }],
             indexes: vec![IndexInfo {
                 schemaname: "public".to_string(),
                 table_name: "users".to_string(),
                 index_name: "users_pkey".to_string(),
-                index_size_bytes: 500000,
+                index_size_bytes: 500_000,
                 idx_scan: 10000,
                 idx_tup_read: 50000,
                 idx_tup_fetch: 48000,
@@ -607,7 +607,7 @@ mod tests {
                 bloat_pct: Some(5.0),
             }],
             stat_statements: vec![StatStatement {
-                queryid: 123456789,
+                queryid: 123_456_789,
                 query: "SELECT * FROM users WHERE id = $1".to_string(),
                 calls: 10000,
                 total_exec_time: 5000.0,
@@ -638,7 +638,7 @@ mod tests {
                 pg_wait_sampling: true,
                 pg_buffercache: true,
             },
-            db_size: 5000000000,
+            db_size: 5_000_000_000,
             checkpoint_stats: Some(CheckpointStats {
                 checkpoints_timed: 100,
                 checkpoints_req: 5,
@@ -648,9 +648,9 @@ mod tests {
                 buffers_backend: 500,
             }),
             wal_stats: Some(crate::db::models::WalStats {
-                wal_records: 1000000,
+                wal_records: 1_000_000,
                 wal_fpi: 5000,
-                wal_bytes: 1073741824,
+                wal_bytes: 1_073_741_824,
                 wal_buffers_full: 10,
                 wal_write: 50000,
                 wal_sync: 50000,
@@ -668,10 +668,10 @@ mod tests {
             bgwriter_stats: Some(crate::db::models::BgwriterStats {
                 buffers_clean: 5000,
                 maxwritten_clean: 10,
-                buffers_alloc: 100000,
+                buffers_alloc: 100_000,
             }),
             db_stats: Some(DatabaseStats {
-                xact_commit: 500000,
+                xact_commit: 500_000,
                 xact_rollback: 100,
                 blks_read: 10000,
             }),
@@ -736,7 +736,7 @@ mod tests {
         assert_eq!(loaded.table_stats.len(), 1);
         assert_eq!(loaded.table_stats[0].schemaname, "public");
         assert_eq!(loaded.table_stats[0].relname, "users");
-        assert_eq!(loaded.table_stats[0].bloat_bytes, Some(500000));
+        assert_eq!(loaded.table_stats[0].bloat_bytes, Some(500_000));
         assert!((loaded.table_stats[0].bloat_pct.unwrap() - 6.25).abs() < 0.001);
 
         // Verify indexes with bloat
@@ -767,7 +767,7 @@ mod tests {
 
         // Verify wraparound
         assert_eq!(loaded.wraparound.len(), 1);
-        assert_eq!(loaded.wraparound[0].xid_age, 500000000);
+        assert_eq!(loaded.wraparound[0].xid_age, 500_000_000);
 
         // Verify stat_statements
         assert_eq!(loaded.stat_statements.len(), 1);
@@ -779,7 +779,7 @@ mod tests {
         assert_eq!(loaded.checkpoint_stats.as_ref().unwrap().checkpoints_timed, 100);
 
         assert!(loaded.wal_stats.is_some());
-        assert_eq!(loaded.wal_stats.as_ref().unwrap().wal_records, 1000000);
+        assert_eq!(loaded.wal_stats.as_ref().unwrap().wal_records, 1_000_000);
 
         assert!(loaded.archiver_stats.is_some());
         assert_eq!(loaded.archiver_stats.as_ref().unwrap().archived_count, 1000);
@@ -788,9 +788,9 @@ mod tests {
         assert_eq!(loaded.bgwriter_stats.as_ref().unwrap().buffers_clean, 5000);
 
         assert!(loaded.db_stats.is_some());
-        assert_eq!(loaded.db_stats.as_ref().unwrap().xact_commit, 500000);
+        assert_eq!(loaded.db_stats.as_ref().unwrap().xact_commit, 500_000);
 
-        assert_eq!(loaded.db_size, 5000000000);
+        assert_eq!(loaded.db_size, 5_000_000_000);
         assert!(loaded.extensions.pg_stat_statements);
     }
 

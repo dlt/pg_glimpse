@@ -511,7 +511,7 @@ mod tests {
         // Any scans > 0 = OK
         assert_eq!(Theme::index_usage_color(1), Theme::border_ok());
         assert_eq!(Theme::index_usage_color(100), Theme::border_ok());
-        assert_eq!(Theme::index_usage_color(1000000), Theme::border_ok());
+        assert_eq!(Theme::index_usage_color(1_000_000), Theme::border_ok());
     }
 
     // ─────────────────────────────────────────────────────────────────────────────

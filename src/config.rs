@@ -779,8 +779,8 @@ mod tests {
             danger_duration_secs = 1.987654321
         ";
         let config: AppConfig = toml::from_str(floats).unwrap();
-        assert!((config.warn_duration_secs - 0.123456789).abs() < 1e-9);
-        assert!((config.danger_duration_secs - 1.987654321).abs() < 1e-9);
+        assert!((config.warn_duration_secs - 0.123_456_789).abs() < 1e-9);
+        assert!((config.danger_duration_secs - 1.987_654_321).abs() < 1e-9);
     }
 
     #[test]
