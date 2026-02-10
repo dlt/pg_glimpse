@@ -61,7 +61,7 @@ impl Filterable for PgExtension {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BottomPanel {
     Queries,
     Blocking,
@@ -101,7 +101,7 @@ impl BottomPanel {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ViewMode {
     Normal,
     Filter,
@@ -148,7 +148,7 @@ pub trait SortColumnTrait: Copy + PartialEq {
 /// Generates: enum definition, next() cycling through variants in order, label() for display.
 macro_rules! define_sort_column {
     ($name:ident { $($variant:ident => $label:literal),+ $(,)? }) => {
-        #[derive(Debug, Clone, Copy, PartialEq)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         pub enum $name {
             $($variant),+
         }
