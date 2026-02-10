@@ -354,8 +354,9 @@ async fn run(cli: Cli) -> Result<()> {
     let mut spinner_interval = tokio::time::interval(Duration::from_millis(80));
     let mut refresh_interval_secs = refresh;
 
-    while app.running {
-        terminal.draw(|frame| ui::render(frame, &mut app))?;
+    loop {
+        while app.running {
+            terminal.draw(|frame| ui::render(frame, &mut app))?;
 
         tokio::select! {
             biased;
@@ -482,6 +483,28 @@ async fn run(cli: Cli) -> Result<()> {
                 }
             }
         }
+        }
+
+        // Check if user selected a recording to replay
+        if let Some(replay_path) = app.pending_replay_path.take() {
+            // Run replay, then return to live mode
+            run_replay(&replay_path, app.config.clone()).await?;
+
+            // Reset app state for live mode
+            app.running = true;
+            app.bottom_panel = app::BottomPanel::Queries;
+            app.view_mode = app::ViewMode::Normal;
+            app.replay = None;
+
+            // Trigger immediate refresh
+            let _ = cmd_tx.try_send(DbCommand::FetchSnapshot);
+
+            // Continue outer loop to resume live mode
+            continue;
+        }
+
+        // No replay requested, exit
+        break;
     }
 
     ratatui::restore();
@@ -514,6 +537,7 @@ async fn run_replay(path: &Path, config: AppConfig) -> Result<()> {
         app.update(snap.clone());
         if let Some(ref mut replay) = app.replay {
             replay.position = 1;
+            replay.playing = true; // Auto-play on open
         }
     }
 

@@ -15,6 +15,7 @@ expression: buffer_to_string(&terminal)
               │    r           Force refresh now                            │             
               │    ?           This help screen                             │             
               │    ,           Configuration                                │             
+              │    L           Load recording (replay mode)                 │             
               │                                                             │             
               │  Panels ────────────────────────────────────────            │             
               │    Q           Queries (active)                             │             
@@ -32,5 +33,4 @@ expression: buffer_to_string(&terminal)
               │                                                             │             
               │  Panel Controls ────────────────────────────────────────    │             
               │    Esc         Back to queries (or quit)                    │             
-              │    ↑ / k       Select previous row                          │             
               ╰─────────────────────────────────────────────────────────────╯

@@ -2,6 +2,7 @@ mod config;
 mod confirm;
 mod help;
 mod inspect;
+mod recordings;
 mod sql_highlight;
 
 pub use config::render_config;
@@ -15,6 +16,7 @@ pub use inspect::{
     render_replication_inspect, render_settings_inspect, render_statement_inspect,
     render_table_inspect, render_vacuum_inspect, render_wraparound_inspect,
 };
+pub use recordings::{render_confirm_delete_recording, render_recordings};
 pub use sql_highlight::highlight_sql_inline;
 
 use ratatui::layout::{Constraint, Direction, Layout, Rect};

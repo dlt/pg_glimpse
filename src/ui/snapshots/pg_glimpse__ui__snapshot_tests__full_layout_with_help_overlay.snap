@@ -16,17 +16,18 @@ expression: buffer_to_string(&terminal)
 ╭ Cache Hit Ratio ── │    r           Force refresh now                                                               │────────────────────╮
 │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀│    ?           This help screen                                                                │                    │
 │⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│    ,           Configuration                                                                   │                ⢀⣀⣀⣀│
-│⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│                                                                                                │  ⣀⣀⣀⣠⣤⣤⣤⣴⣶⣶⣶⣾⣿⣿⣿⣿⣿⣿│
+│⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│    L           Load recording (replay mode)                                                    │  ⣀⣀⣀⣠⣤⣤⣤⣴⣶⣶⣶⣾⣿⣿⣿⣿⣿⣿│
+│⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│                                                                                                │⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│
 │⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│  Panels ────────────────────────────────────────                                               │⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│
 │⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│    Q           Queries (active)                                                                │⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│
 │⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│    Tab         Blocking chains                                                                 │⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│
 │⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│    w           Wait events                                                                     │⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│
-│⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│    t           Table stats                                                                     │⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│
-╰────────────────────│    R           Replication (lag, slots, subs)                                                  │────────────────────╯
-╭ Queries [2] ───────│    v           Vacuum progress                                                                 │────────────────────╮
-│PID      Query      │    x           Transaction wraparound                                                          │    Wait            │
-│12346    UPDATE orde│    I           Index stats                                                                     │    ClientRead      │
-│12345    SELECT * FR│    S           pg_stat_statements                                                              │    DataFileRead    │
+╰────────────────────│    t           Table stats                                                                     │────────────────────╯
+╭ Queries [2] ───────│    R           Replication (lag, slots, subs)                                                  │────────────────────╮
+│PID      Query      │    v           Vacuum progress                                                                 │    Wait            │
+│12346    UPDATE orde│    x           Transaction wraparound                                                          │    ClientRead      │
+│12345    SELECT * FR│    I           Index stats                                                                     │    DataFileRead    │
+│                    │    S           pg_stat_statements                                                              │                    │
 │                    │    A           WAL & I/O stats                                                                 │                    │
 │                    │    P           PostgreSQL settings                                                             │                    │
 │                    │    E           Extensions                                                                      │                    │
@@ -45,10 +46,9 @@ expression: buffer_to_string(&terminal)
 │                    │    y           Copy query to clipboard                                                         │                    │
 │                    │                                                                                                │                    │
 │                    │  Overlay ────────────────────────────────────────                                              │                    │
-│                    │    Esc / q     Close                                                                           │                    │
 │                    ╰────────────────────────────────────────────────────────────────────────────────────────────────╯                    │
 │                                                                                                                                          │
 │                                                                                                                                          │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
  Queries    ↑↓ nav · ⏎ inspect · s sort · / filter · C/K cancel/kill                                                                        
- ⇥ locks · w waits · t tables · R repl · v vacuum · x xid · I idx · S stmts · A wal · P cfg · E ext  │  ? help · , config · q quit
+ ⇥ locks · w waits · t tables · R repl · v vacuum · x xid · I idx · S stmts · A wal · P cfg · E ext  │  L replay · ? help · , config · q qui

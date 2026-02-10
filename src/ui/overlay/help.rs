@@ -34,10 +34,22 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
         section_header("Navigation"),
         entry("q", "Back to queries / quit"),
         entry("Ctrl+C", "Force quit"),
-        entry("p", "Pause / resume refresh"),
-        entry("r", "Force refresh now"),
-        entry("?", "This help screen"),
-        entry(",", "Configuration"),
+    ];
+
+    // Live mode only keys
+    if !app.is_replay_mode() {
+        lines.push(entry("p", "Pause / resume refresh"));
+        lines.push(entry("r", "Force refresh now"));
+    }
+
+    lines.push(entry("?", "This help screen"));
+    lines.push(entry(",", "Configuration"));
+
+    if !app.is_replay_mode() {
+        lines.push(entry("L", "Load recording (replay mode)"));
+    }
+
+    lines.extend([
         Line::from(""),
         section_header("Panels"),
         entry("Q", "Queries (active)"),
@@ -58,7 +70,7 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
         entry("↑ / k", "Select previous row"),
         entry("↓ / j", "Select next row"),
         entry("s", "Cycle sort column"),
-    ];
+    ]);
 
     // Filter - only for panels that support it
     if panel.supports_filter() {
@@ -72,13 +84,24 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
         lines.push(entry("b", "Refresh bloat estimates"));
     }
 
-    // Query actions - only for Queries panel
-    if panel == BottomPanel::Queries {
+    // Query actions - only for Queries panel in live mode
+    if panel == BottomPanel::Queries && !app.is_replay_mode() {
         lines.push(Line::from(""));
         lines.push(section_header("Query Actions"));
         lines.push(entry("C", "Cancel query (batch if filtered)"));
         lines.push(entry("K", "Terminate backend (batch if filtered)"));
         lines.push(entry("y", "Copy query to clipboard"));
+    }
+
+    // Replay controls - only in replay mode
+    if app.is_replay_mode() {
+        lines.push(Line::from(""));
+        lines.push(section_header("Playback"));
+        lines.push(entry("Space", "Play / pause"));
+        lines.push(entry("← / h", "Step backward"));
+        lines.push(entry("→ / l", "Step forward"));
+        lines.push(entry("< / >", "Decrease / increase speed"));
+        lines.push(entry("g / G", "Jump to start / end"));
     }
 
     lines.extend([

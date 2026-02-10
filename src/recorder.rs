@@ -1,11 +1,54 @@
+use chrono::{DateTime, Utc};
 use color_eyre::Result;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
-use std::io::{BufWriter, Write};
+use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::PathBuf;
 use std::time::SystemTime;
 
 use crate::db::models::{PgSnapshot, ServerInfo};
+
+/// Metadata about a recorded session, parsed from the header line.
+#[derive(Debug, Clone)]
+pub struct RecordingInfo {
+    pub path: PathBuf,
+    pub host: String,
+    pub port: u16,
+    pub dbname: String,
+    pub recorded_at: DateTime<Utc>,
+    pub pg_version: String,
+    pub file_size: u64,
+}
+
+impl RecordingInfo {
+    /// Format the connection string for display.
+    pub fn connection_display(&self) -> String {
+        format!("{}:{}/{}", self.host, self.port, self.dbname)
+    }
+
+    /// Format the file size for display (human-readable).
+    pub fn size_display(&self) -> String {
+        if self.file_size >= 1_048_576 {
+            format!("{:.1}MB", self.file_size as f64 / 1_048_576.0)
+        } else if self.file_size >= 1024 {
+            format!("{:.0}KB", self.file_size as f64 / 1024.0)
+        } else {
+            format!("{}B", self.file_size)
+        }
+    }
+
+    /// Extract the short PG version (e.g., "PG 15") from the full version string.
+    pub fn pg_version_short(&self) -> String {
+        // Parse "PostgreSQL 15.3 on x86_64..." -> "PG 15"
+        if let Some(rest) = self.pg_version.strip_prefix("PostgreSQL ") {
+            if let Some(major) = rest.split('.').next() {
+                return format!("PG {major}");
+            }
+        }
+        // Fallback: first 10 chars
+        self.pg_version.chars().take(10).collect()
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -103,6 +146,64 @@ impl Recorder {
         }
     }
 
+    /// List all recordings, sorted by date (newest first).
+    /// Parses only the header line of each file for efficiency.
+    pub fn list_recordings() -> Vec<RecordingInfo> {
+        let dir = Self::recordings_dir();
+        let Ok(entries) = fs::read_dir(&dir) else {
+            return vec![];
+        };
+
+        let mut recordings: Vec<RecordingInfo> = entries
+            .flatten()
+            .filter_map(|entry| {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+                    return None;
+                }
+
+                let meta = path.metadata().ok()?;
+                let file_size = meta.len();
+
+                // Read and parse only the first line (header)
+                let file = File::open(&path).ok()?;
+                let reader = BufReader::new(file);
+                let first_line = reader.lines().next()?.ok()?;
+
+                let header: RecordLine = serde_json::from_str(&first_line).ok()?;
+                match header {
+                    RecordLine::Header {
+                        host,
+                        port,
+                        dbname,
+                        recorded_at,
+                        server_info,
+                        ..
+                    } => Some(RecordingInfo {
+                        path,
+                        host,
+                        port,
+                        dbname,
+                        recorded_at,
+                        pg_version: server_info.version,
+                        file_size,
+                    }),
+                    RecordLine::Snapshot { .. } => None,
+                }
+            })
+            .collect();
+
+        // Sort by date, newest first
+        recordings.sort_by(|a, b| b.recorded_at.cmp(&a.recorded_at));
+        recordings
+    }
+
+    /// Delete a recording file.
+    pub fn delete_recording(path: &PathBuf) -> Result<()> {
+        fs::remove_file(path)?;
+        Ok(())
+    }
+
     #[cfg(test)]
     pub fn new_with_path(
         path: PathBuf,
@@ -140,6 +241,99 @@ mod tests {
     use crate::db::models::{ActivitySummary, BufferCacheStats, DetectedExtensions};
     use std::io::{BufRead, BufReader};
     use tempfile::TempDir;
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // RecordingInfo helper methods
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn recording_info_connection_display() {
+        let info = RecordingInfo {
+            path: PathBuf::from("/tmp/test.jsonl"),
+            host: "localhost".into(),
+            port: 5432,
+            dbname: "mydb".into(),
+            recorded_at: chrono::Utc::now(),
+            pg_version: "PostgreSQL 15.0".into(),
+            file_size: 1000,
+        };
+        assert_eq!(info.connection_display(), "localhost:5432/mydb");
+    }
+
+    #[test]
+    fn recording_info_size_display_bytes() {
+        let info = RecordingInfo {
+            path: PathBuf::from("/tmp/test.jsonl"),
+            host: "host".into(),
+            port: 5432,
+            dbname: "db".into(),
+            recorded_at: chrono::Utc::now(),
+            pg_version: "PostgreSQL 15.0".into(),
+            file_size: 500,
+        };
+        assert_eq!(info.size_display(), "500B");
+    }
+
+    #[test]
+    fn recording_info_size_display_kb() {
+        let info = RecordingInfo {
+            path: PathBuf::from("/tmp/test.jsonl"),
+            host: "host".into(),
+            port: 5432,
+            dbname: "db".into(),
+            recorded_at: chrono::Utc::now(),
+            pg_version: "PostgreSQL 15.0".into(),
+            file_size: 2048,
+        };
+        assert_eq!(info.size_display(), "2KB");
+    }
+
+    #[test]
+    fn recording_info_size_display_mb() {
+        let info = RecordingInfo {
+            path: PathBuf::from("/tmp/test.jsonl"),
+            host: "host".into(),
+            port: 5432,
+            dbname: "db".into(),
+            recorded_at: chrono::Utc::now(),
+            pg_version: "PostgreSQL 15.0".into(),
+            file_size: 2_097_152,
+        };
+        assert_eq!(info.size_display(), "2.0MB");
+    }
+
+    #[test]
+    fn recording_info_pg_version_short() {
+        let info = RecordingInfo {
+            path: PathBuf::from("/tmp/test.jsonl"),
+            host: "host".into(),
+            port: 5432,
+            dbname: "db".into(),
+            recorded_at: chrono::Utc::now(),
+            pg_version: "PostgreSQL 15.3 on x86_64-pc-linux-gnu".into(),
+            file_size: 1000,
+        };
+        assert_eq!(info.pg_version_short(), "PG 15");
+    }
+
+    #[test]
+    fn recording_info_pg_version_short_fallback() {
+        let info = RecordingInfo {
+            path: PathBuf::from("/tmp/test.jsonl"),
+            host: "host".into(),
+            port: 5432,
+            dbname: "db".into(),
+            recorded_at: chrono::Utc::now(),
+            pg_version: "Unknown Version".into(),
+            file_size: 1000,
+        };
+        // Should take first 10 chars
+        assert_eq!(info.pg_version_short(), "Unknown Ve");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Recorder tests
+    // ─────────────────────────────────────────────────────────────────────────────
 
     fn make_server_info() -> ServerInfo {
         ServerInfo {

@@ -136,6 +136,10 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         }
         ViewMode::Config => overlay::render_config(frame, app, frame.area()),
         ViewMode::Help => overlay::render_help(frame, app, frame.area()),
+        ViewMode::Recordings => overlay::render_recordings(frame, app, frame.area()),
+        ViewMode::ConfirmDeleteRecording(ref path) => {
+            overlay::render_confirm_delete_recording(frame, path, frame.area());
+        }
         ViewMode::Normal | ViewMode::Filter => {}
     }
 }

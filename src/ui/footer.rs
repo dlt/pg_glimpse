@@ -97,6 +97,9 @@ fn render_live(frame: &mut Frame, app: &App, area: Rect) {
     line2.push(sep());
     line2.push(Span::styled("│", sep_style));
     line2.push(sep());
+    line2.push(key("L"));
+    line2.push(desc(" replay"));
+    line2.push(dot());
     line2.push(key("?"));
     line2.push(desc(" help"));
     line2.push(dot());

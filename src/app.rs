@@ -3,6 +3,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config as MatcherConfig, Matcher};
 use ratatui::widgets::TableState;
+use std::path::PathBuf;
 
 use std::collections::HashMap;
 
@@ -10,6 +11,7 @@ use crate::config::{AppConfig, ConfigItem};
 use crate::db::models::{ActiveQuery, IndexInfo, PgExtension, PgSetting, PgSnapshot, ServerInfo, StatStatement, TableStat};
 use crate::db::queries::{IndexBloat, TableBloat};
 use crate::history::RingBuffer;
+use crate::recorder::RecordingInfo;
 use crate::ui::theme;
 
 /// Trait for types that can be filtered with fuzzy matching.
@@ -123,6 +125,8 @@ pub enum ViewMode {
     ConfirmKillBatch(Vec<i32>),
     Config,
     Help,
+    Recordings,
+    ConfirmDeleteRecording(PathBuf),
 }
 
 #[derive(Debug, Clone)]
@@ -489,6 +493,11 @@ pub struct App {
     pub filter: FilterState,
     pub replay: Option<ReplayState>,
     pub overlay_scroll: u16,
+
+    // Recordings browser state
+    pub recordings_list: Vec<RecordingInfo>,
+    pub recordings_selected: usize,
+    pub pending_replay_path: Option<PathBuf>,
 }
 
 /// Handle navigation keys for simple table panels (no sorting/filtering).
@@ -582,6 +591,9 @@ impl App {
             filter: FilterState::default(),
             replay: None,
             overlay_scroll: 0,
+            recordings_list: vec![],
+            recordings_selected: 0,
+            pending_replay_path: None,
         }
     }
 
@@ -1328,6 +1340,57 @@ impl App {
         }
     }
 
+    fn handle_recordings_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.view_mode = ViewMode::Normal;
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.recordings_selected > 0 {
+                    self.recordings_selected -= 1;
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if !self.recordings_list.is_empty()
+                    && self.recordings_selected < self.recordings_list.len() - 1
+                {
+                    self.recordings_selected += 1;
+                }
+            }
+            KeyCode::Enter => {
+                if let Some(recording) = self.recordings_list.get(self.recordings_selected) {
+                    self.pending_replay_path = Some(recording.path.clone());
+                    self.running = false;
+                }
+            }
+            KeyCode::Char('d') => {
+                if let Some(recording) = self.recordings_list.get(self.recordings_selected) {
+                    self.view_mode = ViewMode::ConfirmDeleteRecording(recording.path.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_confirm_delete_recording_key(&mut self, key: KeyEvent, path: PathBuf) {
+        if let KeyCode::Char('y' | 'Y') = key.code {
+            if crate::recorder::Recorder::delete_recording(&path).is_ok() {
+                self.status_message = Some("Recording deleted".into());
+                // Refresh the list
+                self.recordings_list = crate::recorder::Recorder::list_recordings();
+                // Adjust selection if needed
+                if self.recordings_selected >= self.recordings_list.len() && !self.recordings_list.is_empty() {
+                    self.recordings_selected = self.recordings_list.len() - 1;
+                }
+            } else {
+                self.status_message = Some("Failed to delete recording".into());
+            }
+            self.view_mode = ViewMode::Recordings;
+        } else {
+            self.view_mode = ViewMode::Recordings;
+        }
+    }
+
     fn handle_filter_key(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Esc => {
@@ -1385,6 +1448,13 @@ impl App {
             }
             KeyCode::Char('y') => {
                 self.yank_selected();
+                true
+            }
+            KeyCode::Char('L') if self.replay.is_none() => {
+                // Open recordings browser (live mode only)
+                self.recordings_list = crate::recorder::Recorder::list_recordings();
+                self.recordings_selected = 0;
+                self.view_mode = ViewMode::Recordings;
                 true
             }
             _ => false,
@@ -1512,6 +1582,15 @@ impl App {
             }
             ViewMode::Filter => {
                 self.handle_filter_key(key);
+                return;
+            }
+            ViewMode::Recordings => {
+                self.handle_recordings_key(key);
+                return;
+            }
+            ViewMode::ConfirmDeleteRecording(ref path) => {
+                let path = path.clone();
+                self.handle_confirm_delete_recording_key(key, path);
                 return;
             }
             ViewMode::Normal => {}
@@ -3704,5 +3783,180 @@ mod tests {
         app.handle_key(key(KeyCode::Enter));
 
         assert!(app.sorted_extensions_indices().is_empty());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Recordings browser
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn recordings_opens_with_l_key() {
+        let mut app = make_app();
+        app.handle_key(key(KeyCode::Char('L')));
+        assert_eq!(app.view_mode, ViewMode::Recordings);
+    }
+
+    #[test]
+    fn recordings_l_key_disabled_in_replay_mode() {
+        let mut app = make_replay_app();
+        app.handle_key(key(KeyCode::Char('L')));
+        assert_eq!(app.view_mode, ViewMode::Normal);
+    }
+
+    #[test]
+    fn recordings_closes_with_esc() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Recordings;
+        app.handle_key(key(KeyCode::Esc));
+        assert_eq!(app.view_mode, ViewMode::Normal);
+    }
+
+    #[test]
+    fn recordings_closes_with_q() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Recordings;
+        app.handle_key(key(KeyCode::Char('q')));
+        assert_eq!(app.view_mode, ViewMode::Normal);
+    }
+
+    #[test]
+    fn recordings_navigation_with_empty_list() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Recordings;
+        // Should not panic
+        app.handle_key(key(KeyCode::Down));
+        app.handle_key(key(KeyCode::Up));
+        app.handle_key(key(KeyCode::Enter));
+        app.handle_key(key(KeyCode::Char('d')));
+    }
+
+    #[test]
+    fn recordings_navigation_down() {
+        use crate::recorder::RecordingInfo;
+        use std::path::PathBuf;
+
+        let mut app = make_app();
+        app.view_mode = ViewMode::Recordings;
+        app.recordings_list = vec![
+            RecordingInfo {
+                path: PathBuf::from("/tmp/test1.jsonl"),
+                host: "host1".into(),
+                port: 5432,
+                dbname: "db1".into(),
+                recorded_at: Utc::now(),
+                pg_version: "PostgreSQL 15.0".into(),
+                file_size: 1000,
+            },
+            RecordingInfo {
+                path: PathBuf::from("/tmp/test2.jsonl"),
+                host: "host2".into(),
+                port: 5432,
+                dbname: "db2".into(),
+                recorded_at: Utc::now(),
+                pg_version: "PostgreSQL 14.0".into(),
+                file_size: 2000,
+            },
+        ];
+
+        assert_eq!(app.recordings_selected, 0);
+        app.handle_key(key(KeyCode::Down));
+        assert_eq!(app.recordings_selected, 1);
+        // At bottom, should not go further
+        app.handle_key(key(KeyCode::Down));
+        assert_eq!(app.recordings_selected, 1);
+    }
+
+    #[test]
+    fn recordings_navigation_up() {
+        use crate::recorder::RecordingInfo;
+        use std::path::PathBuf;
+
+        let mut app = make_app();
+        app.view_mode = ViewMode::Recordings;
+        app.recordings_list = vec![
+            RecordingInfo {
+                path: PathBuf::from("/tmp/test1.jsonl"),
+                host: "host1".into(),
+                port: 5432,
+                dbname: "db1".into(),
+                recorded_at: Utc::now(),
+                pg_version: "PostgreSQL 15.0".into(),
+                file_size: 1000,
+            },
+            RecordingInfo {
+                path: PathBuf::from("/tmp/test2.jsonl"),
+                host: "host2".into(),
+                port: 5432,
+                dbname: "db2".into(),
+                recorded_at: Utc::now(),
+                pg_version: "PostgreSQL 14.0".into(),
+                file_size: 2000,
+            },
+        ];
+        app.recordings_selected = 1;
+
+        app.handle_key(key(KeyCode::Up));
+        assert_eq!(app.recordings_selected, 0);
+        // At top, should not go further
+        app.handle_key(key(KeyCode::Up));
+        assert_eq!(app.recordings_selected, 0);
+    }
+
+    #[test]
+    fn recordings_enter_sets_pending_replay_path() {
+        use crate::recorder::RecordingInfo;
+        use std::path::PathBuf;
+
+        let mut app = make_app();
+        app.view_mode = ViewMode::Recordings;
+        let expected_path = PathBuf::from("/tmp/test.jsonl");
+        app.recordings_list = vec![RecordingInfo {
+            path: expected_path.clone(),
+            host: "host".into(),
+            port: 5432,
+            dbname: "db".into(),
+            recorded_at: Utc::now(),
+            pg_version: "PostgreSQL 15.0".into(),
+            file_size: 1000,
+        }];
+
+        app.handle_key(key(KeyCode::Enter));
+        assert_eq!(app.pending_replay_path, Some(expected_path));
+        assert!(!app.running);
+    }
+
+    #[test]
+    fn recordings_d_key_opens_delete_confirm() {
+        use crate::recorder::RecordingInfo;
+        use std::path::PathBuf;
+
+        let mut app = make_app();
+        app.view_mode = ViewMode::Recordings;
+        let test_path = PathBuf::from("/tmp/test.jsonl");
+        app.recordings_list = vec![RecordingInfo {
+            path: test_path.clone(),
+            host: "host".into(),
+            port: 5432,
+            dbname: "db".into(),
+            recorded_at: Utc::now(),
+            pg_version: "PostgreSQL 15.0".into(),
+            file_size: 1000,
+        }];
+
+        app.handle_key(key(KeyCode::Char('d')));
+        assert_eq!(app.view_mode, ViewMode::ConfirmDeleteRecording(test_path));
+    }
+
+    #[test]
+    fn recordings_delete_confirm_cancel() {
+        use std::path::PathBuf;
+
+        let mut app = make_app();
+        let test_path = PathBuf::from("/tmp/test.jsonl");
+        app.view_mode = ViewMode::ConfirmDeleteRecording(test_path);
+
+        // Any key except y should cancel
+        app.handle_key(key(KeyCode::Esc));
+        assert_eq!(app.view_mode, ViewMode::Recordings);
     }
 }
