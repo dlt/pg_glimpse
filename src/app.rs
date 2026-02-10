@@ -1264,135 +1264,72 @@ impl App {
         }
     }
 
-    fn handle_replication_key(&mut self, key: KeyEvent) {
+    /// Handle navigation keys for simple table panels (no sorting/filtering).
+    fn handle_simple_table_nav(
+        &mut self,
+        key: KeyEvent,
+        state: &mut TableState,
+        len: usize,
+        inspect_mode: Option<ViewMode>,
+    ) {
         match key.code {
             KeyCode::Up | KeyCode::Char('k') => {
-                let i = self.replication_table_state.selected().unwrap_or(0);
-                self.replication_table_state.select(Some(i.saturating_sub(1)));
+                let i = state.selected().unwrap_or(0);
+                state.select(Some(i.saturating_sub(1)));
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                let max = self
-                    .snapshot
-                    .as_ref()
-                    .map(|s| s.replication.len())
-                    .unwrap_or(0)
-                    .saturating_sub(1);
-                let i = self.replication_table_state.selected().unwrap_or(0);
-                self.replication_table_state.select(Some((i + 1).min(max)));
+                let max = len.saturating_sub(1);
+                let i = state.selected().unwrap_or(0);
+                state.select(Some((i + 1).min(max)));
             }
             KeyCode::Enter => {
-                if self.snapshot.as_ref().is_some_and(|s| !s.replication.is_empty()) {
-                    if self.replication_table_state.selected().is_none() {
-                        self.replication_table_state.select(Some(0));
+                if let Some(mode) = inspect_mode {
+                    if len > 0 {
+                        if state.selected().is_none() {
+                            state.select(Some(0));
+                        }
+                        self.overlay_scroll = 0;
+                        self.view_mode = mode;
                     }
-                    self.overlay_scroll = 0;
-                    self.view_mode = ViewMode::ReplicationInspect;
                 }
             }
             _ => {}
         }
+    }
+
+    fn handle_replication_key(&mut self, key: KeyEvent) {
+        let len = self.snapshot.as_ref().map(|s| s.replication.len()).unwrap_or(0);
+        let mut state = std::mem::take(&mut self.replication_table_state);
+        self.handle_simple_table_nav(key, &mut state, len, Some(ViewMode::ReplicationInspect));
+        self.replication_table_state = state;
     }
 
     fn handle_blocking_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Up | KeyCode::Char('k') => {
-                let i = self.blocking_table_state.selected().unwrap_or(0);
-                self.blocking_table_state.select(Some(i.saturating_sub(1)));
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                let max = self
-                    .snapshot
-                    .as_ref()
-                    .map(|s| s.blocking_info.len())
-                    .unwrap_or(0)
-                    .saturating_sub(1);
-                let i = self.blocking_table_state.selected().unwrap_or(0);
-                self.blocking_table_state.select(Some((i + 1).min(max)));
-            }
-            KeyCode::Enter => {
-                if self.snapshot.as_ref().is_some_and(|s| !s.blocking_info.is_empty()) {
-                    if self.blocking_table_state.selected().is_none() {
-                        self.blocking_table_state.select(Some(0));
-                    }
-                    self.overlay_scroll = 0;
-                    self.view_mode = ViewMode::BlockingInspect;
-                }
-            }
-            _ => {}
-        }
+        let len = self.snapshot.as_ref().map(|s| s.blocking_info.len()).unwrap_or(0);
+        let mut state = std::mem::take(&mut self.blocking_table_state);
+        self.handle_simple_table_nav(key, &mut state, len, Some(ViewMode::BlockingInspect));
+        self.blocking_table_state = state;
     }
 
     fn handle_vacuum_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Up | KeyCode::Char('k') => {
-                let i = self.vacuum_table_state.selected().unwrap_or(0);
-                self.vacuum_table_state.select(Some(i.saturating_sub(1)));
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                let max = self
-                    .snapshot
-                    .as_ref()
-                    .map(|s| s.vacuum_progress.len())
-                    .unwrap_or(0)
-                    .saturating_sub(1);
-                let i = self.vacuum_table_state.selected().unwrap_or(0);
-                self.vacuum_table_state.select(Some((i + 1).min(max)));
-            }
-            KeyCode::Enter => {
-                if self.snapshot.as_ref().is_some_and(|s| !s.vacuum_progress.is_empty()) {
-                    if self.vacuum_table_state.selected().is_none() {
-                        self.vacuum_table_state.select(Some(0));
-                    }
-                    self.overlay_scroll = 0;
-                    self.view_mode = ViewMode::VacuumInspect;
-                }
-            }
-            _ => {}
-        }
+        let len = self.snapshot.as_ref().map(|s| s.vacuum_progress.len()).unwrap_or(0);
+        let mut state = std::mem::take(&mut self.vacuum_table_state);
+        self.handle_simple_table_nav(key, &mut state, len, Some(ViewMode::VacuumInspect));
+        self.vacuum_table_state = state;
     }
 
     fn handle_wraparound_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Up | KeyCode::Char('k') => {
-                let i = self.wraparound_table_state.selected().unwrap_or(0);
-                self.wraparound_table_state.select(Some(i.saturating_sub(1)));
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                let max = self
-                    .snapshot
-                    .as_ref()
-                    .map(|s| s.wraparound.len())
-                    .unwrap_or(0)
-                    .saturating_sub(1);
-                let i = self.wraparound_table_state.selected().unwrap_or(0);
-                self.wraparound_table_state.select(Some((i + 1).min(max)));
-            }
-            KeyCode::Enter => {
-                if self.snapshot.as_ref().is_some_and(|s| !s.wraparound.is_empty()) {
-                    if self.wraparound_table_state.selected().is_none() {
-                        self.wraparound_table_state.select(Some(0));
-                    }
-                    self.overlay_scroll = 0;
-                    self.view_mode = ViewMode::WraparoundInspect;
-                }
-            }
-            _ => {}
-        }
+        let len = self.snapshot.as_ref().map(|s| s.wraparound.len()).unwrap_or(0);
+        let mut state = std::mem::take(&mut self.wraparound_table_state);
+        self.handle_simple_table_nav(key, &mut state, len, Some(ViewMode::WraparoundInspect));
+        self.wraparound_table_state = state;
     }
 
     fn handle_settings_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Up | KeyCode::Char('k') => {
-                let i = self.settings_table_state.selected().unwrap_or(0);
-                self.settings_table_state.select(Some(i.saturating_sub(1)));
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                let max = self.sorted_settings_indices().len().saturating_sub(1);
-                let i = self.settings_table_state.selected().unwrap_or(0);
-                self.settings_table_state.select(Some((i + 1).min(max)));
-            }
-            _ => {}
-        }
+        let len = self.sorted_settings_indices().len();
+        let mut state = std::mem::take(&mut self.settings_table_state);
+        self.handle_simple_table_nav(key, &mut state, len, None);
+        self.settings_table_state = state;
     }
 
     fn handle_panel_key(&mut self, key: KeyEvent) {
