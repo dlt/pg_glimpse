@@ -88,135 +88,6 @@ pub enum AppAction {
     RefreshIntervalChanged,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum SortColumn {
-    Pid,
-    Duration,
-    State,
-    User,
-}
-
-impl SortColumn {
-    pub fn next(self) -> Self {
-        match self {
-            Self::Duration => Self::Pid,
-            Self::Pid => Self::User,
-            Self::User => Self::State,
-            Self::State => Self::Duration,
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Pid => "PID",
-            Self::Duration => "Duration",
-            Self::State => "State",
-            Self::User => "User",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum IndexSortColumn {
-    Scans,
-    Size,
-    Name,
-    TupRead,
-    TupFetch,
-}
-
-impl IndexSortColumn {
-    pub fn next(self) -> Self {
-        match self {
-            Self::Scans => Self::Size,
-            Self::Size => Self::Name,
-            Self::Name => Self::TupRead,
-            Self::TupRead => Self::TupFetch,
-            Self::TupFetch => Self::Scans,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum TableStatSortColumn {
-    DeadTuples,
-    Size,
-    Name,
-    SeqScan,
-    IdxScan,
-    DeadRatio,
-}
-
-impl TableStatSortColumn {
-    pub fn next(self) -> Self {
-        match self {
-            Self::DeadTuples => Self::Size,
-            Self::Size => Self::Name,
-            Self::Name => Self::SeqScan,
-            Self::SeqScan => Self::IdxScan,
-            Self::IdxScan => Self::DeadRatio,
-            Self::DeadRatio => Self::DeadTuples,
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::DeadTuples => "Dead Tuples",
-            Self::Size => "Size",
-            Self::Name => "Name",
-            Self::SeqScan => "Seq Scan",
-            Self::IdxScan => "Idx Scan",
-            Self::DeadRatio => "Dead %",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum StatementSortColumn {
-    TotalTime,
-    MeanTime,
-    MaxTime,
-    Stddev,
-    Calls,
-    Rows,
-    HitRatio,
-    SharedReads,
-    IoTime,
-    Temp,
-}
-
-impl StatementSortColumn {
-    pub fn next(self) -> Self {
-        match self {
-            Self::TotalTime => Self::MeanTime,
-            Self::MeanTime => Self::MaxTime,
-            Self::MaxTime => Self::Stddev,
-            Self::Stddev => Self::Calls,
-            Self::Calls => Self::Rows,
-            Self::Rows => Self::HitRatio,
-            Self::HitRatio => Self::SharedReads,
-            Self::SharedReads => Self::IoTime,
-            Self::IoTime => Self::Temp,
-            Self::Temp => Self::TotalTime,
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::TotalTime => "Total Time",
-            Self::MeanTime => "Mean Time",
-            Self::MaxTime => "Max Time",
-            Self::Stddev => "Stddev",
-            Self::Calls => "Calls",
-            Self::Rows => "Rows",
-            Self::HitRatio => "Hit %",
-            Self::SharedReads => "Reads",
-            Self::IoTime => "I/O Time",
-            Self::Temp => "Temp",
-        }
-    }
-}
-
 /// Trait for sort column enums to enable generic TableViewState
 pub trait SortColumnTrait: Copy + PartialEq {
     fn next(self) -> Self;
@@ -224,33 +95,74 @@ pub trait SortColumnTrait: Copy + PartialEq {
     fn label(self) -> &'static str;
 }
 
-impl SortColumnTrait for SortColumn {
-    fn next(self) -> Self { SortColumn::next(self) }
-    fn label(self) -> &'static str { SortColumn::label(self) }
-}
-
-impl SortColumnTrait for IndexSortColumn {
-    fn next(self) -> Self { IndexSortColumn::next(self) }
-    fn label(self) -> &'static str {
-        match self {
-            Self::Scans => "Scans",
-            Self::Size => "Size",
-            Self::Name => "Name",
-            Self::TupRead => "Tup Read",
-            Self::TupFetch => "Tup Fetch",
+/// Macro to define sort column enums with cycling and labels.
+/// Generates: enum definition, next() cycling through variants in order, label() for display.
+macro_rules! define_sort_column {
+    ($name:ident { $($variant:ident => $label:literal),+ $(,)? }) => {
+        #[derive(Debug, Clone, Copy, PartialEq)]
+        pub enum $name {
+            $($variant),+
         }
-    }
+
+        impl $name {
+            const ALL: &'static [Self] = &[$(Self::$variant),+];
+
+            pub fn next(self) -> Self {
+                let idx = Self::ALL.iter().position(|&v| v == self).unwrap_or(0);
+                Self::ALL[(idx + 1) % Self::ALL.len()]
+            }
+
+            #[allow(dead_code)]
+            pub fn label(self) -> &'static str {
+                match self {
+                    $(Self::$variant => $label),+
+                }
+            }
+        }
+
+        impl SortColumnTrait for $name {
+            fn next(self) -> Self { Self::next(self) }
+            fn label(self) -> &'static str { Self::label(self) }
+        }
+    };
 }
 
-impl SortColumnTrait for TableStatSortColumn {
-    fn next(self) -> Self { TableStatSortColumn::next(self) }
-    fn label(self) -> &'static str { TableStatSortColumn::label(self) }
-}
+define_sort_column!(SortColumn {
+    Duration => "Duration",
+    Pid => "PID",
+    User => "User",
+    State => "State",
+});
 
-impl SortColumnTrait for StatementSortColumn {
-    fn next(self) -> Self { StatementSortColumn::next(self) }
-    fn label(self) -> &'static str { StatementSortColumn::label(self) }
-}
+define_sort_column!(IndexSortColumn {
+    Scans => "Scans",
+    Size => "Size",
+    Name => "Name",
+    TupRead => "Tup Read",
+    TupFetch => "Tup Fetch",
+});
+
+define_sort_column!(TableStatSortColumn {
+    DeadTuples => "Dead Tuples",
+    Size => "Size",
+    Name => "Name",
+    SeqScan => "Seq Scan",
+    IdxScan => "Idx Scan",
+    DeadRatio => "Dead %",
+});
+
+define_sort_column!(StatementSortColumn {
+    TotalTime => "Total Time",
+    MeanTime => "Mean Time",
+    MaxTime => "Max Time",
+    Stddev => "Stddev",
+    Calls => "Calls",
+    Rows => "Rows",
+    HitRatio => "Hit %",
+    SharedReads => "Reads",
+    IoTime => "I/O Time",
+    Temp => "Temp",
+});
 
 /// Generic table view state with sort column and navigation
 pub struct TableViewState<S: SortColumnTrait> {
