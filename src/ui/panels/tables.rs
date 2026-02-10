@@ -57,9 +57,9 @@ pub fn render_table_stats(frame: &mut Frame, app: &mut App, area: Rect) {
 
     // Check if filtering is active
     let is_filtering = app.bottom_panel == BottomPanel::TableStats
-        && !app.filter_text.is_empty()
-        && (app.filter_active || app.view_mode == ViewMode::Filter);
-    let filter_text = &app.filter_text;
+        && !app.filter.text.is_empty()
+        && (app.filter.active || app.view_mode == ViewMode::Filter);
+    let filter_text = &app.filter.text;
 
     let rows: Vec<Row> = indices
         .iter()

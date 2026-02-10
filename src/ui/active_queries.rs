@@ -30,10 +30,10 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
         }
     };
 
-    let title = if app.bottom_panel == BottomPanel::Queries && (app.filter_active || (!app.filter_text.is_empty() && app.view_mode == crate::app::ViewMode::Filter)) {
+    let title = if app.bottom_panel == BottomPanel::Queries && (app.filter.active || (!app.filter.text.is_empty() && app.view_mode == crate::app::ViewMode::Filter)) {
         format!(
             " Queries [{}/{}] (filter: {}) ",
-            filtered_count, total_count, app.filter_text
+            filtered_count, total_count, app.filter.text
         )
     } else {
         format!(" Queries [{}] ", total_count)
@@ -66,9 +66,9 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
 
     // Check if filtering is active
     let is_filtering = app.bottom_panel == BottomPanel::Queries
-        && !app.filter_text.is_empty()
-        && (app.filter_active || app.view_mode == crate::app::ViewMode::Filter);
-    let filter_text = &app.filter_text;
+        && !app.filter.text.is_empty()
+        && (app.filter.active || app.view_mode == crate::app::ViewMode::Filter);
+    let filter_text = &app.filter.text;
 
     let rows: Vec<Row> = match &app.snapshot {
         Some(snap) => indices

@@ -746,7 +746,7 @@ fn footer_filter_mode() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
     app.view_mode = ViewMode::Filter;
-    app.filter_text = "SELECT".to_string();
+    app.filter.text = "SELECT".to_string();
 
     terminal.draw(|frame| {
         super::footer::render(frame, &app, frame.area());
@@ -1453,8 +1453,8 @@ fn panel_active_queries_with_filter() {
     let backend = TestBackend::new(140, 12);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
-    app.filter_text = "SELECT".to_string();
-    app.filter_active = true;
+    app.filter.text = "SELECT".to_string();
+    app.filter.active = true;
     app.bottom_panel = BottomPanel::Queries;
 
     terminal.draw(|frame| {

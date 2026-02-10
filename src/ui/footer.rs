@@ -34,7 +34,7 @@ fn render_filter(frame: &mut Frame, app: &App, area: Rect) {
     let line1 = vec![
         Span::styled(" Filter ", label_style),
         Span::styled("  ", Style::default()),
-        Span::styled(&app.filter_text, input_style),
+        Span::styled(&app.filter.text, input_style),
         Span::styled("▌", Style::default().fg(Theme::border_active())),
     ];
 

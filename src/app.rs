@@ -339,6 +339,36 @@ impl ConnectionInfo {
     }
 }
 
+/// Filter state for panel filtering
+#[derive(Default)]
+pub struct FilterState {
+    pub text: String,
+    pub active: bool,
+}
+
+impl FilterState {
+    #[allow(dead_code)]
+    pub fn clear(&mut self) {
+        self.text.clear();
+        self.active = false;
+    }
+
+    #[allow(dead_code)]
+    pub fn is_active(&self) -> bool {
+        self.active && !self.text.is_empty()
+    }
+
+    #[allow(dead_code)]
+    pub fn push_char(&mut self, c: char) {
+        self.text.push(c);
+    }
+
+    #[allow(dead_code)]
+    pub fn pop_char(&mut self) {
+        self.text.pop();
+    }
+}
+
 /// Metrics history for sparklines and rate calculations
 pub struct MetricsHistory {
     // Sparkline data
@@ -483,8 +513,7 @@ pub struct App {
     pub config: AppConfig,
     pub config_selected: usize,
 
-    pub filter_text: String,
-    pub filter_active: bool,
+    pub filter: FilterState,
     pub replay: Option<ReplayState>,
     pub overlay_scroll: u16,
 }
@@ -527,8 +556,7 @@ impl App {
             spinner_frame: 0,
             config,
             config_selected: 0,
-            filter_text: String::new(),
-            filter_active: false,
+            filter: FilterState::default(),
             replay: None,
             overlay_scroll: 0,
         }
@@ -678,10 +706,10 @@ impl App {
         let mut indices: Vec<usize> = (0..snap.active_queries.len()).collect();
 
         // Apply fuzzy filter only when on the Queries panel
-        let filter_text = &self.filter_text;
+        let filter_text = &self.filter.text;
         if self.bottom_panel == BottomPanel::Queries
             && !filter_text.is_empty()
-            && (self.filter_active || self.view_mode == ViewMode::Filter)
+            && (self.filter.active || self.view_mode == ViewMode::Filter)
         {
             let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
             let pattern =
@@ -753,10 +781,10 @@ impl App {
         let mut indices: Vec<usize> = (0..snap.indexes.len()).collect();
 
         // Apply fuzzy filter only when on the Indexes panel
-        let filter_text = &self.filter_text;
+        let filter_text = &self.filter.text;
         if self.bottom_panel == BottomPanel::Indexes
             && !filter_text.is_empty()
-            && (self.filter_active || self.view_mode == ViewMode::Filter)
+            && (self.filter.active || self.view_mode == ViewMode::Filter)
         {
             let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
             let pattern =
@@ -811,10 +839,10 @@ impl App {
         let mut indices: Vec<usize> = (0..snap.stat_statements.len()).collect();
 
         // Apply fuzzy filter only when on the Statements panel
-        let filter_text = &self.filter_text;
+        let filter_text = &self.filter.text;
         if self.bottom_panel == BottomPanel::Statements
             && !filter_text.is_empty()
-            && (self.filter_active || self.view_mode == ViewMode::Filter)
+            && (self.filter.active || self.view_mode == ViewMode::Filter)
         {
             let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
             let pattern =
@@ -911,10 +939,10 @@ impl App {
         let mut indices: Vec<usize> = (0..snap.table_stats.len()).collect();
 
         // Apply fuzzy filter only when on the TableStats panel
-        let filter_text = &self.filter_text;
+        let filter_text = &self.filter.text;
         if self.bottom_panel == BottomPanel::TableStats
             && !filter_text.is_empty()
-            && (self.filter_active || self.view_mode == ViewMode::Filter)
+            && (self.filter.active || self.view_mode == ViewMode::Filter)
         {
             let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
             let pattern =
@@ -975,10 +1003,10 @@ impl App {
         let mut indices: Vec<usize> = (0..self.server_info.settings.len()).collect();
 
         // Apply fuzzy filter only when on the Settings panel
-        let filter_text = &self.filter_text;
+        let filter_text = &self.filter.text;
         if self.bottom_panel == BottomPanel::Settings
             && !filter_text.is_empty()
-            && (self.filter_active || self.view_mode == ViewMode::Filter)
+            && (self.filter.active || self.view_mode == ViewMode::Filter)
         {
             let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
             let pattern =
@@ -1050,8 +1078,8 @@ impl App {
             self.bottom_panel = target;
         }
         // Clear filter state when switching panels
-        self.filter_text.clear();
-        self.filter_active = false;
+        self.filter.text.clear();
+        self.filter.active = false;
         self.view_mode = ViewMode::Normal;
     }
 
@@ -1087,7 +1115,7 @@ impl App {
             KeyCode::Char('K') if self.replay.is_none() => {
                 if let Some(pid) = self.selected_query_pid() {
                     let filtered_pids = self.get_filtered_pids();
-                    if self.filter_active && filtered_pids.len() > 1 {
+                    if self.filter.active && filtered_pids.len() > 1 {
                         // Multiple matches - show choice dialog
                         self.view_mode = ViewMode::ConfirmKillChoice {
                             selected_pid: pid,
@@ -1102,7 +1130,7 @@ impl App {
             KeyCode::Char('C') if self.replay.is_none() => {
                 if let Some(pid) = self.selected_query_pid() {
                     let filtered_pids = self.get_filtered_pids();
-                    if self.filter_active && filtered_pids.len() > 1 {
+                    if self.filter.active && filtered_pids.len() > 1 {
                         // Multiple matches - show choice dialog
                         self.view_mode = ViewMode::ConfirmCancelChoice {
                             selected_pid: pid,
@@ -1703,22 +1731,22 @@ impl App {
     fn handle_filter_key(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Esc => {
-                self.filter_text.clear();
-                self.filter_active = false;
+                self.filter.text.clear();
+                self.filter.active = false;
                 self.view_mode = ViewMode::Normal;
                 self.reset_panel_selection();
             }
             KeyCode::Enter => {
-                self.filter_active = !self.filter_text.is_empty();
+                self.filter.active = !self.filter.text.is_empty();
                 self.view_mode = ViewMode::Normal;
                 self.reset_panel_selection();
             }
             KeyCode::Backspace => {
-                self.filter_text.pop();
+                self.filter.text.pop();
                 self.reset_panel_selection();
             }
             KeyCode::Char(c) => {
-                self.filter_text.push(c);
+                self.filter.text.push(c);
                 self.reset_panel_selection();
             }
             _ => {}
@@ -2213,11 +2241,11 @@ mod tests {
     #[test]
     fn panel_switch_clears_filter() {
         let mut app = make_app();
-        app.filter_text = "test".into();
-        app.filter_active = true;
+        app.filter.text = "test".into();
+        app.filter.active = true;
         app.handle_key(key(KeyCode::Char('I')));
-        assert!(app.filter_text.is_empty());
-        assert!(!app.filter_active);
+        assert!(app.filter.text.is_empty());
+        assert!(!app.filter.active);
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -2265,26 +2293,26 @@ mod tests {
         app.handle_key(key(KeyCode::Char('e')));
         app.handle_key(key(KeyCode::Char('s')));
         app.handle_key(key(KeyCode::Char('t')));
-        assert_eq!(app.filter_text, "test");
+        assert_eq!(app.filter.text, "test");
     }
 
     #[test]
     fn filter_backspace() {
         let mut app = make_app();
         app.view_mode = ViewMode::Filter;
-        app.filter_text = "test".into();
+        app.filter.text = "test".into();
         app.handle_key(key(KeyCode::Backspace));
-        assert_eq!(app.filter_text, "tes");
+        assert_eq!(app.filter.text, "tes");
     }
 
     #[test]
     fn filter_enter_activates() {
         let mut app = make_app();
         app.view_mode = ViewMode::Filter;
-        app.filter_text = "query".into();
+        app.filter.text = "query".into();
         app.handle_key(key(KeyCode::Enter));
         assert_eq!(app.view_mode, ViewMode::Normal);
-        assert!(app.filter_active);
+        assert!(app.filter.active);
     }
 
     #[test]
@@ -2293,18 +2321,18 @@ mod tests {
         app.view_mode = ViewMode::Filter;
         app.handle_key(key(KeyCode::Enter));
         assert_eq!(app.view_mode, ViewMode::Normal);
-        assert!(!app.filter_active);
+        assert!(!app.filter.active);
     }
 
     #[test]
     fn filter_esc_clears_and_exits() {
         let mut app = make_app();
         app.view_mode = ViewMode::Filter;
-        app.filter_text = "test".into();
+        app.filter.text = "test".into();
         app.handle_key(key(KeyCode::Esc));
         assert_eq!(app.view_mode, ViewMode::Normal);
-        assert!(app.filter_text.is_empty());
-        assert!(!app.filter_active);
+        assert!(app.filter.text.is_empty());
+        assert!(!app.filter.active);
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -2841,8 +2869,8 @@ mod tests {
         let mut app = make_app();
         app.update(make_snapshot());
         app.bottom_panel = BottomPanel::Queries;
-        app.filter_text = "xyznonexistent123".to_string();
-        app.filter_active = true;
+        app.filter.text = "xyznonexistent123".to_string();
+        app.filter.active = true;
 
         let indices = app.sorted_query_indices();
         assert!(indices.is_empty());
@@ -2856,8 +2884,8 @@ mod tests {
         app.update(snap);
 
         app.bottom_panel = BottomPanel::Queries;
-        app.filter_text = "table-with".to_string();
-        app.filter_active = true;
+        app.filter.text = "table-with".to_string();
+        app.filter.active = true;
 
         let indices = app.sorted_query_indices();
         assert!(!indices.is_empty());
@@ -2868,8 +2896,8 @@ mod tests {
         let mut app = make_app();
         app.update(make_snapshot());
         app.bottom_panel = BottomPanel::Queries;
-        app.filter_text = "xyznonexistent123".to_string();
-        app.filter_active = false;
+        app.filter.text = "xyznonexistent123".to_string();
+        app.filter.active = false;
         app.view_mode = ViewMode::Normal;
 
         // When filter is not active, all queries should be returned

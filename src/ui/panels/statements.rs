@@ -19,14 +19,14 @@ pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
     let indices = app.sorted_stmt_indices();
     let filtered_count = indices.len();
 
-    let title = if app.filter_active
-        || (!app.filter_text.is_empty()
+    let title = if app.filter.active
+        || (!app.filter.text.is_empty()
             && app.view_mode == ViewMode::Filter
             && app.bottom_panel == BottomPanel::Statements)
     {
         format!(
             "pg_stat_statements [{}/{}] (filter: {})",
-            filtered_count, total_count, app.filter_text
+            filtered_count, total_count, app.filter.text
         )
     } else {
         format!("pg_stat_statements [{}]", total_count)
@@ -169,11 +169,11 @@ pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
     let query_width = (area.width as usize).saturating_sub(2 + 2 + 77).max(20);
 
     // Check if filtering is active
-    let is_filtering = app.filter_active
-        || (!app.filter_text.is_empty()
+    let is_filtering = app.filter.active
+        || (!app.filter.text.is_empty()
             && app.view_mode == ViewMode::Filter
             && app.bottom_panel == BottomPanel::Statements);
-    let filter_text = &app.filter_text;
+    let filter_text = &app.filter.text;
 
     let rows: Vec<Row> = indices
         .iter()
