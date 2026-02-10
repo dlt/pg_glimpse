@@ -207,10 +207,12 @@ Press `,` to open settings. Saved to `~/.config/pg_glimpse/config.toml`.
 
 ## Extension Support
 
-Automatically detects and uses:
-- **pg_stat_statements** — query-level stats
+Automatically detects and integrates with:
+- **pg_stat_statements** — query-level stats (powers the Statements panel)
+
+Detected (shown as indicators in stats panel):
 - **pg_buffercache** — buffer cache inspection
-- **pg_stat_kcache** — OS-level cache stats
+- **pg_stat_kcache** — OS-level CPU/disk stats
 - **pg_wait_sampling** — wait event profiling
 
 ## Troubleshooting
