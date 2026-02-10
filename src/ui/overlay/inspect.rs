@@ -1111,3 +1111,100 @@ fn settings_context_description(context: &str) -> (&'static str, Color) {
         _ => ("Unknown", Theme::fg()),
     }
 }
+
+pub fn render_extensions_inspect(frame: &mut Frame, app: &App, area: Rect) {
+    let popup_area = centered_rect(60, 55, area);
+    frame.render_widget(Clear, popup_area);
+
+    let block = overlay_block(" Extension Details  [j/k] scroll  [y] copy name  [Esc] close ", Theme::border_active());
+
+    let indices = app.sorted_extensions_indices();
+    let selected = app.extensions_table_state.selected().unwrap_or(0);
+    let Some(&idx) = indices.get(selected) else {
+        frame.render_widget(
+            Paragraph::new("No extension selected").block(block),
+            popup_area,
+        );
+        return;
+    };
+
+    let ext = &app.server_info.extensions_list[idx];
+
+    let relocatable_color = if ext.relocatable {
+        Theme::border_ok()
+    } else {
+        Theme::fg_dim()
+    };
+
+    let mut lines = vec![
+        Line::from(""),
+        section_header("Extension"),
+        Line::from(vec![
+            Span::styled("  Name:        ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                &ext.name,
+                Style::default()
+                    .fg(Theme::border_active())
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("  Version:     ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(&ext.version, Style::default().fg(Theme::fg())),
+        ]),
+        Line::from(""),
+        section_header("Location"),
+        Line::from(vec![
+            Span::styled("  Schema:      ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(&ext.schema, Style::default().fg(Theme::fg())),
+        ]),
+        Line::from(vec![
+            Span::styled("  Relocatable: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                if ext.relocatable { "Yes" } else { "No" },
+                Style::default().fg(relocatable_color),
+            ),
+        ]),
+        Line::from(""),
+        section_header("Description"),
+    ];
+
+    // Add description lines, wrapping if needed
+    let description = ext
+        .description
+        .as_deref()
+        .unwrap_or("No description available");
+
+    // Simple word wrapping for description
+    let max_width = 50;
+    let words: Vec<&str> = description.split_whitespace().collect();
+    let mut current_line = String::from("  ");
+
+    for word in words {
+        if current_line.len() + word.len() + 1 > max_width + 2 {
+            lines.push(Line::from(Span::styled(
+                current_line.clone(),
+                Style::default().fg(Theme::fg()),
+            )));
+            current_line = format!("  {}", word);
+        } else {
+            if current_line.len() > 2 {
+                current_line.push(' ');
+            }
+            current_line.push_str(word);
+        }
+    }
+    if current_line.len() > 2 {
+        lines.push(Line::from(Span::styled(
+            current_line,
+            Style::default().fg(Theme::fg()),
+        )));
+    }
+
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false })
+        .scroll((app.overlay_scroll, 0));
+
+    frame.render_widget(paragraph, popup_area);
+}

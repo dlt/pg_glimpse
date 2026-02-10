@@ -1,4 +1,5 @@
 mod blocking;
+mod extensions;
 mod indexes;
 mod replication;
 mod settings;
@@ -10,6 +11,7 @@ mod wal_io;
 mod wraparound;
 
 pub use blocking::render_blocking;
+pub use extensions::render_extensions;
 pub use indexes::render_indexes;
 pub use replication::render_replication;
 pub use settings::render_settings;

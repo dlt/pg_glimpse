@@ -7,7 +7,7 @@ use ratatui::widgets::TableState;
 use std::collections::HashMap;
 
 use crate::config::{AppConfig, ConfigItem};
-use crate::db::models::{ActiveQuery, IndexInfo, PgSetting, PgSnapshot, ServerInfo, StatStatement, TableStat};
+use crate::db::models::{ActiveQuery, IndexInfo, PgExtension, PgSetting, PgSnapshot, ServerInfo, StatStatement, TableStat};
 use crate::db::queries::{IndexBloat, TableBloat};
 use crate::history::RingBuffer;
 use crate::ui::theme;
@@ -25,11 +25,12 @@ pub enum BottomPanel {
     Statements,
     WalIo,
     Settings,
+    Extensions,
 }
 
 impl BottomPanel {
     pub fn supports_filter(self) -> bool {
-        matches!(self, Self::Queries | Self::Indexes | Self::Statements | Self::TableStats | Self::Settings)
+        matches!(self, Self::Queries | Self::Indexes | Self::Statements | Self::TableStats | Self::Settings | Self::Extensions)
     }
 
     #[allow(dead_code)]
@@ -46,6 +47,7 @@ impl BottomPanel {
             Self::Statements => "Statements",
             Self::WalIo => "WAL & I/O",
             Self::Settings => "Settings",
+            Self::Extensions => "Extensions",
         }
     }
 }
@@ -63,6 +65,7 @@ pub enum ViewMode {
     VacuumInspect,
     WraparoundInspect,
     SettingsInspect,
+    ExtensionsInspect,
     ConfirmCancel(i32),
     ConfirmKill(i32),
     ConfirmCancelChoice { selected_pid: i32, all_pids: Vec<i32> },
@@ -505,6 +508,7 @@ pub struct App {
     pub vacuum_table_state: TableState,
     pub wraparound_table_state: TableState,
     pub settings_table_state: TableState,
+    pub extensions_table_state: TableState,
 
     pub metrics: MetricsHistory,
 
@@ -553,6 +557,7 @@ impl App {
             vacuum_table_state: TableState::default(),
             wraparound_table_state: TableState::default(),
             settings_table_state: TableState::default(),
+            extensions_table_state: TableState::default(),
             metrics: MetricsHistory::new(history_len),
             server_info,
             connection: ConnectionInfo::new(host, port, dbname, user),
@@ -705,6 +710,10 @@ impl App {
 
     fn setting_to_filter_string(s: &PgSetting) -> String {
         format!("{} {} {}", s.name, s.category, s.short_desc)
+    }
+
+    fn extension_to_filter_string(e: &PgExtension) -> String {
+        format!("{} {} {}", e.name, e.schema, e.description.as_deref().unwrap_or(""))
     }
 
     pub fn sorted_query_indices(&self) -> Vec<usize> {
@@ -1032,6 +1041,31 @@ impl App {
         indices
     }
 
+    pub fn sorted_extensions_indices(&self) -> Vec<usize> {
+        let mut indices: Vec<usize> = (0..self.server_info.extensions_list.len()).collect();
+
+        // Apply fuzzy filter only when on the Extensions panel
+        let filter_text = &self.filter.text;
+        if self.bottom_panel == BottomPanel::Extensions
+            && !filter_text.is_empty()
+            && (self.filter.active || self.view_mode == ViewMode::Filter)
+        {
+            let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
+            let pattern =
+                Pattern::parse(filter_text, CaseMatching::Ignore, Normalization::Smart);
+            indices.retain(|&i| {
+                let haystack = Self::extension_to_filter_string(&self.server_info.extensions_list[i]);
+                let mut buf = Vec::new();
+                pattern
+                    .score(nucleo_matcher::Utf32Str::new(&haystack, &mut buf), &mut matcher)
+                    .is_some()
+            });
+        }
+
+        // Extensions are already sorted by name from the query
+        indices
+    }
+
     fn copy_to_clipboard(&mut self, text: &str) {
         match arboard::Clipboard::new().and_then(|mut cb| cb.set_text(text)) {
             Ok(()) => {
@@ -1098,6 +1132,7 @@ impl App {
             BottomPanel::TableStats => self.table_stats.select_first(),
             BottomPanel::Replication => self.replication_table_state.select(Some(0)),
             BottomPanel::Settings => self.settings_table_state.select(Some(0)),
+            BottomPanel::Extensions => self.extensions_table_state.select(Some(0)),
             _ => {}
         }
     }
@@ -1333,6 +1368,13 @@ impl App {
         self.settings_table_state = state;
     }
 
+    fn handle_extensions_key(&mut self, key: KeyEvent) {
+        let len = self.sorted_extensions_indices().len();
+        let mut state = std::mem::take(&mut self.extensions_table_state);
+        self.handle_simple_table_nav(key, &mut state, len, Some(ViewMode::ExtensionsInspect));
+        self.extensions_table_state = state;
+    }
+
     fn handle_panel_key(&mut self, key: KeyEvent) {
         match self.bottom_panel {
             BottomPanel::Queries => self.handle_queries_key(key),
@@ -1344,6 +1386,7 @@ impl App {
             BottomPanel::VacuumProgress => self.handle_vacuum_key(key),
             BottomPanel::Wraparound => self.handle_wraparound_key(key),
             BottomPanel::Settings => self.handle_settings_key(key),
+            BottomPanel::Extensions => self.handle_extensions_key(key),
             BottomPanel::WalIo | BottomPanel::WaitEvents => {}
         }
     }
@@ -1653,6 +1696,25 @@ impl App {
         }
     }
 
+    fn handle_extensions_inspect_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.overlay_scroll = 0;
+                self.view_mode = ViewMode::Normal;
+            }
+            KeyCode::Char('y') => {
+                let indices = self.sorted_extensions_indices();
+                if let Some(&idx) = indices.get(self.extensions_table_state.selected().unwrap_or(0)) {
+                    let name = self.server_info.extensions_list[idx].name.clone();
+                    self.copy_to_clipboard(&name);
+                }
+            }
+            _ => {
+                self.handle_overlay_scroll(key);
+            }
+        }
+    }
+
     fn handle_config_key(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Esc => {
@@ -1808,6 +1870,10 @@ impl App {
                 self.switch_panel(BottomPanel::Settings);
                 true
             }
+            KeyCode::Char('E') => {
+                self.switch_panel(BottomPanel::Extensions);
+                true
+            }
             KeyCode::Char('/') => {
                 if self.bottom_panel.supports_filter() {
                     self.view_mode = ViewMode::Filter;
@@ -1887,6 +1953,10 @@ impl App {
             }
             ViewMode::SettingsInspect => {
                 self.handle_settings_inspect_key(key);
+                return;
+            }
+            ViewMode::ExtensionsInspect => {
+                self.handle_extensions_inspect_key(key);
                 return;
             }
             ViewMode::Config => {
@@ -1975,7 +2045,8 @@ impl App {
 mod tests {
     use super::*;
     use crate::db::models::{
-        ActiveQuery, ActivitySummary, BufferCacheStats, DetectedExtensions, PgSnapshot, ServerInfo,
+        ActiveQuery, ActivitySummary, BufferCacheStats, DetectedExtensions, PgExtension,
+        PgSnapshot, ServerInfo,
     };
     use chrono::Utc;
 
@@ -1986,6 +2057,7 @@ mod tests {
             max_connections: 100,
             extensions: DetectedExtensions::default(),
             settings: vec![],
+            extensions_list: vec![],
         }
     }
 
@@ -3778,5 +3850,317 @@ mod tests {
         assert_eq!(StatementSortColumn::SharedReads.label(), "Reads");
         assert_eq!(StatementSortColumn::IoTime.label(), "I/O Time");
         assert_eq!(StatementSortColumn::Temp.label(), "Temp");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Extensions panel tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    fn make_extensions() -> Vec<PgExtension> {
+        vec![
+            PgExtension {
+                name: "pg_stat_statements".into(),
+                version: "1.10".into(),
+                schema: "public".into(),
+                relocatable: true,
+                description: Some("track execution statistics of all SQL statements executed".into()),
+            },
+            PgExtension {
+                name: "plpgsql".into(),
+                version: "1.0".into(),
+                schema: "pg_catalog".into(),
+                relocatable: false,
+                description: Some("PL/pgSQL procedural language".into()),
+            },
+            PgExtension {
+                name: "uuid-ossp".into(),
+                version: "1.1".into(),
+                schema: "public".into(),
+                relocatable: true,
+                description: Some("generate universally unique identifiers (UUIDs)".into()),
+            },
+        ]
+    }
+
+    fn make_app_with_extensions() -> App {
+        let mut server_info = make_server_info();
+        server_info.extensions_list = make_extensions();
+        App::new(
+            "localhost".into(),
+            5432,
+            "postgres".into(),
+            "postgres".into(),
+            2,
+            120,
+            AppConfig::default(),
+            server_info,
+        )
+    }
+
+    #[test]
+    fn extensions_panel_switch() {
+        let mut app = make_app();
+        app.handle_key(key(KeyCode::Char('E')));
+        assert_eq!(app.bottom_panel, BottomPanel::Extensions);
+    }
+
+    #[test]
+    fn extensions_panel_toggle_back_to_queries() {
+        let mut app = make_app();
+        app.bottom_panel = BottomPanel::Extensions;
+        app.handle_key(key(KeyCode::Char('E')));
+        assert_eq!(app.bottom_panel, BottomPanel::Queries);
+    }
+
+    #[test]
+    fn extensions_panel_supports_filter() {
+        assert!(BottomPanel::Extensions.supports_filter());
+    }
+
+    #[test]
+    fn extensions_panel_label() {
+        assert_eq!(BottomPanel::Extensions.label(), "Extensions");
+    }
+
+    #[test]
+    fn extensions_filter_opens() {
+        let mut app = make_app();
+        app.bottom_panel = BottomPanel::Extensions;
+        app.handle_key(key(KeyCode::Char('/')));
+        assert_eq!(app.view_mode, ViewMode::Filter);
+    }
+
+    #[test]
+    fn sorted_extensions_indices_empty() {
+        let app = make_app();
+        assert!(app.sorted_extensions_indices().is_empty());
+    }
+
+    #[test]
+    fn sorted_extensions_indices_with_data() {
+        let app = make_app_with_extensions();
+        let indices = app.sorted_extensions_indices();
+        assert_eq!(indices.len(), 3);
+    }
+
+    #[test]
+    fn extensions_filter_matches_name() {
+        let mut app = make_app_with_extensions();
+        app.bottom_panel = BottomPanel::Extensions;
+        app.filter.text = "plpgsql".into();
+        app.filter.active = true;
+
+        let indices = app.sorted_extensions_indices();
+        assert_eq!(indices.len(), 1);
+        assert_eq!(app.server_info.extensions_list[indices[0]].name, "plpgsql");
+    }
+
+    #[test]
+    fn extensions_filter_matches_schema() {
+        let mut app = make_app_with_extensions();
+        app.bottom_panel = BottomPanel::Extensions;
+        // pg_catalog is unique to plpgsql in our test data
+        app.filter.text = "pg_catalog".into();
+        app.filter.active = true;
+
+        let indices = app.sorted_extensions_indices();
+        assert_eq!(indices.len(), 1);
+        assert_eq!(app.server_info.extensions_list[indices[0]].name, "plpgsql");
+    }
+
+    #[test]
+    fn extensions_filter_no_matches() {
+        let mut app = make_app_with_extensions();
+        app.bottom_panel = BottomPanel::Extensions;
+        app.filter.text = "nonexistent123".into();
+        app.filter.active = true;
+
+        let indices = app.sorted_extensions_indices();
+        assert!(indices.is_empty());
+    }
+
+    #[test]
+    fn extensions_filter_inactive_shows_all() {
+        let mut app = make_app_with_extensions();
+        app.bottom_panel = BottomPanel::Extensions;
+        app.filter.text = "stat".into();
+        app.filter.active = false;
+        app.view_mode = ViewMode::Normal;
+
+        // When filter is inactive, all extensions should be returned
+        let indices = app.sorted_extensions_indices();
+        assert_eq!(indices.len(), 3);
+    }
+
+    #[test]
+    fn extensions_navigation_down() {
+        let mut app = make_app_with_extensions();
+        app.bottom_panel = BottomPanel::Extensions;
+        app.extensions_table_state.select(Some(0));
+
+        app.handle_key(key(KeyCode::Down));
+        assert_eq!(app.extensions_table_state.selected(), Some(1));
+
+        app.handle_key(key(KeyCode::Char('j')));
+        assert_eq!(app.extensions_table_state.selected(), Some(2));
+    }
+
+    #[test]
+    fn extensions_navigation_up() {
+        let mut app = make_app_with_extensions();
+        app.bottom_panel = BottomPanel::Extensions;
+        app.extensions_table_state.select(Some(2));
+
+        app.handle_key(key(KeyCode::Up));
+        assert_eq!(app.extensions_table_state.selected(), Some(1));
+
+        app.handle_key(key(KeyCode::Char('k')));
+        assert_eq!(app.extensions_table_state.selected(), Some(0));
+    }
+
+    #[test]
+    fn extensions_navigation_up_at_top() {
+        let mut app = make_app_with_extensions();
+        app.bottom_panel = BottomPanel::Extensions;
+        app.extensions_table_state.select(Some(0));
+
+        app.handle_key(key(KeyCode::Up));
+        assert_eq!(app.extensions_table_state.selected(), Some(0));
+    }
+
+    #[test]
+    fn extensions_navigation_down_at_bottom() {
+        let mut app = make_app_with_extensions();
+        app.bottom_panel = BottomPanel::Extensions;
+        app.extensions_table_state.select(Some(2));
+
+        app.handle_key(key(KeyCode::Down));
+        assert_eq!(app.extensions_table_state.selected(), Some(2));
+    }
+
+    #[test]
+    fn extensions_inspect_opens() {
+        let mut app = make_app_with_extensions();
+        app.bottom_panel = BottomPanel::Extensions;
+        app.extensions_table_state.select(Some(0));
+
+        app.handle_key(key(KeyCode::Enter));
+        assert_eq!(app.view_mode, ViewMode::ExtensionsInspect);
+        assert_eq!(app.overlay_scroll, 0);
+    }
+
+    #[test]
+    fn extensions_inspect_does_not_open_when_empty() {
+        let mut app = make_app(); // No extensions
+        app.bottom_panel = BottomPanel::Extensions;
+
+        app.handle_key(key(KeyCode::Enter));
+        assert_eq!(app.view_mode, ViewMode::Normal);
+    }
+
+    #[test]
+    fn extensions_inspect_closes_with_esc() {
+        let mut app = make_app_with_extensions();
+        app.view_mode = ViewMode::ExtensionsInspect;
+        app.overlay_scroll = 5;
+
+        app.handle_key(key(KeyCode::Esc));
+        assert_eq!(app.view_mode, ViewMode::Normal);
+        assert_eq!(app.overlay_scroll, 0);
+    }
+
+    #[test]
+    fn extensions_inspect_closes_with_q() {
+        let mut app = make_app_with_extensions();
+        app.view_mode = ViewMode::ExtensionsInspect;
+
+        app.handle_key(key(KeyCode::Char('q')));
+        assert_eq!(app.view_mode, ViewMode::Normal);
+    }
+
+    #[test]
+    fn extensions_inspect_scroll_down() {
+        let mut app = make_app_with_extensions();
+        app.view_mode = ViewMode::ExtensionsInspect;
+        app.overlay_scroll = 0;
+
+        app.handle_key(key(KeyCode::Down));
+        assert_eq!(app.overlay_scroll, 1);
+
+        app.handle_key(key(KeyCode::Char('j')));
+        assert_eq!(app.overlay_scroll, 2);
+    }
+
+    #[test]
+    fn extensions_inspect_scroll_up() {
+        let mut app = make_app_with_extensions();
+        app.view_mode = ViewMode::ExtensionsInspect;
+        app.overlay_scroll = 5;
+
+        app.handle_key(key(KeyCode::Up));
+        assert_eq!(app.overlay_scroll, 4);
+
+        app.handle_key(key(KeyCode::Char('k')));
+        assert_eq!(app.overlay_scroll, 3);
+    }
+
+    #[test]
+    fn extensions_reset_selection_on_filter_confirm() {
+        let mut app = make_app_with_extensions();
+        app.bottom_panel = BottomPanel::Extensions;
+        app.extensions_table_state.select(Some(2));
+        app.view_mode = ViewMode::Filter;
+        app.filter.text = "test".into();
+
+        app.handle_key(key(KeyCode::Enter));
+        assert_eq!(app.extensions_table_state.selected(), Some(0));
+    }
+
+    #[test]
+    fn extensions_panel_switch_clears_filter() {
+        let mut app = make_app_with_extensions();
+        app.bottom_panel = BottomPanel::Extensions;
+        app.filter.text = "test".into();
+        app.filter.active = true;
+
+        app.handle_key(key(KeyCode::Char('I'))); // Switch to Indexes
+        assert!(app.filter.text.is_empty());
+        assert!(!app.filter.active);
+    }
+
+    #[test]
+    fn extensions_esc_returns_to_queries() {
+        let mut app = make_app_with_extensions();
+        app.bottom_panel = BottomPanel::Extensions;
+
+        app.handle_key(key(KeyCode::Esc));
+        assert_eq!(app.bottom_panel, BottomPanel::Queries);
+    }
+
+    #[test]
+    fn extensions_q_returns_to_queries() {
+        let mut app = make_app_with_extensions();
+        app.bottom_panel = BottomPanel::Extensions;
+
+        app.handle_key(key(KeyCode::Char('q')));
+        assert_eq!(app.bottom_panel, BottomPanel::Queries);
+    }
+
+    #[test]
+    fn empty_extensions_no_panic() {
+        let mut app = make_app();
+        app.bottom_panel = BottomPanel::Extensions;
+
+        // Navigation should not panic with empty list
+        app.handle_key(key(KeyCode::Down));
+        app.handle_key(key(KeyCode::Up));
+        app.handle_key(key(KeyCode::Enter));
+
+        // Filter should work on empty list
+        app.view_mode = ViewMode::Filter;
+        app.handle_key(key(KeyCode::Char('t')));
+        app.handle_key(key(KeyCode::Enter));
+
+        assert!(app.sorted_extensions_indices().is_empty());
     }
 }

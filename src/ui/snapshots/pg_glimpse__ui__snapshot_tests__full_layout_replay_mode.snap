@@ -41,4 +41,4 @@ expression: buffer_to_string(&terminal)
 │                                                                                                                                          │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
  Replay  Space play/pause · ←→ step · <> speed · g/G jump  ↑↓ nav · ⏎ inspect · s sort · / filter                                           
- ⇥ locks · w waits · t tables · R repl · v vacuum · x xid · I idx · S stmts · A wal · P cfg  │  q quit
+ ⇥ locks · w waits · t tables · R repl · v vacuum · x xid · I idx · S stmts · A wal · P cfg · E ext  │  q quit

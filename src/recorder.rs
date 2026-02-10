@@ -148,6 +148,7 @@ mod tests {
             max_connections: 100,
             extensions: DetectedExtensions::default(),
             settings: vec![],
+            extensions_list: vec![],
         }
     }
 
@@ -443,6 +444,7 @@ mod tests {
                 pg_buffercache: true,
             },
             settings: vec![],
+            extensions_list: vec![],
         };
 
         // Create a complex snapshot with data in all fields

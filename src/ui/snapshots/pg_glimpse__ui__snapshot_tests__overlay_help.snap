@@ -1,6 +1,5 @@
 ---
 source: src/ui/snapshot_tests.rs
-assertion_line: 871
 expression: buffer_to_string(&terminal)
 ---
                                                                                           
@@ -29,9 +28,9 @@ expression: buffer_to_string(&terminal)
               │    S           pg_stat_statements                           │             
               │    A           WAL & I/O stats                              │             
               │    P           PostgreSQL settings                          │             
+              │    E           Extensions                                   │             
               │                                                             │             
               │  Panel Controls ────────────────────────────────────────    │             
               │    Esc         Back to queries (or quit)                    │             
               │    ↑ / k       Select previous row                          │             
-              │    ↓ / j       Select next row                              │             
               ╰─────────────────────────────────────────────────────────────╯

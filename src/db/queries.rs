@@ -5,8 +5,9 @@ use tokio_postgres::Client;
 use super::models::{
     ActiveQuery, ActivitySummary, ArchiverStats, BgwriterStats, BlockingInfo,
     BufferCacheStats, CheckpointStats, DatabaseStats, DetectedExtensions, IndexInfo,
-    PgSetting, PgSnapshot, ReplicationInfo, ReplicationSlot, ServerInfo, StatStatement,
-    Subscription, TableStat, VacuumProgress, WaitEventCount, WalStats, WraparoundInfo,
+    PgExtension, PgSetting, PgSnapshot, ReplicationInfo, ReplicationSlot, ServerInfo,
+    StatStatement, Subscription, TableStat, VacuumProgress, WaitEventCount, WalStats,
+    WraparoundInfo,
 };
 
 /// Query result limits - these values are embedded in the SQL constants below.
@@ -450,6 +451,19 @@ FROM pg_settings
 ORDER BY category, name
 ";
 
+const PG_EXTENSIONS_LIST_SQL: &str = "
+SELECT
+    e.extname AS name,
+    e.extversion AS version,
+    n.nspname AS schema,
+    e.extrelocatable AS relocatable,
+    a.comment AS description
+FROM pg_extension e
+JOIN pg_namespace n ON n.oid = e.extnamespace
+LEFT JOIN pg_available_extensions a ON a.name = e.extname
+ORDER BY e.extname
+";
+
 const DB_SIZE_SQL: &str = "
 SELECT pg_database_size(current_database()) AS db_size
 ";
@@ -621,9 +635,25 @@ pub async fn fetch_pg_settings(client: &Client) -> Result<Vec<PgSetting>> {
     Ok(results)
 }
 
+pub async fn fetch_extensions_list(client: &Client) -> Result<Vec<PgExtension>> {
+    let rows = client.query(PG_EXTENSIONS_LIST_SQL, &[]).await?;
+    let mut results = Vec::with_capacity(rows.len());
+    for row in rows {
+        results.push(PgExtension {
+            name: row.get("name"),
+            version: row.get("version"),
+            schema: row.get("schema"),
+            relocatable: row.get("relocatable"),
+            description: row.get("description"),
+        });
+    }
+    Ok(results)
+}
+
 pub async fn fetch_server_info(client: &Client) -> Result<ServerInfo> {
     let extensions = detect_extensions(client).await;
     let settings = fetch_pg_settings(client).await.unwrap_or_default();
+    let extensions_list = fetch_extensions_list(client).await.unwrap_or_default();
     let row = client.query_one(SERVER_INFO_SQL, &[]).await?;
     let version: String = row.get(0);
     let start_time: DateTime<Utc> = row.get(1);
@@ -634,6 +664,7 @@ pub async fn fetch_server_info(client: &Client) -> Result<ServerInfo> {
         max_connections,
         extensions,
         settings,
+        extensions_list,
     })
 }
 

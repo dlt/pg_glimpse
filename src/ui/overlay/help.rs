@@ -51,6 +51,7 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
         entry("S", "pg_stat_statements"),
         entry("A", "WAL & I/O stats"),
         entry("P", "PostgreSQL settings"),
+        entry("E", "Extensions"),
         Line::from(""),
         section_header("Panel Controls"),
         entry("Esc", "Back to queries (or quit)"),

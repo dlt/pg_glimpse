@@ -23,6 +23,15 @@ pub struct PgSetting {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PgExtension {
+    pub name: String,
+    pub version: String,
+    pub schema: String,
+    pub relocatable: bool,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerInfo {
     pub version: String,
     pub start_time: DateTime<Utc>,
@@ -30,6 +39,8 @@ pub struct ServerInfo {
     pub extensions: DetectedExtensions,
     #[serde(default)]
     pub settings: Vec<PgSetting>,
+    #[serde(default)]
+    pub extensions_list: Vec<PgExtension>,
 }
 
 impl ServerInfo {
@@ -329,6 +340,7 @@ mod tests {
             max_connections: 100,
             extensions: DetectedExtensions::default(),
             settings: vec![],
+            extensions_list: vec![],
         }
     }
 
@@ -435,6 +447,7 @@ mod tests {
                 source: "configuration file".to_string(),
                 pending_restart: false,
             }],
+            extensions_list: vec![],
         };
 
         let json = serde_json::to_string(&info).unwrap();

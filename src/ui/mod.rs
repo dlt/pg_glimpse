@@ -83,6 +83,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         BottomPanel::Statements => panels::render_statements(frame, app, areas.queries),
         BottomPanel::WalIo => panels::render_wal_io(frame, app, areas.queries),
         BottomPanel::Settings => panels::render_settings(frame, app, areas.queries),
+        BottomPanel::Extensions => panels::render_extensions(frame, app, areas.queries),
     }
 
     footer::render(frame, app, areas.footer);
@@ -111,6 +112,9 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         }
         ViewMode::SettingsInspect => {
             overlay::render_settings_inspect(frame, app, frame.area())
+        }
+        ViewMode::ExtensionsInspect => {
+            overlay::render_extensions_inspect(frame, app, frame.area())
         }
         ViewMode::ConfirmCancel(pid) => {
             overlay::render_confirm_cancel(frame, *pid, frame.area())

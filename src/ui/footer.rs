@@ -81,6 +81,7 @@ fn render_live(frame: &mut Frame, app: &App, area: Rect) {
         BottomPanel::Statements => "Statements",
         BottomPanel::WalIo => "WAL",
         BottomPanel::Settings => "Settings",
+        BottomPanel::Extensions => "Extensions",
     };
 
     // Line 1: Panel name + contextual actions
@@ -225,10 +226,13 @@ fn render_panel_keys<'a>(
             spans.push(key("Esc"));
             spans.push(desc(" back"));
         }
-        BottomPanel::Settings => {
+        BottomPanel::Settings | BottomPanel::Extensions => {
             spans.push(sep());
             spans.push(key("↑↓"));
             spans.push(desc(" nav"));
+            spans.push(dot());
+            spans.push(key("⏎"));
+            spans.push(desc(" inspect"));
             spans.push(dot());
             spans.push(key("/"));
             spans.push(desc(" filter"));
@@ -274,4 +278,7 @@ fn render_panel_switch_keys<'a>(
     spans.push(dot());
     spans.push(key("P"));
     spans.push(desc(" cfg"));
+    spans.push(dot());
+    spans.push(key("E"));
+    spans.push(desc(" ext"));
 }

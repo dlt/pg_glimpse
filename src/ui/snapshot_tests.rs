@@ -30,6 +30,7 @@ fn make_server_info() -> ServerInfo {
             pg_buffercache: true,
         },
         settings: vec![],
+        extensions_list: vec![],
     }
 }
 
