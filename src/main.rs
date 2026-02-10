@@ -388,7 +388,8 @@ async fn run(cli: Cli) -> Result<()> {
                             app.status_message = Some(format!("Cancelled query on PID {pid}"));
                             let _ = cmd_tx.try_send(DbCommand::FetchSnapshot);
                         }
-                        DbResult::CancelQuery(pid, Ok(false)) => {
+                        DbResult::CancelQuery(pid, Ok(false))
+                        | DbResult::TerminateBackend(pid, Ok(false)) => {
                             app.status_message = Some(format!("PID {pid} not found or already finished"));
                         }
                         DbResult::CancelQuery(_, Err(e)) => {
@@ -397,9 +398,6 @@ async fn run(cli: Cli) -> Result<()> {
                         DbResult::TerminateBackend(pid, Ok(true)) => {
                             app.status_message = Some(format!("Terminated backend PID {pid}"));
                             let _ = cmd_tx.try_send(DbCommand::FetchSnapshot);
-                        }
-                        DbResult::TerminateBackend(pid, Ok(false)) => {
-                            app.status_message = Some(format!("PID {pid} not found or already finished"));
                         }
                         DbResult::TerminateBackend(_, Err(e)) => {
                             app.status_message = Some(format!("Terminate failed: {e}"));

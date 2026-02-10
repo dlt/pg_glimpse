@@ -1354,7 +1354,7 @@ impl App {
 
     fn handle_normal_global_key(&mut self, key: KeyEvent) -> bool {
         match key.code {
-            KeyCode::Char('q') => {
+            KeyCode::Char('q') | KeyCode::Esc => {
                 if self.bottom_panel == BottomPanel::Queries {
                     self.running = false;
                 } else {
@@ -1364,14 +1364,6 @@ impl App {
             }
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.running = false;
-                true
-            }
-            KeyCode::Esc => {
-                if self.bottom_panel == BottomPanel::Queries {
-                    self.running = false;
-                } else {
-                    self.switch_panel(BottomPanel::Queries);
-                }
                 true
             }
             KeyCode::Char('p') if self.replay.is_none() => {
