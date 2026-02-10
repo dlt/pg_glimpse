@@ -716,28 +716,38 @@ impl App {
         format!("{} {} {}", e.name, e.schema, e.description.as_deref().unwrap_or(""))
     }
 
+    /// Check if fuzzy filter should be applied for the given panel
+    fn should_apply_filter(&self, panel: BottomPanel) -> bool {
+        self.bottom_panel == panel
+            && !self.filter.text.is_empty()
+            && (self.filter.active || self.view_mode == ViewMode::Filter)
+    }
+
+    /// Apply fuzzy filter to indices, retaining only those that match the filter text.
+    /// `to_haystack` converts an item to a searchable string.
+    fn apply_fuzzy_filter<T, F>(&self, indices: &mut Vec<usize>, items: &[T], to_haystack: F)
+    where
+        F: Fn(&T) -> String,
+    {
+        let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
+        let pattern = Pattern::parse(&self.filter.text, CaseMatching::Ignore, Normalization::Smart);
+        indices.retain(|&i| {
+            let haystack = to_haystack(&items[i]);
+            let mut buf = Vec::new();
+            pattern
+                .score(nucleo_matcher::Utf32Str::new(&haystack, &mut buf), &mut matcher)
+                .is_some()
+        });
+    }
+
     pub fn sorted_query_indices(&self) -> Vec<usize> {
         let Some(snap) = &self.snapshot else {
             return vec![];
         };
         let mut indices: Vec<usize> = (0..snap.active_queries.len()).collect();
 
-        // Apply fuzzy filter only when on the Queries panel
-        let filter_text = &self.filter.text;
-        if self.bottom_panel == BottomPanel::Queries
-            && !filter_text.is_empty()
-            && (self.filter.active || self.view_mode == ViewMode::Filter)
-        {
-            let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
-            let pattern =
-                Pattern::parse(filter_text, CaseMatching::Ignore, Normalization::Smart);
-            indices.retain(|&i| {
-                let haystack = Self::query_to_filter_string(&snap.active_queries[i]);
-                let mut buf = Vec::new();
-                pattern
-                    .score(nucleo_matcher::Utf32Str::new(&haystack, &mut buf), &mut matcher)
-                    .is_some()
-            });
+        if self.should_apply_filter(BottomPanel::Queries) {
+            self.apply_fuzzy_filter(&mut indices, &snap.active_queries, Self::query_to_filter_string);
         }
 
         let asc = self.queries.sort_ascending;
@@ -797,22 +807,8 @@ impl App {
         };
         let mut indices: Vec<usize> = (0..snap.indexes.len()).collect();
 
-        // Apply fuzzy filter only when on the Indexes panel
-        let filter_text = &self.filter.text;
-        if self.bottom_panel == BottomPanel::Indexes
-            && !filter_text.is_empty()
-            && (self.filter.active || self.view_mode == ViewMode::Filter)
-        {
-            let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
-            let pattern =
-                Pattern::parse(filter_text, CaseMatching::Ignore, Normalization::Smart);
-            indices.retain(|&i| {
-                let haystack = Self::index_to_filter_string(&snap.indexes[i]);
-                let mut buf = Vec::new();
-                pattern
-                    .score(nucleo_matcher::Utf32Str::new(&haystack, &mut buf), &mut matcher)
-                    .is_some()
-            });
+        if self.should_apply_filter(BottomPanel::Indexes) {
+            self.apply_fuzzy_filter(&mut indices, &snap.indexes, Self::index_to_filter_string);
         }
 
         let asc = self.indexes.sort_ascending;
@@ -855,22 +851,8 @@ impl App {
         };
         let mut indices: Vec<usize> = (0..snap.stat_statements.len()).collect();
 
-        // Apply fuzzy filter only when on the Statements panel
-        let filter_text = &self.filter.text;
-        if self.bottom_panel == BottomPanel::Statements
-            && !filter_text.is_empty()
-            && (self.filter.active || self.view_mode == ViewMode::Filter)
-        {
-            let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
-            let pattern =
-                Pattern::parse(filter_text, CaseMatching::Ignore, Normalization::Smart);
-            indices.retain(|&i| {
-                let haystack = Self::stmt_to_filter_string(&snap.stat_statements[i]);
-                let mut buf = Vec::new();
-                pattern
-                    .score(nucleo_matcher::Utf32Str::new(&haystack, &mut buf), &mut matcher)
-                    .is_some()
-            });
+        if self.should_apply_filter(BottomPanel::Statements) {
+            self.apply_fuzzy_filter(&mut indices, &snap.stat_statements, Self::stmt_to_filter_string);
         }
 
         let asc = self.statements.sort_ascending;
@@ -955,22 +937,8 @@ impl App {
         };
         let mut indices: Vec<usize> = (0..snap.table_stats.len()).collect();
 
-        // Apply fuzzy filter only when on the TableStats panel
-        let filter_text = &self.filter.text;
-        if self.bottom_panel == BottomPanel::TableStats
-            && !filter_text.is_empty()
-            && (self.filter.active || self.view_mode == ViewMode::Filter)
-        {
-            let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
-            let pattern =
-                Pattern::parse(filter_text, CaseMatching::Ignore, Normalization::Smart);
-            indices.retain(|&i| {
-                let haystack = Self::table_stat_to_filter_string(&snap.table_stats[i]);
-                let mut buf = Vec::new();
-                pattern
-                    .score(nucleo_matcher::Utf32Str::new(&haystack, &mut buf), &mut matcher)
-                    .is_some()
-            });
+        if self.should_apply_filter(BottomPanel::TableStats) {
+            self.apply_fuzzy_filter(&mut indices, &snap.table_stats, Self::table_stat_to_filter_string);
         }
 
         let asc = self.table_stats.sort_ascending;
@@ -1019,22 +987,8 @@ impl App {
     pub fn sorted_settings_indices(&self) -> Vec<usize> {
         let mut indices: Vec<usize> = (0..self.server_info.settings.len()).collect();
 
-        // Apply fuzzy filter only when on the Settings panel
-        let filter_text = &self.filter.text;
-        if self.bottom_panel == BottomPanel::Settings
-            && !filter_text.is_empty()
-            && (self.filter.active || self.view_mode == ViewMode::Filter)
-        {
-            let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
-            let pattern =
-                Pattern::parse(filter_text, CaseMatching::Ignore, Normalization::Smart);
-            indices.retain(|&i| {
-                let haystack = Self::setting_to_filter_string(&self.server_info.settings[i]);
-                let mut buf = Vec::new();
-                pattern
-                    .score(nucleo_matcher::Utf32Str::new(&haystack, &mut buf), &mut matcher)
-                    .is_some()
-            });
+        if self.should_apply_filter(BottomPanel::Settings) {
+            self.apply_fuzzy_filter(&mut indices, &self.server_info.settings, Self::setting_to_filter_string);
         }
 
         // Settings are already sorted by category, name from the query
@@ -1044,22 +998,8 @@ impl App {
     pub fn sorted_extensions_indices(&self) -> Vec<usize> {
         let mut indices: Vec<usize> = (0..self.server_info.extensions_list.len()).collect();
 
-        // Apply fuzzy filter only when on the Extensions panel
-        let filter_text = &self.filter.text;
-        if self.bottom_panel == BottomPanel::Extensions
-            && !filter_text.is_empty()
-            && (self.filter.active || self.view_mode == ViewMode::Filter)
-        {
-            let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
-            let pattern =
-                Pattern::parse(filter_text, CaseMatching::Ignore, Normalization::Smart);
-            indices.retain(|&i| {
-                let haystack = Self::extension_to_filter_string(&self.server_info.extensions_list[i]);
-                let mut buf = Vec::new();
-                pattern
-                    .score(nucleo_matcher::Utf32Str::new(&haystack, &mut buf), &mut matcher)
-                    .is_some()
-            });
+        if self.should_apply_filter(BottomPanel::Extensions) {
+            self.apply_fuzzy_filter(&mut indices, &self.server_info.extensions_list, Self::extension_to_filter_string);
         }
 
         // Extensions are already sorted by name from the query
