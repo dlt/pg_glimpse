@@ -12,6 +12,55 @@ use crate::db::queries::{IndexBloat, TableBloat};
 use crate::history::RingBuffer;
 use crate::ui::theme;
 
+/// Trait for types that can be filtered with fuzzy matching.
+trait Filterable {
+    fn filter_string(&self) -> String;
+}
+
+impl Filterable for ActiveQuery {
+    fn filter_string(&self) -> String {
+        format!(
+            "{} {} {} {} {} {}",
+            self.pid,
+            self.usename.as_deref().unwrap_or(""),
+            self.datname.as_deref().unwrap_or(""),
+            self.state.as_deref().unwrap_or(""),
+            self.wait_event.as_deref().unwrap_or(""),
+            self.query.as_deref().unwrap_or(""),
+        )
+    }
+}
+
+impl Filterable for IndexInfo {
+    fn filter_string(&self) -> String {
+        format!("{} {} {} {}", self.schemaname, self.table_name, self.index_name, self.index_definition)
+    }
+}
+
+impl Filterable for StatStatement {
+    fn filter_string(&self) -> String {
+        self.query.clone()
+    }
+}
+
+impl Filterable for TableStat {
+    fn filter_string(&self) -> String {
+        format!("{} {}", self.schemaname, self.relname)
+    }
+}
+
+impl Filterable for PgSetting {
+    fn filter_string(&self) -> String {
+        format!("{} {} {}", self.name, self.category, self.short_desc)
+    }
+}
+
+impl Filterable for PgExtension {
+    fn filter_string(&self) -> String {
+        format!("{} {} {}", self.name, self.schema, self.description.as_deref().unwrap_or(""))
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BottomPanel {
     Queries,
@@ -642,41 +691,6 @@ impl App {
         }
     }
 
-    fn query_to_filter_string(q: &ActiveQuery) -> String {
-        format!(
-            "{} {} {} {} {} {}",
-            q.pid,
-            q.usename.as_deref().unwrap_or(""),
-            q.datname.as_deref().unwrap_or(""),
-            q.state.as_deref().unwrap_or(""),
-            q.wait_event.as_deref().unwrap_or(""),
-            q.query.as_deref().unwrap_or(""),
-        )
-    }
-
-    fn index_to_filter_string(idx: &IndexInfo) -> String {
-        format!(
-            "{} {} {} {}",
-            idx.schemaname, idx.table_name, idx.index_name, idx.index_definition
-        )
-    }
-
-    fn stmt_to_filter_string(stmt: &StatStatement) -> String {
-        stmt.query.clone()
-    }
-
-    fn table_stat_to_filter_string(t: &TableStat) -> String {
-        format!("{} {}", t.schemaname, t.relname)
-    }
-
-    fn setting_to_filter_string(s: &PgSetting) -> String {
-        format!("{} {} {}", s.name, s.category, s.short_desc)
-    }
-
-    fn extension_to_filter_string(e: &PgExtension) -> String {
-        format!("{} {} {}", e.name, e.schema, e.description.as_deref().unwrap_or(""))
-    }
-
     /// Check if fuzzy filter should be applied for the given panel
     fn should_apply_filter(&self, panel: BottomPanel) -> bool {
         self.bottom_panel == panel
@@ -685,15 +699,11 @@ impl App {
     }
 
     /// Apply fuzzy filter to indices, retaining only those that match the filter text.
-    /// `to_haystack` converts an item to a searchable string.
-    fn apply_fuzzy_filter<T, F>(&self, indices: &mut Vec<usize>, items: &[T], to_haystack: F)
-    where
-        F: Fn(&T) -> String,
-    {
+    fn apply_fuzzy_filter<T: Filterable>(&self, indices: &mut Vec<usize>, items: &[T]) {
         let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
         let pattern = Pattern::parse(&self.filter.text, CaseMatching::Ignore, Normalization::Smart);
         indices.retain(|&i| {
-            let haystack = to_haystack(&items[i]);
+            let haystack = items[i].filter_string();
             let mut buf = Vec::new();
             pattern
                 .score(nucleo_matcher::Utf32Str::new(&haystack, &mut buf), &mut matcher)
@@ -708,7 +718,7 @@ impl App {
         let mut indices: Vec<usize> = (0..snap.active_queries.len()).collect();
 
         if self.should_apply_filter(BottomPanel::Queries) {
-            self.apply_fuzzy_filter(&mut indices, &snap.active_queries, Self::query_to_filter_string);
+            self.apply_fuzzy_filter(&mut indices, &snap.active_queries);
         }
 
         let asc = self.queries.sort_ascending;
@@ -749,7 +759,7 @@ impl App {
         let mut indices: Vec<usize> = (0..snap.indexes.len()).collect();
 
         if self.should_apply_filter(BottomPanel::Indexes) {
-            self.apply_fuzzy_filter(&mut indices, &snap.indexes, Self::index_to_filter_string);
+            self.apply_fuzzy_filter(&mut indices, &snap.indexes);
         }
 
         let asc = self.indexes.sort_ascending;
@@ -771,7 +781,7 @@ impl App {
         let mut indices: Vec<usize> = (0..snap.stat_statements.len()).collect();
 
         if self.should_apply_filter(BottomPanel::Statements) {
-            self.apply_fuzzy_filter(&mut indices, &snap.stat_statements, Self::stmt_to_filter_string);
+            self.apply_fuzzy_filter(&mut indices, &snap.stat_statements);
         }
 
         let asc = self.statements.sort_ascending;
@@ -798,7 +808,7 @@ impl App {
         let mut indices: Vec<usize> = (0..snap.table_stats.len()).collect();
 
         if self.should_apply_filter(BottomPanel::TableStats) {
-            self.apply_fuzzy_filter(&mut indices, &snap.table_stats, Self::table_stat_to_filter_string);
+            self.apply_fuzzy_filter(&mut indices, &snap.table_stats);
         }
 
         let asc = self.table_stats.sort_ascending;
@@ -818,7 +828,7 @@ impl App {
         let mut indices: Vec<usize> = (0..self.server_info.settings.len()).collect();
 
         if self.should_apply_filter(BottomPanel::Settings) {
-            self.apply_fuzzy_filter(&mut indices, &self.server_info.settings, Self::setting_to_filter_string);
+            self.apply_fuzzy_filter(&mut indices, &self.server_info.settings);
         }
 
         // Settings are already sorted by category, name from the query
@@ -829,7 +839,7 @@ impl App {
         let mut indices: Vec<usize> = (0..self.server_info.extensions_list.len()).collect();
 
         if self.should_apply_filter(BottomPanel::Extensions) {
-            self.apply_fuzzy_filter(&mut indices, &self.server_info.extensions_list, Self::extension_to_filter_string);
+            self.apply_fuzzy_filter(&mut indices, &self.server_info.extensions_list);
         }
 
         // Extensions are already sorted by name from the query
