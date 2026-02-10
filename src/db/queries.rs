@@ -9,6 +9,20 @@ use super::models::{
     Subscription, TableStat, VacuumProgress, WaitEventCount, WalStats, WraparoundInfo,
 };
 
+/// Query result limits - these values are embedded in the SQL constants below.
+/// Change both the constant and the corresponding SQL if adjusting limits.
+pub mod limits {
+    /// Maximum active queries to fetch from pg_stat_activity
+    pub const MAX_ACTIVE_QUERIES: u32 = 100;
+    /// Maximum blocking chains to fetch
+    pub const MAX_BLOCKING_CHAINS: u32 = 50;
+    /// Maximum table stats entries to fetch
+    pub const MAX_TABLE_STATS: u32 = 30;
+    /// Maximum pg_stat_statements entries to fetch
+    pub const MAX_STAT_STATEMENTS: u32 = 100;
+}
+
+/// See limits::MAX_ACTIVE_QUERIES
 const ACTIVE_QUERIES_SQL: &str = "
 SELECT
     pid,
@@ -49,6 +63,7 @@ GROUP BY wait_event_type, wait_event
 ORDER BY count DESC
 ";
 
+/// See limits::MAX_BLOCKING_CHAINS
 const BLOCKING_SQL: &str = "
 SELECT
     blocked.pid AS blocked_pid,
@@ -80,6 +95,7 @@ FROM pg_stat_database
 WHERE datname = current_database()
 ";
 
+/// See limits::MAX_TABLE_STATS
 const TABLE_STATS_SQL: &str = "
 SELECT schemaname, relname,
     COALESCE(pg_total_relation_size(relid), 0) AS total_size_bytes,
@@ -245,7 +261,8 @@ FROM pg_stat_user_indexes s
 ORDER BY pg_relation_size(s.indexrelid) DESC NULLS LAST
 ";
 
-/// pg_stat_statements query for PG11-12: uses total_time, blk_read_time
+/// pg_stat_statements query for PG11-12: uses total_time, blk_read_time.
+/// See limits::MAX_STAT_STATEMENTS
 const STAT_STATEMENTS_SQL_V11: &str = "
 SELECT
     COALESCE(queryid, 0) AS queryid,
@@ -278,7 +295,8 @@ ORDER BY total_time DESC
 LIMIT 100
 ";
 
-/// pg_stat_statements query for PG13-14: uses total_exec_time, blk_read_time
+/// pg_stat_statements query for PG13-14: uses total_exec_time, blk_read_time.
+/// See limits::MAX_STAT_STATEMENTS
 const STAT_STATEMENTS_SQL_V13: &str = "
 SELECT
     COALESCE(queryid, 0) AS queryid,
@@ -311,8 +329,9 @@ ORDER BY total_exec_time DESC
 LIMIT 100
 ";
 
-/// pg_stat_statements query for PG17+: uses total_exec_time, shared_blk_read_time
-/// Note: The blk_read_time → shared_blk_read_time rename happened in PG17, not the extension
+/// pg_stat_statements query for PG17+: uses total_exec_time, shared_blk_read_time.
+/// Note: The blk_read_time → shared_blk_read_time rename happened in PG17, not the extension.
+/// See limits::MAX_STAT_STATEMENTS
 const STAT_STATEMENTS_SQL_V17: &str = "
 SELECT
     COALESCE(queryid, 0) AS queryid,
