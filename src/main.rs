@@ -289,7 +289,7 @@ async fn run(cli: Cli) -> Result<()> {
         BloatData(Result<BloatResult, String>),
     }
 
-    let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel::<DbCommand>();
+    let (cmd_tx, mut cmd_rx) = mpsc::channel::<DbCommand>(16);
     let (result_tx, mut result_rx) = mpsc::unbounded_channel::<DbResult>();
     let client = Arc::new(client);
     let db_client = Arc::clone(&client);
@@ -349,7 +349,7 @@ async fn run(cli: Cli) -> Result<()> {
     });
 
     // Initial fetch
-    let _ = cmd_tx.send(DbCommand::FetchSnapshot);
+    let _ = cmd_tx.try_send(DbCommand::FetchSnapshot);
 
     let mut terminal = ratatui::init();
     let mut events = event::EventHandler::new(Duration::from_millis(10));
@@ -389,7 +389,7 @@ async fn run(cli: Cli) -> Result<()> {
                         }
                         DbResult::CancelQuery(pid, Ok(true)) => {
                             app.status_message = Some(format!("Cancelled query on PID {}", pid));
-                            let _ = cmd_tx.send(DbCommand::FetchSnapshot);
+                            let _ = cmd_tx.try_send(DbCommand::FetchSnapshot);
                         }
                         DbResult::CancelQuery(pid, Ok(false)) => {
                             app.status_message = Some(format!("PID {} not found or already finished", pid));
@@ -399,7 +399,7 @@ async fn run(cli: Cli) -> Result<()> {
                         }
                         DbResult::TerminateBackend(pid, Ok(true)) => {
                             app.status_message = Some(format!("Terminated backend PID {}", pid));
-                            let _ = cmd_tx.send(DbCommand::FetchSnapshot);
+                            let _ = cmd_tx.try_send(DbCommand::FetchSnapshot);
                         }
                         DbResult::TerminateBackend(pid, Ok(false)) => {
                             app.status_message = Some(format!("PID {} not found or already finished", pid));
@@ -415,7 +415,7 @@ async fn run(cli: Cli) -> Result<()> {
                             } else {
                                 app.status_message = Some(format!("Cancelled {}/{} queries ({} already finished)", succeeded, total, total - succeeded));
                             }
-                            let _ = cmd_tx.send(DbCommand::FetchSnapshot);
+                            let _ = cmd_tx.try_send(DbCommand::FetchSnapshot);
                         }
                         DbResult::TerminateBackends(results) => {
                             let total = results.len();
@@ -425,7 +425,7 @@ async fn run(cli: Cli) -> Result<()> {
                             } else {
                                 app.status_message = Some(format!("Terminated {}/{} backends ({} already finished)", succeeded, total, total - succeeded));
                             }
-                            let _ = cmd_tx.send(DbCommand::FetchSnapshot);
+                            let _ = cmd_tx.try_send(DbCommand::FetchSnapshot);
                         }
                         DbResult::BloatData(Ok((table_bloat, index_bloat))) => {
                             app.bloat_loading = false;
@@ -446,7 +446,7 @@ async fn run(cli: Cli) -> Result<()> {
             }
             _ = tick_interval.tick() => {
                 if !app.paused {
-                    let _ = cmd_tx.send(DbCommand::FetchSnapshot);
+                    let _ = cmd_tx.try_send(DbCommand::FetchSnapshot);
                 }
             }
             _ = spinner_interval.tick() => {
@@ -460,22 +460,22 @@ async fn run(cli: Cli) -> Result<()> {
         if let Some(action) = app.pending_action.take() {
             match action {
                 AppAction::ForceRefresh => {
-                    let _ = cmd_tx.send(DbCommand::FetchSnapshot);
+                    let _ = cmd_tx.try_send(DbCommand::FetchSnapshot);
                 }
                 AppAction::CancelQuery(pid) => {
-                    let _ = cmd_tx.send(DbCommand::CancelQuery(pid));
+                    let _ = cmd_tx.try_send(DbCommand::CancelQuery(pid));
                 }
                 AppAction::TerminateBackend(pid) => {
-                    let _ = cmd_tx.send(DbCommand::TerminateBackend(pid));
+                    let _ = cmd_tx.try_send(DbCommand::TerminateBackend(pid));
                 }
                 AppAction::CancelQueries(pids) => {
-                    let _ = cmd_tx.send(DbCommand::CancelQueries(pids));
+                    let _ = cmd_tx.try_send(DbCommand::CancelQueries(pids));
                 }
                 AppAction::TerminateBackends(pids) => {
-                    let _ = cmd_tx.send(DbCommand::TerminateBackends(pids));
+                    let _ = cmd_tx.try_send(DbCommand::TerminateBackends(pids));
                 }
                 AppAction::RefreshBloat => {
-                    let _ = cmd_tx.send(DbCommand::RefreshBloat);
+                    let _ = cmd_tx.try_send(DbCommand::RefreshBloat);
                 }
                 AppAction::SaveConfig => {
                     app.config.save();
