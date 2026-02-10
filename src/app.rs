@@ -314,6 +314,31 @@ impl ReplayState {
     }
 }
 
+/// Connection information (read-only after construction)
+pub struct ConnectionInfo {
+    pub host: String,
+    pub port: u16,
+    pub dbname: String,
+    pub user: String,
+    pub ssl_mode: Option<String>,
+}
+
+impl ConnectionInfo {
+    pub fn new(host: String, port: u16, dbname: String, user: String) -> Self {
+        Self {
+            host,
+            port,
+            dbname,
+            user,
+            ssl_mode: None,
+        }
+    }
+
+    pub fn set_ssl_mode(&mut self, label: &str) {
+        self.ssl_mode = Some(label.to_string());
+    }
+}
+
 /// Metrics history for sparklines and rate calculations
 pub struct MetricsHistory {
     // Sparkline data
@@ -446,11 +471,7 @@ pub struct App {
     pub metrics: MetricsHistory,
 
     pub server_info: ServerInfo,
-
-    pub host: String,
-    pub port: u16,
-    pub dbname: String,
-    pub user: String,
+    pub connection: ConnectionInfo,
     pub refresh_interval_secs: u64,
 
     pub last_error: Option<String>,
@@ -466,7 +487,6 @@ pub struct App {
     pub filter_active: bool,
     pub replay: Option<ReplayState>,
     pub overlay_scroll: u16,
-    pub ssl_mode_label: Option<String>,
 }
 
 impl App {
@@ -498,10 +518,7 @@ impl App {
             settings_table_state: TableState::default(),
             metrics: MetricsHistory::new(history_len),
             server_info,
-            host,
-            port,
-            dbname,
-            user,
+            connection: ConnectionInfo::new(host, port, dbname, user),
             refresh_interval_secs: refresh,
             last_error: None,
             status_message: None,
@@ -514,12 +531,11 @@ impl App {
             filter_active: false,
             replay: None,
             overlay_scroll: 0,
-            ssl_mode_label: None,
         }
     }
 
     pub fn set_ssl_mode_label(&mut self, label: &str) {
-        self.ssl_mode_label = Some(label.to_string());
+        self.connection.set_ssl_mode(label);
     }
 
     #[allow(clippy::too_many_arguments)]

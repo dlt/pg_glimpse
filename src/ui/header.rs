@@ -38,21 +38,21 @@ fn render_live(frame: &mut Frame, app: &App, area: Rect) {
         Span::styled("  ", dim_style),
         Span::styled("◆ ", Style::default().fg(Theme::border_ok())),
         Span::styled(
-            format!("{}:{}", app.host, app.port),
+            format!("{}:{}", app.connection.host, app.connection.port),
             normal_style,
         ),
         Span::styled("/", dim_style),
         Span::styled(
-            &app.dbname,
+            &app.connection.dbname,
             Style::default().fg(Theme::border_active()),
         ),
         Span::styled("  ", dim_style),
         Span::styled("as ", label_style),
-        Span::styled(&app.user, normal_style),
+        Span::styled(&app.connection.user, normal_style),
     ];
 
     // Show SSL mode if set (only show for SSL connections, not "No TLS")
-    if let Some(ref ssl_label) = app.ssl_mode_label {
+    if let Some(ref ssl_label) = &app.connection.ssl_mode {
         if ssl_label != "No TLS" {
             spans.push(Span::styled("  ", dim_style));
             spans.push(Span::styled(ssl_label.as_str(), label_style));

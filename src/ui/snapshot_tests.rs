@@ -644,7 +644,7 @@ fn header_live_with_ssl() {
     let backend = TestBackend::new(110, 1);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
-    app.ssl_mode_label = Some("TLS 1.3".to_string());
+    app.connection.ssl_mode = Some("TLS 1.3".to_string());
 
     terminal.draw(|frame| {
         super::header::render(frame, &app, frame.area());
