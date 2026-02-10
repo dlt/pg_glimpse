@@ -210,7 +210,7 @@ async fn run(cli: Cli) -> Result<()> {
             }
         }
 
-        if let Some(r) = result { r } else {
+        result.unwrap_or_else(|| {
             let info = cli.connection_info();
             eprintln!(
                 "Error: could not connect to PostgreSQL with any SSL mode: {:?}\n",
@@ -224,7 +224,7 @@ async fn run(cli: Cli) -> Result<()> {
             eprintln!("Try: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword");
             eprintln!("See: pg_glimpse --help");
             std::process::exit(1);
-        }
+        })
     };
 
     let config = AppConfig::load();

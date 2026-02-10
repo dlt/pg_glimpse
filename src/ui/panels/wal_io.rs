@@ -70,10 +70,7 @@ fn render_wal_column(frame: &mut Frame, wal: Option<&WalStats>, wal_rate: Option
 
     if let Some(w) = wal {
         // Show rate first (most important metric)
-        let rate_display = match wal_rate {
-            Some(rate) => format_byte_rate(rate),
-            None => "\u{2014}".into(),
-        };
+        let rate_display = wal_rate.map_or_else(|| "\u{2014}".into(), format_byte_rate);
         lines.push(Line::from(vec![
             Span::styled("Rate:         ", label_style),
             Span::styled(

@@ -94,24 +94,25 @@ pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {
                 None
             };
 
-            let index_cell = if let Some(indices) = match_indices {
-                let spans = highlight_matches(
-                    &idx.index_name,
-                    &indices,
-                    Style::default().fg(Theme::fg()),
-                );
-                Cell::from(Line::from(spans))
-            } else {
-                Cell::from(idx.index_name.clone())
-            };
+            let index_cell = match_indices.map_or_else(
+                || Cell::from(idx.index_name.clone()),
+                |indices| {
+                    let spans = highlight_matches(
+                        &idx.index_name,
+                        &indices,
+                        Style::default().fg(Theme::fg()),
+                    );
+                    Cell::from(Line::from(spans))
+                },
+            );
 
-            let bloat_cell = match idx.bloat_pct {
-                Some(pct) => {
+            let bloat_cell = idx.bloat_pct.map_or_else(
+                || Cell::from("-"),
+                |pct| {
                     let color = Theme::bloat_color(pct);
                     Cell::from(format!("{pct:.1}%")).style(Style::default().fg(color))
-                }
-                None => Cell::from("-"),
-            };
+                },
+            );
 
             Row::new(vec![
                 Cell::from(table_name),

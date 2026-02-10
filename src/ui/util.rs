@@ -50,10 +50,7 @@ pub fn format_bytes(bytes: i64) -> String {
 }
 
 pub fn format_lag(secs: Option<f64>) -> String {
-    match secs {
-        Some(s) => format!("{s:.3}s"),
-        None => "-".into(),
-    }
+    secs.map_or_else(|| "-".into(), |s| format!("{s:.3}s"))
 }
 
 

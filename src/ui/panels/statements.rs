@@ -212,23 +212,24 @@ pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
             };
 
             // For statements, filter string is just the query
-            let query_cell = if let Some(indices) = match_indices {
-                // Truncate query for display
-                let display_text = if stmt.query.len() > query_width {
-                    format!("{}…", &stmt.query[..query_width.saturating_sub(1)])
-                } else {
-                    stmt.query.clone()
-                };
+            let query_cell = match_indices.map_or_else(
+                || Cell::from(Line::from(highlight_sql_inline(&stmt.query, query_width))),
+                |indices| {
+                    // Truncate query for display
+                    let display_text = if stmt.query.len() > query_width {
+                        format!("{}…", &stmt.query[..query_width.saturating_sub(1)])
+                    } else {
+                        stmt.query.clone()
+                    };
 
-                let spans = highlight_matches(
-                    &display_text,
-                    &indices,
-                    Style::default().fg(Theme::fg()),
-                );
-                Cell::from(Line::from(spans))
-            } else {
-                Cell::from(Line::from(highlight_sql_inline(&stmt.query, query_width)))
-            };
+                    let spans = highlight_matches(
+                        &display_text,
+                        &indices,
+                        Style::default().fg(Theme::fg()),
+                    );
+                    Cell::from(Line::from(spans))
+                },
+            );
 
             Row::new(vec![
                 query_cell,

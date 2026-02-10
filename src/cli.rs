@@ -62,19 +62,20 @@ pub struct ConnectionInfo {
 
 impl Cli {
     pub fn pg_config(&self) -> Result<tokio_postgres::Config, tokio_postgres::Error> {
-        if let Some(ref conn_str) = self.connection_string {
-            conn_str.parse()
-        } else {
-            let mut config = tokio_postgres::Config::new();
-            config.host(&self.host);
-            config.port(self.port);
-            config.dbname(&self.dbname);
-            config.user(&self.user);
-            if let Some(ref pw) = self.password {
-                config.password(pw);
-            }
-            Ok(config)
-        }
+        self.connection_string.as_ref().map_or_else(
+            || {
+                let mut config = tokio_postgres::Config::new();
+                config.host(&self.host);
+                config.port(self.port);
+                config.dbname(&self.dbname);
+                config.user(&self.user);
+                if let Some(ref pw) = self.password {
+                    config.password(pw);
+                }
+                Ok(config)
+            },
+            |conn_str| conn_str.parse(),
+        )
     }
 
     /// Extract connection info for display, parsing from connection string if provided

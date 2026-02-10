@@ -70,8 +70,8 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
         && (app.filter.active || app.view_mode == crate::app::ViewMode::Filter);
     let filter_text = &app.filter.text;
 
-    let rows: Vec<Row> = match &app.snapshot {
-        Some(snap) => indices
+    let rows: Vec<Row> = app.snapshot.as_ref().map_or_else(Vec::new, |snap| {
+        indices
             .iter()
             .map(|&i| {
                 let q = &snap.active_queries[i];
@@ -89,23 +89,24 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
                 };
 
                 // Build query cell with optional highlighting
-                let query_cell = if let Some(indices) = match_indices {
-                    // Truncate query_text for display
-                    let display_text = if query_text.len() > query_width {
-                        format!("{}…", &query_text[..query_width.saturating_sub(1)])
-                    } else {
-                        query_text.to_string()
-                    };
+                let query_cell = match_indices.map_or_else(
+                    || Cell::from(Line::from(highlight_sql_inline(query_text, query_width))),
+                    |indices| {
+                        // Truncate query_text for display
+                        let display_text = if query_text.len() > query_width {
+                            format!("{}…", &query_text[..query_width.saturating_sub(1)])
+                        } else {
+                            query_text.to_string()
+                        };
 
-                    let spans = highlight_matches(
-                        &display_text,
-                        &indices,
-                        Style::default().fg(Theme::fg()),
-                    );
-                    Cell::from(Line::from(spans))
-                } else {
-                    Cell::from(Line::from(highlight_sql_inline(query_text, query_width)))
-                };
+                        let spans = highlight_matches(
+                            &display_text,
+                            &indices,
+                            Style::default().fg(Theme::fg()),
+                        );
+                        Cell::from(Line::from(spans))
+                    },
+                );
 
                 Row::new(vec![
                     Cell::from(q.pid.to_string()),
@@ -124,9 +125,8 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
                         })),
                 ])
             })
-            .collect(),
-        None => vec![],
-    };
+            .collect()
+    });
 
     let widths = [
         Constraint::Fill(1), // PID

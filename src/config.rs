@@ -325,10 +325,8 @@ impl AppConfig {
         let Some(path) = Self::config_path() else {
             return Self::default();
         };
-        match fs::read_to_string(&path) {
-            Ok(contents) => toml::from_str(&contents).unwrap_or_default(),
-            Err(_) => Self::default(),
-        }
+        fs::read_to_string(&path)
+            .map_or_else(|_| Self::default(), |contents| toml::from_str(&contents).unwrap_or_default())
     }
 
     pub fn save(&self) {

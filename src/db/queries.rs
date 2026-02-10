@@ -1000,18 +1000,19 @@ pub async fn fetch_stat_statements(
     match count_check {
         Err(e) => {
             // Can't even count rows - permission or access issue
-            let msg = if let Some(db_err) = e.as_db_error() {
-                let mut parts = vec![db_err.message().to_string()];
-                if let Some(detail) = db_err.detail() {
-                    parts.push(format!("Detail: {detail}"));
-                }
-                if let Some(hint) = db_err.hint() {
-                    parts.push(format!("Hint: {hint}"));
-                }
-                parts.join(" - ")
-            } else {
-                e.to_string()
-            };
+            let msg = e.as_db_error().map_or_else(
+                || e.to_string(),
+                |db_err| {
+                    let mut parts = vec![db_err.message().to_string()];
+                    if let Some(detail) = db_err.detail() {
+                        parts.push(format!("Detail: {detail}"));
+                    }
+                    if let Some(hint) = db_err.hint() {
+                        parts.push(format!("Hint: {hint}"));
+                    }
+                    parts.join(" - ")
+                },
+            );
             let hint = if msg.contains("permission denied") {
                 format!("{msg} (Try: GRANT pg_read_all_stats TO your_user;)")
             } else if msg.contains("does not exist") {
@@ -1087,7 +1088,7 @@ pub async fn fetch_stat_statements(
                     continue;
                 }
                 // For other errors, return immediately
-                let detailed = if let Some(db_err) = e.as_db_error() {
+                let detailed = e.as_db_error().map_or(msg, |db_err| {
                     let mut parts = vec![db_err.message().to_string()];
                     if let Some(detail) = db_err.detail() {
                         parts.push(format!("Detail: {detail}"));
@@ -1096,9 +1097,7 @@ pub async fn fetch_stat_statements(
                         parts.push(format!("Hint: {hint}"));
                     }
                     parts.join(" - ")
-                } else {
-                    msg
-                };
+                });
                 let version_info = ext_version.unwrap_or("unknown");
                 let hint = if detailed.contains("permission denied") {
                     format!("{detailed} (Try: GRANT pg_read_all_stats TO your_user;)")

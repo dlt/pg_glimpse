@@ -68,12 +68,13 @@ pub fn render_extensions(frame: &mut Frame, app: &mut App, area: Rect) {
                 None
             };
 
-            let name_cell = if let Some(ref indices) = match_indices {
-                let spans = highlight_matches(&ext.name, indices, name_style);
-                Cell::from(Line::from(spans))
-            } else {
-                Cell::from(ext.name.clone()).style(name_style)
-            };
+            let name_cell = match_indices.as_ref().map_or_else(
+                || Cell::from(ext.name.clone()).style(name_style),
+                |indices| {
+                    let spans = highlight_matches(&ext.name, indices, name_style);
+                    Cell::from(Line::from(spans))
+                },
+            );
 
             let relocatable_display = if ext.relocatable { "Yes" } else { "No" };
             let relocatable_style = if ext.relocatable {

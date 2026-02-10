@@ -75,16 +75,13 @@ pub fn render_settings(frame: &mut Frame, app: &mut App, area: Rect) {
                 None
             };
 
-            let name_cell = if let Some(ref indices) = match_indices {
-                let spans = highlight_matches(
-                    &s.name,
-                    indices,
-                    name_style,
-                );
-                Cell::from(Line::from(spans))
-            } else {
-                Cell::from(s.name.clone()).style(name_style)
-            };
+            let name_cell = match_indices.as_ref().map_or_else(
+                || Cell::from(s.name.clone()).style(name_style),
+                |indices| {
+                    let spans = highlight_matches(&s.name, indices, name_style);
+                    Cell::from(Line::from(spans))
+                },
+            );
 
             // Truncate value for display
             let value_display = if s.setting.len() > 40 {

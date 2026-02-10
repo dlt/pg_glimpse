@@ -202,7 +202,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                     .partial_cmp(&b.dead_ratio)
                     .unwrap_or(std::cmp::Ordering::Equal)
             });
-        let dead_spans = if let Some(t) = worst_dead {
+        let dead_spans = worst_dead.map_or_else(Vec::new, |t| {
             let dead_color = Theme::dead_ratio_color(t.dead_ratio);
             vec![
                 Span::styled("  Dead: ", Style::default().fg(Theme::fg_dim())),
@@ -211,9 +211,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                     Style::default().fg(dead_color),
                 ),
             ]
-        } else {
-            vec![]
-        };
+        });
         let cache_spark = render_sparkline(&app.metrics.hit_ratio.as_vec(), sparkline_width);
         let mut cache_line = vec![
             Span::styled("Cache: ", Style::default().fg(Theme::fg_dim())),
@@ -233,10 +231,10 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
 
         // Line 6: Blocks read/sec (physical I/O - cache misses)
         let blks_spark = render_sparkline(&app.metrics.blks_read.as_vec(), sparkline_width);
-        let blks_display = match app.metrics.current_blks_read_rate {
-            Some(rate) => format_rate(rate),
-            None => "\u{2014}".into(),
-        };
+        let blks_display = app
+            .metrics
+            .current_blks_read_rate
+            .map_or_else(|| "\u{2014}".into(), format_rate);
         // Color based on I/O pressure
         let blks_color = match app.metrics.current_blks_read_rate {
             Some(r) if r > 1000.0 => Theme::border_danger(),
@@ -262,10 +260,10 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
 
         // Line 7: TPS (transactions per second)
         let tps_spark = render_sparkline(&app.metrics.tps.as_vec(), sparkline_width);
-        let tps_display = match app.metrics.current_tps {
-            Some(tps) => format_rate(tps),
-            None => "\u{2014}".into(), // em-dash
-        };
+        let tps_display = app
+            .metrics
+            .current_tps
+            .map_or_else(|| "\u{2014}".into(), format_rate);
         lines.push(Line::from(vec![
             Span::styled("TPS: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
@@ -283,10 +281,10 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         // Line 7: WAL rate (bytes per second) - PG14+ only
         if snap.wal_stats.is_some() {
             let wal_spark = render_sparkline(&app.metrics.wal_rate.as_vec(), sparkline_width);
-            let wal_display = match app.metrics.current_wal_rate {
-                Some(rate) => format_byte_rate(rate),
-                None => "\u{2014}".into(),
-            };
+            let wal_display = app
+                .metrics
+                .current_wal_rate
+                .map_or_else(|| "\u{2014}".into(), format_byte_rate);
             lines.push(Line::from(vec![
                 Span::styled("WAL: ", Style::default().fg(Theme::fg_dim())),
                 Span::styled(

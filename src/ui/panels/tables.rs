@@ -86,13 +86,13 @@ pub fn render_table_stats(frame: &mut Frame, app: &mut App, area: Rect) {
                 Cell::from(table_name)
             };
 
-            let bloat_cell = match t.bloat_pct {
-                Some(pct) => {
+            let bloat_cell = t.bloat_pct.map_or_else(
+                || Cell::from("-"),
+                |pct| {
                     let color = Theme::bloat_color(pct);
                     Cell::from(format!("{pct:.1}%")).style(Style::default().fg(color))
-                }
-                None => Cell::from("-"),
-            };
+                },
+            );
 
             Row::new(vec![
                 table_cell,
