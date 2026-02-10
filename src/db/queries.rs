@@ -262,87 +262,56 @@ FROM pg_stat_user_indexes s
 ORDER BY pg_relation_size(s.indexrelid) DESC NULLS LAST
 ";
 
-/// `pg_stat_statements` query for PG11-12: uses `total_time`, `blk_read_time`.
-/// See `limits::MAX_STAT_STATEMENTS`
-const STAT_STATEMENTS_SQL_V11: &str = "
-SELECT
-    COALESCE(queryid, 0) AS queryid,
-    query,
-    COALESCE(calls, 0) AS calls,
-    COALESCE(total_time, 0) AS total_exec_time,
-    COALESCE(min_time, 0) AS min_exec_time,
-    COALESCE(mean_time, 0) AS mean_exec_time,
-    COALESCE(max_time, 0) AS max_exec_time,
-    COALESCE(stddev_time, 0) AS stddev_exec_time,
-    COALESCE(rows, 0) AS rows,
-    COALESCE(shared_blks_hit, 0) AS shared_blks_hit,
-    COALESCE(shared_blks_read, 0) AS shared_blks_read,
-    COALESCE(shared_blks_dirtied, 0) AS shared_blks_dirtied,
-    COALESCE(shared_blks_written, 0) AS shared_blks_written,
-    COALESCE(local_blks_hit, 0) AS local_blks_hit,
-    COALESCE(local_blks_read, 0) AS local_blks_read,
-    COALESCE(local_blks_dirtied, 0) AS local_blks_dirtied,
-    COALESCE(local_blks_written, 0) AS local_blks_written,
-    COALESCE(temp_blks_read, 0) AS temp_blks_read,
-    COALESCE(temp_blks_written, 0) AS temp_blks_written,
-    COALESCE(blk_read_time, 0) AS blk_read_time,
-    COALESCE(blk_write_time, 0) AS blk_write_time,
-    CASE
-        WHEN COALESCE(shared_blks_hit, 0) + COALESCE(shared_blks_read, 0) = 0 THEN 1.0
-        ELSE COALESCE(shared_blks_hit, 0)::float / (COALESCE(shared_blks_hit, 0) + COALESCE(shared_blks_read, 0))
-    END AS hit_ratio
-FROM pg_stat_statements
-ORDER BY total_time DESC
-LIMIT 100
-";
+/// Column naming variants for `pg_stat_statements` across PG versions.
+/// - PG11-12: `total_time`, `min_time`, etc. + `blk_read_time`
+/// - PG13-16: `total_exec_time`, `min_exec_time`, etc. + `blk_read_time`
+/// - PG17+: `total_exec_time`, etc. + `shared_blk_read_time`
+#[derive(Clone, Copy)]
+struct StatStatementsColumns {
+    /// Column prefix for time stats (empty for V11's "time", "exec_" for V13+)
+    time_prefix: &'static str,
+    /// Column name for block read time
+    blk_read_time: &'static str,
+    /// Column name for block write time
+    blk_write_time: &'static str,
+    /// ORDER BY column name
+    order_by: &'static str,
+}
 
-/// `pg_stat_statements` query for PG13-14: uses `total_exec_time`, `blk_read_time`.
-/// See `limits::MAX_STAT_STATEMENTS`
-const STAT_STATEMENTS_SQL_V13: &str = "
-SELECT
-    COALESCE(queryid, 0) AS queryid,
-    query,
-    COALESCE(calls, 0) AS calls,
-    COALESCE(total_exec_time, 0) AS total_exec_time,
-    COALESCE(min_exec_time, 0) AS min_exec_time,
-    COALESCE(mean_exec_time, 0) AS mean_exec_time,
-    COALESCE(max_exec_time, 0) AS max_exec_time,
-    COALESCE(stddev_exec_time, 0) AS stddev_exec_time,
-    COALESCE(rows, 0) AS rows,
-    COALESCE(shared_blks_hit, 0) AS shared_blks_hit,
-    COALESCE(shared_blks_read, 0) AS shared_blks_read,
-    COALESCE(shared_blks_dirtied, 0) AS shared_blks_dirtied,
-    COALESCE(shared_blks_written, 0) AS shared_blks_written,
-    COALESCE(local_blks_hit, 0) AS local_blks_hit,
-    COALESCE(local_blks_read, 0) AS local_blks_read,
-    COALESCE(local_blks_dirtied, 0) AS local_blks_dirtied,
-    COALESCE(local_blks_written, 0) AS local_blks_written,
-    COALESCE(temp_blks_read, 0) AS temp_blks_read,
-    COALESCE(temp_blks_written, 0) AS temp_blks_written,
-    COALESCE(blk_read_time, 0) AS blk_read_time,
-    COALESCE(blk_write_time, 0) AS blk_write_time,
-    CASE
-        WHEN COALESCE(shared_blks_hit, 0) + COALESCE(shared_blks_read, 0) = 0 THEN 1.0
-        ELSE COALESCE(shared_blks_hit, 0)::float / (COALESCE(shared_blks_hit, 0) + COALESCE(shared_blks_read, 0))
-    END AS hit_ratio
-FROM pg_stat_statements
-ORDER BY total_exec_time DESC
-LIMIT 100
-";
+const STAT_STATEMENTS_V11: StatStatementsColumns = StatStatementsColumns {
+    time_prefix: "",
+    blk_read_time: "blk_read_time",
+    blk_write_time: "blk_write_time",
+    order_by: "total_time",
+};
 
-/// `pg_stat_statements` query for PG17+: uses `total_exec_time`, `shared_blk_read_time`.
-/// Note: The `blk_read_time` → `shared_blk_read_time` rename happened in PG17, not the extension.
+const STAT_STATEMENTS_V13: StatStatementsColumns = StatStatementsColumns {
+    time_prefix: "exec_",
+    blk_read_time: "blk_read_time",
+    blk_write_time: "blk_write_time",
+    order_by: "total_exec_time",
+};
+
+const STAT_STATEMENTS_V17: StatStatementsColumns = StatStatementsColumns {
+    time_prefix: "exec_",
+    blk_read_time: "shared_blk_read_time",
+    blk_write_time: "shared_blk_write_time",
+    order_by: "total_exec_time",
+};
+
+/// Build `pg_stat_statements` query with version-specific column names.
 /// See `limits::MAX_STAT_STATEMENTS`
-const STAT_STATEMENTS_SQL_V17: &str = "
-SELECT
+fn build_stat_statements_sql(cols: StatStatementsColumns) -> String {
+    format!(
+        "SELECT
     COALESCE(queryid, 0) AS queryid,
     query,
     COALESCE(calls, 0) AS calls,
-    COALESCE(total_exec_time, 0) AS total_exec_time,
-    COALESCE(min_exec_time, 0) AS min_exec_time,
-    COALESCE(mean_exec_time, 0) AS mean_exec_time,
-    COALESCE(max_exec_time, 0) AS max_exec_time,
-    COALESCE(stddev_exec_time, 0) AS stddev_exec_time,
+    COALESCE(total_{tp}time, 0) AS total_exec_time,
+    COALESCE(min_{tp}time, 0) AS min_exec_time,
+    COALESCE(mean_{tp}time, 0) AS mean_exec_time,
+    COALESCE(max_{tp}time, 0) AS max_exec_time,
+    COALESCE(stddev_{tp}time, 0) AS stddev_exec_time,
     COALESCE(rows, 0) AS rows,
     COALESCE(shared_blks_hit, 0) AS shared_blks_hit,
     COALESCE(shared_blks_read, 0) AS shared_blks_read,
@@ -354,16 +323,21 @@ SELECT
     COALESCE(local_blks_written, 0) AS local_blks_written,
     COALESCE(temp_blks_read, 0) AS temp_blks_read,
     COALESCE(temp_blks_written, 0) AS temp_blks_written,
-    COALESCE(shared_blk_read_time, 0) AS blk_read_time,
-    COALESCE(shared_blk_write_time, 0) AS blk_write_time,
+    COALESCE({blk_read}, 0) AS blk_read_time,
+    COALESCE({blk_write}, 0) AS blk_write_time,
     CASE
         WHEN COALESCE(shared_blks_hit, 0) + COALESCE(shared_blks_read, 0) = 0 THEN 1.0
         ELSE COALESCE(shared_blks_hit, 0)::float / (COALESCE(shared_blks_hit, 0) + COALESCE(shared_blks_read, 0))
     END AS hit_ratio
 FROM pg_stat_statements
-ORDER BY total_exec_time DESC
-LIMIT 100
-";
+ORDER BY {order_by} DESC
+LIMIT 100",
+        tp = cols.time_prefix,
+        blk_read = cols.blk_read_time,
+        blk_write = cols.blk_write_time,
+        order_by = cols.order_by,
+    )
+}
 
 /// Parse extension version like "1.8" or "1.10" and return (major, minor)
 pub(crate) fn parse_ext_version(v: &str) -> Option<(u32, u32)> {
@@ -408,6 +382,44 @@ mod tests {
     fn parse_ext_version_edge_cases() {
         assert_eq!(parse_ext_version("0.0"), Some((0, 0)));
         assert_eq!(parse_ext_version("99.99"), Some((99, 99)));
+    }
+
+    #[test]
+    fn stat_statements_sql_v11_uses_total_time() {
+        let sql = build_stat_statements_sql(STAT_STATEMENTS_V11);
+        assert!(sql.contains("total_time"), "V11 should use total_time");
+        assert!(sql.contains("min_time"), "V11 should use min_time");
+        assert!(sql.contains("blk_read_time"), "V11 should use blk_read_time");
+        assert!(sql.contains("ORDER BY total_time DESC"));
+    }
+
+    #[test]
+    fn stat_statements_sql_v13_uses_exec_time() {
+        let sql = build_stat_statements_sql(STAT_STATEMENTS_V13);
+        assert!(sql.contains("total_exec_time"), "V13 should use total_exec_time");
+        assert!(sql.contains("min_exec_time"), "V13 should use min_exec_time");
+        assert!(sql.contains("blk_read_time"), "V13 should use blk_read_time");
+        assert!(sql.contains("ORDER BY total_exec_time DESC"));
+    }
+
+    #[test]
+    fn stat_statements_sql_v17_uses_shared_blk() {
+        let sql = build_stat_statements_sql(STAT_STATEMENTS_V17);
+        assert!(sql.contains("total_exec_time"), "V17 should use total_exec_time");
+        assert!(sql.contains("shared_blk_read_time"), "V17 should use shared_blk_read_time");
+        assert!(sql.contains("shared_blk_write_time"), "V17 should use shared_blk_write_time");
+        assert!(sql.contains("ORDER BY total_exec_time DESC"));
+    }
+
+    #[test]
+    fn stat_statements_sql_all_versions_have_same_output_columns() {
+        // All versions should alias to the same output column names
+        for cols in [STAT_STATEMENTS_V11, STAT_STATEMENTS_V13, STAT_STATEMENTS_V17] {
+            let sql = build_stat_statements_sql(cols);
+            assert!(sql.contains("AS total_exec_time"), "Should alias to total_exec_time");
+            assert!(sql.contains("AS blk_read_time"), "Should alias to blk_read_time");
+            assert!(sql.contains("AS blk_write_time"), "Should alias to blk_write_time");
+        }
     }
 }
 
@@ -1034,22 +1046,23 @@ pub async fn fetch_stat_statements(
     // Try queries in order: version-appropriate first, then fallbacks
     // Important: blk_read_time → shared_blk_read_time rename happened in PG17 (server version),
     // while total_time → total_exec_time happened in extension version 1.8 (PG13)
-    let queries_to_try = if pg_major_version >= 17 {
+    let columns_to_try = if pg_major_version >= 17 {
         // PG17+ uses shared_blk_read_time
-        vec![STAT_STATEMENTS_SQL_V17, STAT_STATEMENTS_SQL_V13, STAT_STATEMENTS_SQL_V11]
+        vec![STAT_STATEMENTS_V17, STAT_STATEMENTS_V13, STAT_STATEMENTS_V11]
     } else {
         // PG13-16: uses total_exec_time but old blk_read_time
         match ext_version.and_then(parse_ext_version) {
             Some((major, minor)) if major > 1 || (major == 1 && minor >= 8) => {
-                vec![STAT_STATEMENTS_SQL_V13, STAT_STATEMENTS_SQL_V11]
+                vec![STAT_STATEMENTS_V13, STAT_STATEMENTS_V11]
             }
-            _ => vec![STAT_STATEMENTS_SQL_V11],
+            _ => vec![STAT_STATEMENTS_V11],
         }
     };
 
     let mut last_error = String::new();
-    for sql in queries_to_try {
-        match client.query(sql, &[]).await {
+    for cols in columns_to_try {
+        let sql = build_stat_statements_sql(cols);
+        match client.query(&sql, &[]).await {
             Ok(rows) => {
                 let mut results = Vec::with_capacity(rows.len());
                 for row in rows {
