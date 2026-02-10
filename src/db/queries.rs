@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use color_eyre::Result;
 use tokio_postgres::Client;
 
+use super::error::{DbError, Result as DbResult};
 use super::models::{
     ActiveQuery, ActivitySummary, ArchiverStats, BgwriterStats, BlockingInfo,
     BufferCacheStats, CheckpointStats, DatabaseStats, DetectedExtensions, IndexInfo,
@@ -628,8 +629,14 @@ pub async fn detect_extensions(client: &Client) -> DetectedExtensions {
     ext
 }
 
-pub async fn fetch_pg_settings(client: &Client) -> Result<Vec<PgSetting>> {
-    let rows = client.query(PG_SETTINGS_SQL, &[]).await?;
+pub async fn fetch_pg_settings(client: &Client) -> DbResult<Vec<PgSetting>> {
+    let rows = client
+        .query(PG_SETTINGS_SQL, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_pg_settings",
+            source: e,
+        })?;
     let mut results = Vec::with_capacity(rows.len());
     for row in rows {
         results.push(PgSetting {
@@ -646,8 +653,14 @@ pub async fn fetch_pg_settings(client: &Client) -> Result<Vec<PgSetting>> {
     Ok(results)
 }
 
-pub async fn fetch_extensions_list(client: &Client) -> Result<Vec<PgExtension>> {
-    let rows = client.query(PG_EXTENSIONS_LIST_SQL, &[]).await?;
+pub async fn fetch_extensions_list(client: &Client) -> DbResult<Vec<PgExtension>> {
+    let rows = client
+        .query(PG_EXTENSIONS_LIST_SQL, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_extensions_list",
+            source: e,
+        })?;
     let mut results = Vec::with_capacity(rows.len());
     for row in rows {
         results.push(PgExtension {
@@ -661,11 +674,17 @@ pub async fn fetch_extensions_list(client: &Client) -> Result<Vec<PgExtension>> 
     Ok(results)
 }
 
-pub async fn fetch_server_info(client: &Client) -> Result<ServerInfo> {
+pub async fn fetch_server_info(client: &Client) -> DbResult<ServerInfo> {
     let extensions = detect_extensions(client).await;
     let settings = fetch_pg_settings(client).await.unwrap_or_default();
     let extensions_list = fetch_extensions_list(client).await.unwrap_or_default();
-    let row = client.query_one(SERVER_INFO_SQL, &[]).await?;
+    let row = client
+        .query_one(SERVER_INFO_SQL, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_server_info",
+            source: e,
+        })?;
     let version: String = row.get(0);
     let start_time: DateTime<Utc> = row.get(1);
     let max_connections: i64 = row.get(2);
@@ -679,14 +698,26 @@ pub async fn fetch_server_info(client: &Client) -> Result<ServerInfo> {
     })
 }
 
-pub async fn fetch_db_size(client: &Client) -> Result<i64> {
-    let row = client.query_one(DB_SIZE_SQL, &[]).await?;
+pub async fn fetch_db_size(client: &Client) -> DbResult<i64> {
+    let row = client
+        .query_one(DB_SIZE_SQL, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_db_size",
+            source: e,
+        })?;
     Ok(row.get("db_size"))
 }
 
-pub async fn fetch_checkpoint_stats(client: &Client, version: u32) -> Result<CheckpointStats> {
+pub async fn fetch_checkpoint_stats(client: &Client, version: u32) -> DbResult<CheckpointStats> {
     let sql = checkpoint_stats_sql(version);
-    let row = client.query_one(sql, &[]).await?;
+    let row = client
+        .query_one(sql, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_checkpoint_stats",
+            source: e,
+        })?;
     Ok(CheckpointStats {
         checkpoints_timed: row.get("checkpoints_timed"),
         checkpoints_req: row.get("checkpoints_req"),
@@ -697,13 +728,19 @@ pub async fn fetch_checkpoint_stats(client: &Client, version: u32) -> Result<Che
     })
 }
 
-pub async fn fetch_wal_stats(client: &Client, version: u32) -> Result<WalStats> {
+pub async fn fetch_wal_stats(client: &Client, version: u32) -> DbResult<WalStats> {
     let sql = if version >= 18 {
         WAL_STATS_SQL_V18
     } else {
         WAL_STATS_SQL_V14
     };
-    let row = client.query_one(sql, &[]).await?;
+    let row = client
+        .query_one(sql, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_wal_stats",
+            source: e,
+        })?;
     Ok(WalStats {
         wal_records: row.get("wal_records"),
         wal_fpi: row.get("wal_fpi"),
@@ -716,8 +753,14 @@ pub async fn fetch_wal_stats(client: &Client, version: u32) -> Result<WalStats> 
     })
 }
 
-pub async fn fetch_archiver_stats(client: &Client) -> Result<ArchiverStats> {
-    let row = client.query_one(ARCHIVER_STATS_SQL, &[]).await?;
+pub async fn fetch_archiver_stats(client: &Client) -> DbResult<ArchiverStats> {
+    let row = client
+        .query_one(ARCHIVER_STATS_SQL, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_archiver_stats",
+            source: e,
+        })?;
     Ok(ArchiverStats {
         archived_count: row.get("archived_count"),
         failed_count: row.get("failed_count"),
@@ -728,8 +771,14 @@ pub async fn fetch_archiver_stats(client: &Client) -> Result<ArchiverStats> {
     })
 }
 
-pub async fn fetch_bgwriter_stats(client: &Client) -> Result<BgwriterStats> {
-    let row = client.query_one(BGWRITER_STATS_SQL, &[]).await?;
+pub async fn fetch_bgwriter_stats(client: &Client) -> DbResult<BgwriterStats> {
+    let row = client
+        .query_one(BGWRITER_STATS_SQL, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_bgwriter_stats",
+            source: e,
+        })?;
     Ok(BgwriterStats {
         buffers_clean: row.get("buffers_clean"),
         maxwritten_clean: row.get("maxwritten_clean"),
@@ -737,8 +786,14 @@ pub async fn fetch_bgwriter_stats(client: &Client) -> Result<BgwriterStats> {
     })
 }
 
-pub async fn fetch_database_stats(client: &Client) -> Result<DatabaseStats> {
-    let row = client.query_one(DATABASE_STATS_SQL, &[]).await?;
+pub async fn fetch_database_stats(client: &Client) -> DbResult<DatabaseStats> {
+    let row = client
+        .query_one(DATABASE_STATS_SQL, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_database_stats",
+            source: e,
+        })?;
     Ok(DatabaseStats {
         xact_commit: row.get("xact_commit"),
         xact_rollback: row.get("xact_rollback"),
@@ -746,8 +801,14 @@ pub async fn fetch_database_stats(client: &Client) -> Result<DatabaseStats> {
     })
 }
 
-pub async fn fetch_active_queries(client: &Client) -> Result<Vec<ActiveQuery>> {
-    let rows = client.query(ACTIVE_QUERIES_SQL, &[]).await?;
+pub async fn fetch_active_queries(client: &Client) -> DbResult<Vec<ActiveQuery>> {
+    let rows = client
+        .query(ACTIVE_QUERIES_SQL, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_active_queries",
+            source: e,
+        })?;
     let mut results = Vec::with_capacity(rows.len());
     for row in rows {
         results.push(ActiveQuery {
@@ -766,8 +827,14 @@ pub async fn fetch_active_queries(client: &Client) -> Result<Vec<ActiveQuery>> {
     Ok(results)
 }
 
-pub async fn fetch_wait_events(client: &Client) -> Result<Vec<WaitEventCount>> {
-    let rows = client.query(WAIT_EVENTS_SQL, &[]).await?;
+pub async fn fetch_wait_events(client: &Client) -> DbResult<Vec<WaitEventCount>> {
+    let rows = client
+        .query(WAIT_EVENTS_SQL, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_wait_events",
+            source: e,
+        })?;
     let mut results = Vec::with_capacity(rows.len());
     for row in rows {
         results.push(WaitEventCount {
@@ -779,8 +846,14 @@ pub async fn fetch_wait_events(client: &Client) -> Result<Vec<WaitEventCount>> {
     Ok(results)
 }
 
-pub async fn fetch_blocking_info(client: &Client) -> Result<Vec<BlockingInfo>> {
-    let rows = client.query(BLOCKING_SQL, &[]).await?;
+pub async fn fetch_blocking_info(client: &Client) -> DbResult<Vec<BlockingInfo>> {
+    let rows = client
+        .query(BLOCKING_SQL, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_blocking_info",
+            source: e,
+        })?;
     let mut results = Vec::with_capacity(rows.len());
     for row in rows {
         results.push(BlockingInfo {
@@ -797,8 +870,14 @@ pub async fn fetch_blocking_info(client: &Client) -> Result<Vec<BlockingInfo>> {
     Ok(results)
 }
 
-pub async fn fetch_buffer_cache(client: &Client) -> Result<BufferCacheStats> {
-    let row = client.query_one(BUFFER_CACHE_SQL, &[]).await?;
+pub async fn fetch_buffer_cache(client: &Client) -> DbResult<BufferCacheStats> {
+    let row = client
+        .query_one(BUFFER_CACHE_SQL, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_buffer_cache",
+            source: e,
+        })?;
     Ok(BufferCacheStats {
         blks_hit: row.get("blks_hit"),
         blks_read: row.get("blks_read"),
@@ -806,8 +885,14 @@ pub async fn fetch_buffer_cache(client: &Client) -> Result<BufferCacheStats> {
     })
 }
 
-pub async fn fetch_activity_summary(client: &Client) -> Result<ActivitySummary> {
-    let row = client.query_one(ACTIVITY_SUMMARY_SQL, &[]).await?;
+pub async fn fetch_activity_summary(client: &Client) -> DbResult<ActivitySummary> {
+    let row = client
+        .query_one(ACTIVITY_SUMMARY_SQL, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_activity_summary",
+            source: e,
+        })?;
     Ok(ActivitySummary {
         active_query_count: row.get("active_query_count"),
         idle_in_transaction_count: row.get("idle_in_transaction_count"),
@@ -819,8 +904,14 @@ pub async fn fetch_activity_summary(client: &Client) -> Result<ActivitySummary> 
     })
 }
 
-pub async fn fetch_table_stats(client: &Client) -> Result<Vec<TableStat>> {
-    let rows = client.query(TABLE_STATS_SQL, &[]).await?;
+pub async fn fetch_table_stats(client: &Client) -> DbResult<Vec<TableStat>> {
+    let rows = client
+        .query(TABLE_STATS_SQL, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_table_stats",
+            source: e,
+        })?;
     let mut results = Vec::with_capacity(rows.len());
     for row in rows {
         results.push(TableStat {
@@ -853,13 +944,19 @@ pub async fn fetch_table_stats(client: &Client) -> Result<Vec<TableStat>> {
     Ok(results)
 }
 
-pub async fn fetch_replication(client: &Client, version: u32) -> Result<Vec<ReplicationInfo>> {
+pub async fn fetch_replication(client: &Client, version: u32) -> DbResult<Vec<ReplicationInfo>> {
     let sql = if version >= 12 {
         REPLICATION_SQL_V12
     } else {
         REPLICATION_SQL_V10
     };
-    let rows = client.query(sql, &[]).await?;
+    let rows = client
+        .query(sql, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_replication",
+            source: e,
+        })?;
     let mut results = Vec::with_capacity(rows.len());
     for row in rows {
         results.push(ReplicationInfo {
@@ -888,7 +985,7 @@ pub async fn fetch_replication(client: &Client, version: u32) -> Result<Vec<Repl
     Ok(results)
 }
 
-pub async fn fetch_replication_slots(client: &Client, version: u32) -> Result<Vec<ReplicationSlot>> {
+pub async fn fetch_replication_slots(client: &Client, version: u32) -> DbResult<Vec<ReplicationSlot>> {
     let sql = if version >= 14 {
         REPLICATION_SLOTS_SQL_V14
     } else {
@@ -916,7 +1013,7 @@ pub async fn fetch_replication_slots(client: &Client, version: u32) -> Result<Ve
     Ok(results)
 }
 
-pub async fn fetch_subscriptions(client: &Client, version: u32) -> Result<Vec<Subscription>> {
+pub async fn fetch_subscriptions(client: &Client, version: u32) -> DbResult<Vec<Subscription>> {
     // Logical replication subscriptions only available in PG 10+
     if version < 10 {
         return Ok(vec![]);
@@ -941,8 +1038,14 @@ pub async fn fetch_subscriptions(client: &Client, version: u32) -> Result<Vec<Su
     Ok(results)
 }
 
-pub async fn fetch_vacuum_progress(client: &Client, _version: u32) -> Result<Vec<VacuumProgress>> {
-    let rows = client.query(VACUUM_PROGRESS_SQL, &[]).await?;
+pub async fn fetch_vacuum_progress(client: &Client, _version: u32) -> DbResult<Vec<VacuumProgress>> {
+    let rows = client
+        .query(VACUUM_PROGRESS_SQL, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_vacuum_progress",
+            source: e,
+        })?;
     let mut results = Vec::with_capacity(rows.len());
     for row in rows {
         results.push(VacuumProgress {
@@ -959,8 +1062,14 @@ pub async fn fetch_vacuum_progress(client: &Client, _version: u32) -> Result<Vec
     Ok(results)
 }
 
-pub async fn fetch_wraparound(client: &Client) -> Result<Vec<WraparoundInfo>> {
-    let rows = client.query(WRAPAROUND_SQL, &[]).await?;
+pub async fn fetch_wraparound(client: &Client) -> DbResult<Vec<WraparoundInfo>> {
+    let rows = client
+        .query(WRAPAROUND_SQL, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_wraparound",
+            source: e,
+        })?;
     let mut results = Vec::with_capacity(rows.len());
     for row in rows {
         results.push(WraparoundInfo {
@@ -973,8 +1082,14 @@ pub async fn fetch_wraparound(client: &Client) -> Result<Vec<WraparoundInfo>> {
     Ok(results)
 }
 
-pub async fn fetch_indexes(client: &Client) -> Result<Vec<IndexInfo>> {
-    let rows = client.query(INDEXES_SQL, &[]).await?;
+pub async fn fetch_indexes(client: &Client) -> DbResult<Vec<IndexInfo>> {
+    let rows = client
+        .query(INDEXES_SQL, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_indexes",
+            source: e,
+        })?;
     let mut results = Vec::with_capacity(rows.len());
     for row in rows {
         results.push(IndexInfo {
@@ -1144,8 +1259,14 @@ pub struct IndexBloat {
 }
 
 /// Fetch table bloat estimates. Returns map of "schema.table" -> bloat info.
-pub async fn fetch_table_bloat(client: &Client) -> Result<HashMap<String, TableBloat>> {
-    let rows = client.query(TABLE_BLOAT_SQL, &[]).await?;
+pub async fn fetch_table_bloat(client: &Client) -> DbResult<HashMap<String, TableBloat>> {
+    let rows = client
+        .query(TABLE_BLOAT_SQL, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_table_bloat",
+            source: e,
+        })?;
     let mut results = HashMap::with_capacity(rows.len());
     for row in rows {
         let schema: String = row.get("schemaname");
@@ -1163,8 +1284,14 @@ pub async fn fetch_table_bloat(client: &Client) -> Result<HashMap<String, TableB
 }
 
 /// Fetch index bloat estimates. Returns map of "`schema.index_name`" -> bloat info.
-pub async fn fetch_index_bloat(client: &Client) -> Result<HashMap<String, IndexBloat>> {
-    let rows = client.query(INDEX_BLOAT_SQL, &[]).await?;
+pub async fn fetch_index_bloat(client: &Client) -> DbResult<HashMap<String, IndexBloat>> {
+    let rows = client
+        .query(INDEX_BLOAT_SQL, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_index_bloat",
+            source: e,
+        })?;
     let mut results = HashMap::with_capacity(rows.len());
     for row in rows {
         let schema: String = row.get("schemaname");
@@ -1181,17 +1308,25 @@ pub async fn fetch_index_bloat(client: &Client) -> Result<HashMap<String, IndexB
     Ok(results)
 }
 
-pub async fn cancel_backend(client: &Client, pid: i32) -> Result<bool> {
+pub async fn cancel_backend(client: &Client, pid: i32) -> DbResult<bool> {
     let row = client
         .query_one("SELECT pg_cancel_backend($1)", &[&pid])
-        .await?;
+        .await
+        .map_err(|e| DbError::Query {
+            context: "cancel_backend",
+            source: e,
+        })?;
     Ok(row.get(0))
 }
 
-pub async fn terminate_backend(client: &Client, pid: i32) -> Result<bool> {
+pub async fn terminate_backend(client: &Client, pid: i32) -> DbResult<bool> {
     let row = client
         .query_one("SELECT pg_terminate_backend($1)", &[&pid])
-        .await?;
+        .await
+        .map_err(|e| DbError::Query {
+            context: "terminate_backend",
+            source: e,
+        })?;
     Ok(row.get(0))
 }
 
@@ -1223,22 +1358,22 @@ pub async fn fetch_snapshot(
     let ext = extensions.clone();
     let (active, waits, blocks, cache, summary, tables, repl, repl_slots, subs, vacuum, wrap, indexes, ss, db_size, chkpt, wal, archiver, bgwriter, db_stats) =
         tokio::try_join!(
-            fetch_active_queries(client),
-            fetch_wait_events(client),
-            fetch_blocking_info(client),
-            fetch_buffer_cache(client),
-            fetch_activity_summary(client),
+            async { fetch_active_queries(client).await.map_err(color_eyre::Report::from) },
+            async { fetch_wait_events(client).await.map_err(color_eyre::Report::from) },
+            async { fetch_blocking_info(client).await.map_err(color_eyre::Report::from) },
+            async { fetch_buffer_cache(client).await.map_err(color_eyre::Report::from) },
+            async { fetch_activity_summary(client).await.map_err(color_eyre::Report::from) },
             // Table stats can fail if tables are dropped during query - return empty on error
             async { Ok::<_, color_eyre::Report>(fetch_table_stats(client).await.unwrap_or_default()) },
-            fetch_replication(client, version),
-            fetch_replication_slots(client, version),
-            fetch_subscriptions(client, version),
-            fetch_vacuum_progress(client, version),
-            fetch_wraparound(client),
+            async { fetch_replication(client, version).await.map_err(color_eyre::Report::from) },
+            async { fetch_replication_slots(client, version).await.map_err(color_eyre::Report::from) },
+            async { fetch_subscriptions(client, version).await.map_err(color_eyre::Report::from) },
+            async { fetch_vacuum_progress(client, version).await.map_err(color_eyre::Report::from) },
+            async { fetch_wraparound(client).await.map_err(color_eyre::Report::from) },
             // Index stats can fail if tables are dropped during query - return empty on error
             async { Ok::<_, color_eyre::Report>(fetch_indexes(client).await.unwrap_or_default()) },
             async { Ok(fetch_stat_statements(client, &ext, version).await) },
-            fetch_db_size(client),
+            async { fetch_db_size(client).await.map_err(color_eyre::Report::from) },
             async { Ok(fetch_checkpoint_stats(client, version).await.ok()) },
             async {
                 // pg_stat_wal only available in PG14+

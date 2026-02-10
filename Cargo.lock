@@ -1599,6 +1599,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "tempfile",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-postgres",
  "tokio-postgres-rustls",
