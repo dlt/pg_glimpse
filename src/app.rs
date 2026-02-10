@@ -347,11 +347,6 @@ impl FilterState {
         self.active = false;
     }
 
-    #[allow(dead_code)]
-    pub fn is_active(&self) -> bool {
-        self.active && !self.text.is_empty()
-    }
-
     pub fn push_char(&mut self, c: char) {
         self.text.push(c);
     }
