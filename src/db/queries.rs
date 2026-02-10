@@ -595,9 +595,8 @@ ORDER BY bloat_bytes DESC
 ";
 
 pub async fn detect_extensions(client: &Client) -> DetectedExtensions {
-    let rows = match client.query(EXTENSIONS_SQL, &[]).await {
-        Ok(rows) => rows,
-        Err(_) => return DetectedExtensions::default(),
+    let Ok(rows) = client.query(EXTENSIONS_SQL, &[]).await else {
+        return DetectedExtensions::default();
     };
     let mut ext = DetectedExtensions::default();
     for row in rows {
@@ -883,9 +882,8 @@ pub async fn fetch_replication_slots(client: &Client, version: u32) -> Result<Ve
     } else {
         REPLICATION_SLOTS_SQL
     };
-    let rows = match client.query(sql, &[]).await {
-        Ok(rows) => rows,
-        Err(_) => return Ok(vec![]), // Graceful fallback if query fails
+    let Ok(rows) = client.query(sql, &[]).await else {
+        return Ok(vec![]); // Graceful fallback if query fails
     };
     let mut results = Vec::with_capacity(rows.len());
     for row in rows {
@@ -911,9 +909,8 @@ pub async fn fetch_subscriptions(client: &Client, version: u32) -> Result<Vec<Su
     if version < 10 {
         return Ok(vec![]);
     }
-    let rows = match client.query(SUBSCRIPTIONS_SQL, &[]).await {
-        Ok(rows) => rows,
-        Err(_) => return Ok(vec![]), // Graceful fallback if query fails
+    let Ok(rows) = client.query(SUBSCRIPTIONS_SQL, &[]).await else {
+        return Ok(vec![]); // Graceful fallback if query fails
     };
     let mut results = Vec::with_capacity(rows.len());
     for row in rows {
