@@ -553,9 +553,9 @@ mod tests {
     #[test]
     fn app_config_deserialize_with_missing_fields() {
         // Test that serde(default) works - missing fields get defaults
-        let toml_str = r#"
+        let toml_str = r"
             refresh_interval_secs = 10
-        "#;
+        ";
         let config: AppConfig = toml::from_str(toml_str).unwrap();
 
         assert_eq!(config.refresh_interval_secs, 10);
@@ -699,9 +699,9 @@ mod tests {
     #[test]
     fn deserialize_negative_numbers() {
         // Negative where unsigned expected - TOML will fail
-        let negative = r#"
+        let negative = r"
             refresh_interval_secs = -5
-        "#;
+        ";
         let result: Result<AppConfig, _> = toml::from_str(negative);
         assert!(result.is_err());
     }
@@ -738,12 +738,12 @@ mod tests {
     #[test]
     fn deserialize_large_values() {
         // Large but valid numbers (within i64 range for TOML compatibility)
-        let large = r#"
+        let large = r"
             refresh_interval_secs = 9223372036854775807
             warn_duration_secs = 999999999.99
             danger_duration_secs = 999999999.99
             recording_retention_secs = 9223372036854775807
-        "#;
+        ";
         let config: AppConfig = toml::from_str(large).unwrap();
         assert_eq!(config.refresh_interval_secs, i64::MAX as u64);
         assert!(config.warn_duration_secs > 999999999.0);
@@ -752,21 +752,21 @@ mod tests {
     #[test]
     fn deserialize_extreme_values_fails() {
         // u64::MAX is larger than i64::MAX, which TOML can't handle
-        let extreme = r#"
+        let extreme = r"
             refresh_interval_secs = 18446744073709551615
-        "#;
+        ";
         let result: Result<AppConfig, _> = toml::from_str(extreme);
         assert!(result.is_err());
     }
 
     #[test]
     fn deserialize_zero_values() {
-        let zeros = r#"
+        let zeros = r"
             refresh_interval_secs = 0
             warn_duration_secs = 0.0
             danger_duration_secs = 0.0
             recording_retention_secs = 0
-        "#;
+        ";
         let config: AppConfig = toml::from_str(zeros).unwrap();
         assert_eq!(config.refresh_interval_secs, 0);
         assert_eq!(config.warn_duration_secs, 0.0);
@@ -774,10 +774,10 @@ mod tests {
 
     #[test]
     fn deserialize_float_precision() {
-        let floats = r#"
+        let floats = r"
             warn_duration_secs = 0.123456789
             danger_duration_secs = 1.987654321
-        "#;
+        ";
         let config: AppConfig = toml::from_str(floats).unwrap();
         assert!((config.warn_duration_secs - 0.123456789).abs() < 1e-9);
         assert!((config.danger_duration_secs - 1.987654321).abs() < 1e-9);
@@ -910,12 +910,12 @@ mod tests {
                 retention in 0u64..1000000
             ) {
                 let toml_str = format!(
-                    r#"
+                    r"
                     refresh_interval_secs = {}
                     warn_duration_secs = {}
                     danger_duration_secs = {}
                     recording_retention_secs = {}
-                    "#,
+                    ",
                     refresh, warn, danger, retention
                 );
                 let result = toml::from_str::<AppConfig>(&toml_str);

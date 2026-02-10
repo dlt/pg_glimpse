@@ -3073,9 +3073,9 @@ mod tests {
             let mut snap = make_snapshot();
             snap.timestamp = base_time + chrono::Duration::seconds(i * 2);
             snap.db_stats = Some(DatabaseStats {
-                xact_commit: 1000 + (i as i64 * 100), // +100 per 2 sec = 50 TPS
+                xact_commit: 1000 + (i * 100), // +100 per 2 sec = 50 TPS
                 xact_rollback: 0,
-                blks_read: 100 + (i as i64 * 10),
+                blks_read: 100 + (i * 10),
             });
             app.update(snap);
         }

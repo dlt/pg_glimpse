@@ -2254,15 +2254,15 @@ fn make_special_chars_snapshot() -> PgSnapshot {
         // Empty string query
         ActiveQuery {
             pid: 4,
-            usename: Some("".to_string()),
-            datname: Some("".to_string()),
-            state: Some("".to_string()),
-            wait_event_type: Some("".to_string()),
-            wait_event: Some("".to_string()),
+            usename: Some(String::new()),
+            datname: Some(String::new()),
+            state: Some(String::new()),
+            wait_event_type: Some(String::new()),
+            wait_event: Some(String::new()),
             query_start: None,
             duration_secs: 0.0,
-            query: Some("".to_string()),
-            backend_type: Some("".to_string()),
+            query: Some(String::new()),
+            backend_type: Some(String::new()),
         },
     ];
     snapshot

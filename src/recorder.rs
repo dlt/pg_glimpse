@@ -248,7 +248,7 @@ mod tests {
         assert_eq!(lines.len(), 2);
 
         let snapshot_line: serde_json::Value =
-            serde_json::from_str(&lines[1].as_ref().unwrap()).unwrap();
+            serde_json::from_str(lines[1].as_ref().unwrap()).unwrap();
         assert_eq!(snapshot_line["type"], "snapshot");
         assert!(snapshot_line["data"].is_object());
     }
