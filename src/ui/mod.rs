@@ -109,6 +109,9 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         ViewMode::WraparoundInspect => {
             overlay::render_wraparound_inspect(frame, app, frame.area())
         }
+        ViewMode::SettingsInspect => {
+            overlay::render_settings_inspect(frame, app, frame.area())
+        }
         ViewMode::ConfirmCancel(pid) => {
             overlay::render_confirm_cancel(frame, *pid, frame.area())
         }

@@ -1,0 +1,38 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                    ╭ Setting Details ─────────────────────────────────────────╮                    
+                    │                                                          │                    
+                    │  Setting ────────────────────────────────────────        │                    
+                    │  Name:        log_min_duration_statement                 │                    
+                    │  Value:       1000                                       │                    
+                    │  Unit:        ms                                         │                    
+                    │                                                          │                    
+                    │  Category ────────────────────────────────────────       │                    
+                    │  Category:    Reporting and Logging / When to Log        │                    
+                    │                                                          │                    
+                    │  Description ────────────────────────────────────────    │                    
+                    │  Sets the minimum execution time above which statements  │                    
+                    │will be logged.                                           │                    
+                    │                                                          │                    
+                    │  Configuration ────────────────────────────────────────  │                    
+                    │  Context:     sighup                                     │                    
+                    │  Source:      configuration file                         │                    
+                    │  To Apply:    Config reload (pg_reload_conf())           │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    ╰──────────────────────────────────────────────────────────╯

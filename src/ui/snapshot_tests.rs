@@ -2050,6 +2050,148 @@ fn overlay_wraparound_inspect_critical() {
 }
 
 #[test]
+fn overlay_settings_inspect() {
+    use crate::db::models::PgSetting;
+
+    let backend = TestBackend::new(100, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+
+    // Add settings to server_info
+    app.server_info.settings = vec![
+        PgSetting {
+            name: "shared_buffers".to_string(),
+            setting: "128MB".to_string(),
+            unit: Some("8kB".to_string()),
+            category: "Resource Usage / Memory".to_string(),
+            short_desc: "Sets the number of shared memory buffers used by the server.".to_string(),
+            context: "postmaster".to_string(),
+            source: "configuration file".to_string(),
+            pending_restart: false,
+        },
+        PgSetting {
+            name: "work_mem".to_string(),
+            setting: "4MB".to_string(),
+            unit: Some("kB".to_string()),
+            category: "Resource Usage / Memory".to_string(),
+            short_desc: "Sets the maximum memory to be used for query workspaces.".to_string(),
+            context: "user".to_string(),
+            source: "default".to_string(),
+            pending_restart: false,
+        },
+    ];
+
+    app.bottom_panel = BottomPanel::Settings;
+    app.view_mode = ViewMode::SettingsInspect;
+    app.settings_table_state.select(Some(0));
+
+    terminal.draw(|frame| {
+        super::overlay::render_settings_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_settings_inspect_pending_restart() {
+    use crate::db::models::PgSetting;
+
+    let backend = TestBackend::new(100, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+
+    // Add settings with pending restart
+    app.server_info.settings = vec![
+        PgSetting {
+            name: "max_connections".to_string(),
+            setting: "200".to_string(),
+            unit: None,
+            category: "Connections and Authentication".to_string(),
+            short_desc: "Sets the maximum number of concurrent connections.".to_string(),
+            context: "postmaster".to_string(),
+            source: "configuration file".to_string(),
+            pending_restart: true,
+        },
+    ];
+
+    app.bottom_panel = BottomPanel::Settings;
+    app.view_mode = ViewMode::SettingsInspect;
+    app.settings_table_state.select(Some(0));
+
+    terminal.draw(|frame| {
+        super::overlay::render_settings_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_settings_inspect_sighup() {
+    use crate::db::models::PgSetting;
+
+    let backend = TestBackend::new(100, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+
+    // Add sighup setting (requires reload)
+    app.server_info.settings = vec![
+        PgSetting {
+            name: "log_min_duration_statement".to_string(),
+            setting: "1000".to_string(),
+            unit: Some("ms".to_string()),
+            category: "Reporting and Logging / When to Log".to_string(),
+            short_desc: "Sets the minimum execution time above which statements will be logged.".to_string(),
+            context: "sighup".to_string(),
+            source: "configuration file".to_string(),
+            pending_restart: false,
+        },
+    ];
+
+    app.bottom_panel = BottomPanel::Settings;
+    app.view_mode = ViewMode::SettingsInspect;
+    app.settings_table_state.select(Some(0));
+
+    terminal.draw(|frame| {
+        super::overlay::render_settings_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_settings_inspect_user() {
+    use crate::db::models::PgSetting;
+
+    let backend = TestBackend::new(100, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+
+    // Add user setting (can SET at runtime)
+    app.server_info.settings = vec![
+        PgSetting {
+            name: "work_mem".to_string(),
+            setting: "4096".to_string(),
+            unit: Some("kB".to_string()),
+            category: "Resource Usage / Memory".to_string(),
+            short_desc: "Sets the maximum memory to be used for query workspaces.".to_string(),
+            context: "user".to_string(),
+            source: "default".to_string(),
+            pending_restart: false,
+        },
+    ];
+
+    app.bottom_panel = BottomPanel::Settings;
+    app.view_mode = ViewMode::SettingsInspect;
+    app.settings_table_state.select(Some(0));
+
+    terminal.draw(|frame| {
+        super::overlay::render_settings_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
 fn stats_panel_extreme_values() {
     let backend = TestBackend::new(40, 20);
     let mut terminal = Terminal::new(backend).unwrap();

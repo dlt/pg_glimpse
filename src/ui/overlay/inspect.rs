@@ -1000,3 +1000,114 @@ pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
         .scroll((app.overlay_scroll, 0));
     frame.render_widget(paragraph, popup);
 }
+
+pub fn render_settings_inspect(frame: &mut Frame, app: &App, area: Rect) {
+    let popup_area = centered_rect(60, 70, area);
+    frame.render_widget(Clear, popup_area);
+
+    let block = overlay_block("Setting Details", Theme::border_active());
+
+    let indices = app.sorted_settings_indices();
+    let selected = app.settings_table_state.selected().unwrap_or(0);
+    let Some(&idx) = indices.get(selected) else {
+        frame.render_widget(block, popup_area);
+        return;
+    };
+
+    let s = &app.server_info.settings[idx];
+
+    let mut lines = vec![
+        // Setting section
+        Line::from(""),
+        section_header("Setting"),
+        Line::from(vec![
+            Span::styled("  Name:        ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(&s.name, Style::default().fg(Theme::fg()).add_modifier(Modifier::BOLD)),
+        ]),
+        Line::from(vec![
+            Span::styled("  Value:       ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(&s.setting, Style::default().fg(Theme::border_active())),
+        ]),
+    ];
+    if let Some(unit) = &s.unit {
+        lines.push(Line::from(vec![
+            Span::styled("  Unit:        ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(unit, Style::default().fg(Theme::fg())),
+        ]));
+    }
+    lines.push(Line::from(""));
+
+    // Category section
+    lines.push(section_header("Category"));
+    lines.push(Line::from(vec![
+        Span::styled("  Category:    ", Style::default().fg(Theme::fg_dim())),
+        Span::styled(&s.category, Style::default().fg(Theme::fg())),
+    ]));
+    lines.push(Line::from(""));
+
+    // Description section
+    lines.push(section_header("Description"));
+    lines.push(Line::from(vec![
+        Span::styled("  ", Style::default()),
+        Span::styled(&s.short_desc, Style::default().fg(Theme::fg())),
+    ]));
+    lines.push(Line::from(""));
+
+    // Configuration section
+    lines.push(section_header("Configuration"));
+    lines.push(Line::from(vec![
+        Span::styled("  Context:     ", Style::default().fg(Theme::fg_dim())),
+        Span::styled(&s.context, Style::default().fg(settings_context_color(&s.context))),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled("  Source:      ", Style::default().fg(Theme::fg_dim())),
+        Span::styled(&s.source, Style::default().fg(Theme::fg())),
+    ]));
+
+    // Add "To Apply" description based on context
+    let (apply_action, apply_color) = settings_context_description(&s.context);
+    lines.push(Line::from(vec![
+        Span::styled("  To Apply:    ", Style::default().fg(Theme::fg_dim())),
+        Span::styled(apply_action, Style::default().fg(apply_color)),
+    ]));
+
+    if s.pending_restart {
+        lines.push(Line::from(""));
+        lines.push(Line::from(vec![
+            Span::styled("  ⚠ ", Style::default().fg(Theme::border_danger())),
+            Span::styled(
+                "Pending restart - value changed but not yet active",
+                Style::default().fg(Theme::border_danger()),
+            ),
+        ]));
+    }
+
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false })
+        .scroll((app.overlay_scroll, 0));
+
+    frame.render_widget(paragraph, popup_area);
+}
+
+fn settings_context_color(context: &str) -> Color {
+    match context {
+        "postmaster" => Theme::border_danger(),  // Requires restart
+        "sighup" => Theme::border_warn(),        // Requires reload
+        "superuser" | "user" => Theme::border_active(), // Can change at runtime
+        _ => Theme::fg(),
+    }
+}
+
+fn settings_context_description(context: &str) -> (&'static str, Color) {
+    match context {
+        "postmaster" => ("Server restart required", Theme::border_danger()),
+        "sighup" => ("Config reload (pg_reload_conf())", Theme::border_warn()),
+        "superuser" => ("SET command (superuser only)", Theme::border_active()),
+        "user" => ("SET command (any user)", Theme::border_ok()),
+        "superuser-backend" => ("Connection start (superuser)", Theme::fg()),
+        "backend" => ("Connection start only", Theme::fg()),
+        "internal" => ("Cannot be changed", Theme::fg_dim()),
+        _ => ("Unknown", Theme::fg()),
+    }
+}

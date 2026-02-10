@@ -1,0 +1,38 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                    ╭ Setting Details ─────────────────────────────────────────╮                    
+                    │                                                          │                    
+                    │  Setting ────────────────────────────────────────        │                    
+                    │  Name:        work_mem                                   │                    
+                    │  Value:       4096                                       │                    
+                    │  Unit:        kB                                         │                    
+                    │                                                          │                    
+                    │  Category ────────────────────────────────────────       │                    
+                    │  Category:    Resource Usage / Memory                    │                    
+                    │                                                          │                    
+                    │  Description ────────────────────────────────────────    │                    
+                    │  Sets the maximum memory to be used for query workspaces.│                    
+                    │                                                          │                    
+                    │  Configuration ────────────────────────────────────────  │                    
+                    │  Context:     user                                       │                    
+                    │  Source:      default                                    │                    
+                    │  To Apply:    SET command (any user)                     │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    ╰──────────────────────────────────────────────────────────╯

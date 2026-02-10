@@ -12,8 +12,8 @@ pub use confirm::{
 pub use help::render_help;
 pub use inspect::{
     render_blocking_inspect, render_index_inspect, render_inspect,
-    render_replication_inspect, render_statement_inspect, render_table_inspect,
-    render_vacuum_inspect, render_wraparound_inspect,
+    render_replication_inspect, render_settings_inspect, render_statement_inspect,
+    render_table_inspect, render_vacuum_inspect, render_wraparound_inspect,
 };
 pub use sql_highlight::highlight_sql_inline;
 

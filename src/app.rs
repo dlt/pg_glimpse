@@ -62,6 +62,7 @@ pub enum ViewMode {
     BlockingInspect,
     VacuumInspect,
     WraparoundInspect,
+    SettingsInspect,
     ConfirmCancel(i32),
     ConfirmKill(i32),
     ConfirmCancelChoice { selected_pid: i32, all_pids: Vec<i32> },
@@ -1328,7 +1329,7 @@ impl App {
     fn handle_settings_key(&mut self, key: KeyEvent) {
         let len = self.sorted_settings_indices().len();
         let mut state = std::mem::take(&mut self.settings_table_state);
-        self.handle_simple_table_nav(key, &mut state, len, None);
+        self.handle_simple_table_nav(key, &mut state, len, Some(ViewMode::SettingsInspect));
         self.settings_table_state = state;
     }
 
@@ -1633,6 +1634,25 @@ impl App {
         }
     }
 
+    fn handle_settings_inspect_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.overlay_scroll = 0;
+                self.view_mode = ViewMode::Normal;
+            }
+            KeyCode::Char('y') => {
+                let indices = self.sorted_settings_indices();
+                if let Some(&idx) = indices.get(self.settings_table_state.selected().unwrap_or(0)) {
+                    let s = &self.server_info.settings[idx];
+                    self.copy_to_clipboard(&format!("{} = {}", s.name, s.setting));
+                }
+            }
+            _ => {
+                self.handle_overlay_scroll(key);
+            }
+        }
+    }
+
     fn handle_config_key(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Esc => {
@@ -1863,6 +1883,10 @@ impl App {
             }
             ViewMode::WraparoundInspect => {
                 self.handle_wraparound_inspect_key(key);
+                return;
+            }
+            ViewMode::SettingsInspect => {
+                self.handle_settings_inspect_key(key);
                 return;
             }
             ViewMode::Config => {

@@ -1,0 +1,38 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                    ╭ Setting Details ─────────────────────────────────────────╮                    
+                    │                                                          │                    
+                    │  Setting ────────────────────────────────────────        │                    
+                    │  Name:        max_connections                            │                    
+                    │  Value:       200                                        │                    
+                    │                                                          │                    
+                    │  Category ────────────────────────────────────────       │                    
+                    │  Category:    Connections and Authentication             │                    
+                    │                                                          │                    
+                    │  Description ────────────────────────────────────────    │                    
+                    │  Sets the maximum number of concurrent connections.      │                    
+                    │                                                          │                    
+                    │  Configuration ────────────────────────────────────────  │                    
+                    │  Context:     postmaster                                 │                    
+                    │  Source:      configuration file                         │                    
+                    │  To Apply:    Server restart required                    │                    
+                    │                                                          │                    
+                    │  ⚠ Pending restart - value changed but not yet active    │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    │                                                          │                    
+                    ╰──────────────────────────────────────────────────────────╯
