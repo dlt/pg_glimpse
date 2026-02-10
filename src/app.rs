@@ -267,11 +267,6 @@ impl<S: SortColumnTrait> TableViewState<S> {
         self.sort_column = self.sort_column.next();
     }
 
-    #[allow(dead_code)]
-    pub fn toggle_direction(&mut self) {
-        self.sort_ascending = !self.sort_ascending;
-    }
-
     pub fn select_next(&mut self, max: usize) {
         let i = self.state.selected().unwrap_or(0);
         if i < max.saturating_sub(1) {
@@ -347,7 +342,6 @@ pub struct FilterState {
 }
 
 impl FilterState {
-    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.text.clear();
         self.active = false;
@@ -358,12 +352,10 @@ impl FilterState {
         self.active && !self.text.is_empty()
     }
 
-    #[allow(dead_code)]
     pub fn push_char(&mut self, c: char) {
         self.text.push(c);
     }
 
-    #[allow(dead_code)]
     pub fn pop_char(&mut self) {
         self.text.pop();
     }
@@ -1078,8 +1070,7 @@ impl App {
             self.bottom_panel = target;
         }
         // Clear filter state when switching panels
-        self.filter.text.clear();
-        self.filter.active = false;
+        self.filter.clear();
         self.view_mode = ViewMode::Normal;
     }
 
@@ -1731,8 +1722,7 @@ impl App {
     fn handle_filter_key(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Esc => {
-                self.filter.text.clear();
-                self.filter.active = false;
+                self.filter.clear();
                 self.view_mode = ViewMode::Normal;
                 self.reset_panel_selection();
             }
@@ -1742,11 +1732,11 @@ impl App {
                 self.reset_panel_selection();
             }
             KeyCode::Backspace => {
-                self.filter.text.pop();
+                self.filter.pop_char();
                 self.reset_panel_selection();
             }
             KeyCode::Char(c) => {
-                self.filter.text.push(c);
+                self.filter.push_char(c);
                 self.reset_panel_selection();
             }
             _ => {}
