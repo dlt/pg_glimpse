@@ -475,6 +475,22 @@ fn simple_table_nav(
     }
 }
 
+/// Sort indices by a key extracted from items. Handles ascending/descending.
+fn sort_by_key<T, K: Ord>(indices: &mut [usize], items: &[T], asc: bool, key: impl Fn(&T) -> K) {
+    indices.sort_by(|&a, &b| {
+        let cmp = key(&items[a]).cmp(&key(&items[b]));
+        if asc { cmp } else { cmp.reverse() }
+    });
+}
+
+/// Sort indices by a key extracted from items, using partial_cmp for floats.
+fn sort_by_key_partial<T, K: PartialOrd>(indices: &mut [usize], items: &[T], asc: bool, key: impl Fn(&T) -> K) {
+    indices.sort_by(|&a, &b| {
+        let cmp = key(&items[a]).partial_cmp(&key(&items[b])).unwrap_or(std::cmp::Ordering::Equal);
+        if asc { cmp } else { cmp.reverse() }
+    });
+}
+
 impl App {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -696,32 +712,12 @@ impl App {
         }
 
         let asc = self.queries.sort_ascending;
+        let q = &snap.active_queries;
         match self.queries.sort_column {
-            SortColumn::Pid => indices.sort_by(|&a, &b| {
-                let cmp = snap.active_queries[a]
-                    .pid
-                    .cmp(&snap.active_queries[b].pid);
-                if asc { cmp } else { cmp.reverse() }
-            }),
-            SortColumn::Duration => indices.sort_by(|&a, &b| {
-                let cmp = snap.active_queries[a]
-                    .duration_secs
-                    .partial_cmp(&snap.active_queries[b].duration_secs)
-                    .unwrap_or(std::cmp::Ordering::Equal);
-                if asc { cmp } else { cmp.reverse() }
-            }),
-            SortColumn::State => indices.sort_by(|&a, &b| {
-                let cmp = snap.active_queries[a]
-                    .state
-                    .cmp(&snap.active_queries[b].state);
-                if asc { cmp } else { cmp.reverse() }
-            }),
-            SortColumn::User => indices.sort_by(|&a, &b| {
-                let cmp = snap.active_queries[a]
-                    .usename
-                    .cmp(&snap.active_queries[b].usename);
-                if asc { cmp } else { cmp.reverse() }
-            }),
+            SortColumn::Pid => sort_by_key(&mut indices, q, asc, |x| x.pid),
+            SortColumn::Duration => sort_by_key_partial(&mut indices, q, asc, |x| x.duration_secs),
+            SortColumn::State => sort_by_key(&mut indices, q, asc, |x| x.state.clone()),
+            SortColumn::User => sort_by_key(&mut indices, q, asc, |x| x.usename.clone()),
         }
         indices
     }
@@ -757,35 +753,13 @@ impl App {
         }
 
         let asc = self.indexes.sort_ascending;
+        let idx = &snap.indexes;
         match self.indexes.sort_column {
-            IndexSortColumn::Scans => indices.sort_by(|&a, &b| {
-                let cmp = snap.indexes[a].idx_scan.cmp(&snap.indexes[b].idx_scan);
-                if asc { cmp } else { cmp.reverse() }
-            }),
-            IndexSortColumn::Size => indices.sort_by(|&a, &b| {
-                let cmp = snap.indexes[a]
-                    .index_size_bytes
-                    .cmp(&snap.indexes[b].index_size_bytes);
-                if asc { cmp } else { cmp.reverse() }
-            }),
-            IndexSortColumn::Name => indices.sort_by(|&a, &b| {
-                let cmp = snap.indexes[a]
-                    .index_name
-                    .cmp(&snap.indexes[b].index_name);
-                if asc { cmp } else { cmp.reverse() }
-            }),
-            IndexSortColumn::TupRead => indices.sort_by(|&a, &b| {
-                let cmp = snap.indexes[a]
-                    .idx_tup_read
-                    .cmp(&snap.indexes[b].idx_tup_read);
-                if asc { cmp } else { cmp.reverse() }
-            }),
-            IndexSortColumn::TupFetch => indices.sort_by(|&a, &b| {
-                let cmp = snap.indexes[a]
-                    .idx_tup_fetch
-                    .cmp(&snap.indexes[b].idx_tup_fetch);
-                if asc { cmp } else { cmp.reverse() }
-            }),
+            IndexSortColumn::Scans => sort_by_key(&mut indices, idx, asc, |x| x.idx_scan),
+            IndexSortColumn::Size => sort_by_key(&mut indices, idx, asc, |x| x.index_size_bytes),
+            IndexSortColumn::Name => sort_by_key(&mut indices, idx, asc, |x| x.index_name.clone()),
+            IndexSortColumn::TupRead => sort_by_key(&mut indices, idx, asc, |x| x.idx_tup_read),
+            IndexSortColumn::TupFetch => sort_by_key(&mut indices, idx, asc, |x| x.idx_tup_fetch),
         }
         indices
     }
@@ -801,77 +775,18 @@ impl App {
         }
 
         let asc = self.statements.sort_ascending;
+        let s = &snap.stat_statements;
         match self.statements.sort_column {
-            StatementSortColumn::TotalTime => indices.sort_by(|&a, &b| {
-                let cmp = snap.stat_statements[a]
-                    .total_exec_time
-                    .partial_cmp(&snap.stat_statements[b].total_exec_time)
-                    .unwrap_or(std::cmp::Ordering::Equal);
-                if asc { cmp } else { cmp.reverse() }
-            }),
-            StatementSortColumn::MeanTime => indices.sort_by(|&a, &b| {
-                let cmp = snap.stat_statements[a]
-                    .mean_exec_time
-                    .partial_cmp(&snap.stat_statements[b].mean_exec_time)
-                    .unwrap_or(std::cmp::Ordering::Equal);
-                if asc { cmp } else { cmp.reverse() }
-            }),
-            StatementSortColumn::MaxTime => indices.sort_by(|&a, &b| {
-                let cmp = snap.stat_statements[a]
-                    .max_exec_time
-                    .partial_cmp(&snap.stat_statements[b].max_exec_time)
-                    .unwrap_or(std::cmp::Ordering::Equal);
-                if asc { cmp } else { cmp.reverse() }
-            }),
-            StatementSortColumn::Stddev => indices.sort_by(|&a, &b| {
-                let cmp = snap.stat_statements[a]
-                    .stddev_exec_time
-                    .partial_cmp(&snap.stat_statements[b].stddev_exec_time)
-                    .unwrap_or(std::cmp::Ordering::Equal);
-                if asc { cmp } else { cmp.reverse() }
-            }),
-            StatementSortColumn::Calls => indices.sort_by(|&a, &b| {
-                let cmp = snap.stat_statements[a]
-                    .calls
-                    .cmp(&snap.stat_statements[b].calls);
-                if asc { cmp } else { cmp.reverse() }
-            }),
-            StatementSortColumn::Rows => indices.sort_by(|&a, &b| {
-                let cmp = snap.stat_statements[a]
-                    .rows
-                    .cmp(&snap.stat_statements[b].rows);
-                if asc { cmp } else { cmp.reverse() }
-            }),
-            StatementSortColumn::HitRatio => indices.sort_by(|&a, &b| {
-                let cmp = snap.stat_statements[a]
-                    .hit_ratio
-                    .partial_cmp(&snap.stat_statements[b].hit_ratio)
-                    .unwrap_or(std::cmp::Ordering::Equal);
-                if asc { cmp } else { cmp.reverse() }
-            }),
-            StatementSortColumn::SharedReads => indices.sort_by(|&a, &b| {
-                let cmp = snap.stat_statements[a]
-                    .shared_blks_read
-                    .cmp(&snap.stat_statements[b].shared_blks_read);
-                if asc { cmp } else { cmp.reverse() }
-            }),
-            StatementSortColumn::IoTime => indices.sort_by(|&a, &b| {
-                let io = |s: &crate::db::models::StatStatement| {
-                    s.blk_read_time + s.blk_write_time
-                };
-                let cmp = io(&snap.stat_statements[a])
-                    .partial_cmp(&io(&snap.stat_statements[b]))
-                    .unwrap_or(std::cmp::Ordering::Equal);
-                if asc { cmp } else { cmp.reverse() }
-            }),
-            StatementSortColumn::Temp => indices.sort_by(|&a, &b| {
-                let temp = |s: &crate::db::models::StatStatement| {
-                    s.temp_blks_read + s.temp_blks_written
-                };
-                let cmp = temp(&snap.stat_statements[a])
-                    .cmp(&temp(&snap.stat_statements[b]));
-                if asc { cmp } else { cmp.reverse() }
-            }),
+            StatementSortColumn::TotalTime => sort_by_key_partial(&mut indices, s, asc, |x| x.total_exec_time),
+            StatementSortColumn::MeanTime => sort_by_key_partial(&mut indices, s, asc, |x| x.mean_exec_time),
+            StatementSortColumn::MaxTime => sort_by_key_partial(&mut indices, s, asc, |x| x.max_exec_time),
+            StatementSortColumn::Stddev => sort_by_key_partial(&mut indices, s, asc, |x| x.stddev_exec_time),
+            StatementSortColumn::Calls => sort_by_key(&mut indices, s, asc, |x| x.calls),
+            StatementSortColumn::Rows => sort_by_key(&mut indices, s, asc, |x| x.rows),
+            StatementSortColumn::HitRatio => sort_by_key_partial(&mut indices, s, asc, |x| x.hit_ratio),
+            StatementSortColumn::SharedReads => sort_by_key(&mut indices, s, asc, |x| x.shared_blks_read),
+            StatementSortColumn::IoTime => sort_by_key_partial(&mut indices, s, asc, |x| x.blk_read_time + x.blk_write_time),
+            StatementSortColumn::Temp => sort_by_key(&mut indices, s, asc, |x| x.temp_blks_read + x.temp_blks_written),
         }
         indices
     }
@@ -887,44 +802,14 @@ impl App {
         }
 
         let asc = self.table_stats.sort_ascending;
+        let t = &snap.table_stats;
         match self.table_stats.sort_column {
-            TableStatSortColumn::DeadTuples => indices.sort_by(|&a, &b| {
-                let cmp = snap.table_stats[a]
-                    .n_dead_tup
-                    .cmp(&snap.table_stats[b].n_dead_tup);
-                if asc { cmp } else { cmp.reverse() }
-            }),
-            TableStatSortColumn::Size => indices.sort_by(|&a, &b| {
-                let cmp = snap.table_stats[a]
-                    .total_size_bytes
-                    .cmp(&snap.table_stats[b].total_size_bytes);
-                if asc { cmp } else { cmp.reverse() }
-            }),
-            TableStatSortColumn::Name => indices.sort_by(|&a, &b| {
-                let cmp = snap.table_stats[a]
-                    .relname
-                    .cmp(&snap.table_stats[b].relname);
-                if asc { cmp } else { cmp.reverse() }
-            }),
-            TableStatSortColumn::SeqScan => indices.sort_by(|&a, &b| {
-                let cmp = snap.table_stats[a]
-                    .seq_scan
-                    .cmp(&snap.table_stats[b].seq_scan);
-                if asc { cmp } else { cmp.reverse() }
-            }),
-            TableStatSortColumn::IdxScan => indices.sort_by(|&a, &b| {
-                let cmp = snap.table_stats[a]
-                    .idx_scan
-                    .cmp(&snap.table_stats[b].idx_scan);
-                if asc { cmp } else { cmp.reverse() }
-            }),
-            TableStatSortColumn::DeadRatio => indices.sort_by(|&a, &b| {
-                let cmp = snap.table_stats[a]
-                    .dead_ratio
-                    .partial_cmp(&snap.table_stats[b].dead_ratio)
-                    .unwrap_or(std::cmp::Ordering::Equal);
-                if asc { cmp } else { cmp.reverse() }
-            }),
+            TableStatSortColumn::DeadTuples => sort_by_key(&mut indices, t, asc, |x| x.n_dead_tup),
+            TableStatSortColumn::Size => sort_by_key(&mut indices, t, asc, |x| x.total_size_bytes),
+            TableStatSortColumn::Name => sort_by_key(&mut indices, t, asc, |x| x.relname.clone()),
+            TableStatSortColumn::SeqScan => sort_by_key(&mut indices, t, asc, |x| x.seq_scan),
+            TableStatSortColumn::IdxScan => sort_by_key(&mut indices, t, asc, |x| x.idx_scan),
+            TableStatSortColumn::DeadRatio => sort_by_key_partial(&mut indices, t, asc, |x| x.dead_ratio),
         }
         indices
     }
