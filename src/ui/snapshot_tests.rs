@@ -655,15 +655,17 @@ fn header_live_with_ssl() {
 
 #[test]
 fn header_replay_mode() {
+    use crate::app::ReplayState;
     let backend = TestBackend::new(100, 1);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
-    app.replay_mode = true;
-    app.replay_filename = Some("recording-2024-01-15.jsonl".to_string());
-    app.replay_position = 42;
-    app.replay_total = 100;
-    app.replay_speed = 2.0;
-    app.replay_playing = true;
+    app.replay = Some(ReplayState {
+        filename: "recording-2024-01-15.jsonl".to_string(),
+        position: 42,
+        total: 100,
+        speed: 2.0,
+        playing: true,
+    });
 
     terminal.draw(|frame| {
         super::header::render(frame, &app, frame.area());
@@ -674,15 +676,17 @@ fn header_replay_mode() {
 
 #[test]
 fn header_replay_paused() {
+    use crate::app::ReplayState;
     let backend = TestBackend::new(100, 1);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
-    app.replay_mode = true;
-    app.replay_filename = Some("recording-2024-01-15.jsonl".to_string());
-    app.replay_position = 42;
-    app.replay_total = 100;
-    app.replay_speed = 0.5;
-    app.replay_playing = false;
+    app.replay = Some(ReplayState {
+        filename: "recording-2024-01-15.jsonl".to_string(),
+        position: 42,
+        total: 100,
+        speed: 0.5,
+        playing: false,
+    });
 
     terminal.draw(|frame| {
         super::header::render(frame, &app, frame.area());
@@ -753,10 +757,11 @@ fn footer_filter_mode() {
 
 #[test]
 fn footer_replay_mode() {
+    use crate::app::ReplayState;
     let backend = TestBackend::new(120, 2);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
-    app.replay_mode = true;
+    app.replay = Some(ReplayState::new("test.jsonl".to_string(), 10));
 
     terminal.draw(|frame| {
         super::footer::render(frame, &app, frame.area());
@@ -1564,15 +1569,17 @@ fn full_layout_with_config_overlay() {
 
 #[test]
 fn full_layout_replay_mode() {
+    use crate::app::ReplayState;
     let backend = TestBackend::new(140, 40);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
-    app.replay_mode = true;
-    app.replay_filename = Some("recording-2024-01-15.jsonl".to_string());
-    app.replay_position = 42;
-    app.replay_total = 100;
-    app.replay_speed = 1.0;
-    app.replay_playing = true;
+    app.replay = Some(ReplayState {
+        filename: "recording-2024-01-15.jsonl".to_string(),
+        position: 42,
+        total: 100,
+        speed: 1.0,
+        playing: true,
+    });
 
     terminal.draw(|frame| {
         super::render(frame, &mut app);

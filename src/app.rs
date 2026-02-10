@@ -212,6 +212,27 @@ impl StatementSortColumn {
     }
 }
 
+/// State for replay mode (when reviewing recorded sessions)
+pub struct ReplayState {
+    pub filename: String,
+    pub position: usize,
+    pub total: usize,
+    pub speed: f64,
+    pub playing: bool,
+}
+
+impl ReplayState {
+    pub fn new(filename: String, total: usize) -> Self {
+        Self {
+            filename,
+            position: 0,
+            total,
+            speed: 1.0,
+            playing: false,
+        }
+    }
+}
+
 pub struct App {
     pub running: bool,
     pub paused: bool,
@@ -272,12 +293,7 @@ pub struct App {
 
     pub filter_text: String,
     pub filter_active: bool,
-    pub replay_mode: bool,
-    pub replay_filename: Option<String>,
-    pub replay_position: usize,
-    pub replay_total: usize,
-    pub replay_speed: f64,
-    pub replay_playing: bool,
+    pub replay: Option<ReplayState>,
     pub overlay_scroll: u16,
     pub ssl_mode_label: Option<String>,
 }
@@ -344,12 +360,7 @@ impl App {
             config_selected: 0,
             filter_text: String::new(),
             filter_active: false,
-            replay_mode: false,
-            replay_filename: None,
-            replay_position: 0,
-            replay_total: 0,
-            replay_speed: 1.0,
-            replay_playing: false,
+            replay: None,
             overlay_scroll: 0,
             ssl_mode_label: None,
         }
@@ -372,10 +383,13 @@ impl App {
         total_snapshots: usize,
     ) -> Self {
         let mut app = Self::new(host, port, dbname, user, 0, history_len, config, server_info);
-        app.replay_mode = true;
-        app.replay_filename = Some(filename);
-        app.replay_total = total_snapshots;
+        app.replay = Some(ReplayState::new(filename, total_snapshots));
         app
+    }
+
+    /// Returns true if in replay mode
+    pub fn is_replay_mode(&self) -> bool {
+        self.replay.is_some()
     }
 
     pub fn update(&mut self, mut snapshot: PgSnapshot) {
@@ -970,7 +984,7 @@ impl App {
                     self.view_mode = ViewMode::Inspect;
                 }
             }
-            KeyCode::Char('K') if !self.replay_mode => {
+            KeyCode::Char('K') if self.replay.is_none() => {
                 if let Some(pid) = self.selected_query_pid() {
                     let filtered_pids = self.get_filtered_pids();
                     if self.filter_active && filtered_pids.len() > 1 {
@@ -985,7 +999,7 @@ impl App {
                     }
                 }
             }
-            KeyCode::Char('C') if !self.replay_mode => {
+            KeyCode::Char('C') if self.replay.is_none() => {
                 if let Some(pid) = self.selected_query_pid() {
                     let filtered_pids = self.get_filtered_pids();
                     if self.filter_active && filtered_pids.len() > 1 {
@@ -1053,7 +1067,7 @@ impl App {
                     );
                 }
             }
-            KeyCode::Char('b') if !self.replay_mode => {
+            KeyCode::Char('b') if self.replay.is_none() => {
                 self.pending_action = Some(AppAction::RefreshBloat);
                 self.status_message = Some("Refreshing bloat estimates...".to_string());
                 self.bloat_loading = true;
@@ -1144,7 +1158,7 @@ impl App {
                     if self.table_stat_sort_ascending { "\u{2191}" } else { "\u{2193}" }
                 ));
             }
-            KeyCode::Char('b') if !self.replay_mode => {
+            KeyCode::Char('b') if self.replay.is_none() => {
                 self.pending_action = Some(AppAction::RefreshBloat);
                 self.status_message = Some("Refreshing bloat estimates...".to_string());
                 self.bloat_loading = true;
@@ -1670,11 +1684,11 @@ impl App {
                 }
                 true
             }
-            KeyCode::Char('p') if !self.replay_mode => {
+            KeyCode::Char('p') if self.replay.is_none() => {
                 self.paused = !self.paused;
                 true
             }
-            KeyCode::Char('r') if !self.replay_mode => {
+            KeyCode::Char('r') if self.replay.is_none() => {
                 self.pending_action = Some(AppAction::ForceRefresh);
                 true
             }
@@ -3071,9 +3085,10 @@ mod tests {
     #[test]
     fn replay_mode_state() {
         let app = make_replay_app();
-        assert!(app.replay_mode);
-        assert_eq!(app.replay_filename, Some("test.jsonl".to_string()));
-        assert_eq!(app.replay_total, 10);
+        assert!(app.is_replay_mode());
+        let replay = app.replay.as_ref().unwrap();
+        assert_eq!(replay.filename, "test.jsonl");
+        assert_eq!(replay.total, 10);
     }
 
     #[test]

@@ -518,7 +518,9 @@ async fn run_replay(path: &Path, config: AppConfig) -> Result<()> {
     // Feed first snapshot
     if let Some(snap) = session.current() {
         app.update(snap.clone());
-        app.replay_position = 1;
+        if let Some(ref mut replay) = app.replay {
+            replay.position = 1;
+        }
     }
 
     let mut terminal = ratatui::init();
@@ -530,18 +532,24 @@ async fn run_replay(path: &Path, config: AppConfig) -> Result<()> {
         terminal.draw(|frame| ui::render(frame, &mut app))?;
 
         // Auto-advance when playing
-        if app.replay_playing && !session.at_end() {
-            let interval = compute_replay_interval(&session, app.replay_speed);
+        let should_advance = app.replay.as_ref().is_some_and(|r| r.playing && !session.at_end());
+        if should_advance {
+            let speed = app.replay.as_ref().map_or(1.0, |r| r.speed);
+            let interval = compute_replay_interval(&session, speed);
             if last_advance.elapsed() >= interval {
                 if session.step_forward() {
                     if let Some(snap) = session.current() {
                         app.update(snap.clone());
-                        app.replay_position = session.position + 1;
+                        if let Some(ref mut replay) = app.replay {
+                            replay.position = session.position + 1;
+                        }
                     }
                 }
                 last_advance = Instant::now();
                 if session.at_end() {
-                    app.replay_playing = false;
+                    if let Some(ref mut replay) = app.replay {
+                        replay.playing = false;
+                    }
                 }
             }
         }
@@ -583,9 +591,13 @@ fn handle_replay_key(
     code: KeyCode,
     last_advance: &mut Instant,
 ) -> bool {
+    let Some(ref mut replay) = app.replay else {
+        return false;
+    };
+
     match code {
         KeyCode::Char(' ') => {
-            app.replay_playing = !app.replay_playing;
+            replay.playing = !replay.playing;
             *last_advance = Instant::now();
             true
         }
@@ -595,7 +607,9 @@ fn handle_replay_key(
             if session.step_forward() {
                 if let Some(snap) = session.current() {
                     app.update(snap.clone());
-                    app.replay_position = session.position + 1;
+                    if let Some(ref mut replay) = app.replay {
+                        replay.position = session.position + 1;
+                    }
                 }
             }
             true
@@ -606,24 +620,28 @@ fn handle_replay_key(
             if session.step_back() {
                 if let Some(snap) = session.current() {
                     app.update(snap.clone());
-                    app.replay_position = session.position + 1;
+                    if let Some(ref mut replay) = app.replay {
+                        replay.position = session.position + 1;
+                    }
                 }
             }
             true
         }
         KeyCode::Char('>') => {
-            app.replay_speed = next_speed(app.replay_speed);
+            replay.speed = next_speed(replay.speed);
             true
         }
         KeyCode::Char('<') => {
-            app.replay_speed = prev_speed(app.replay_speed);
+            replay.speed = prev_speed(replay.speed);
             true
         }
         KeyCode::Char('g') if app.view_mode == app::ViewMode::Normal => {
             session.jump_start();
             if let Some(snap) = session.current() {
                 app.update(snap.clone());
-                app.replay_position = session.position + 1;
+                if let Some(ref mut replay) = app.replay {
+                    replay.position = session.position + 1;
+                }
             }
             true
         }
@@ -631,9 +649,11 @@ fn handle_replay_key(
             session.jump_end();
             if let Some(snap) = session.current() {
                 app.update(snap.clone());
-                app.replay_position = session.position + 1;
+                if let Some(ref mut replay) = app.replay {
+                    replay.position = session.position + 1;
+                    replay.playing = false;
+                }
             }
-            app.replay_playing = false;
             true
         }
         _ => false,

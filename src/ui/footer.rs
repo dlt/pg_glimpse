@@ -13,7 +13,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         return;
     }
 
-    if app.replay_mode {
+    if app.is_replay_mode() {
         render_replay(frame, app, area);
     } else {
         render_live(frame, app, area);
@@ -184,7 +184,7 @@ fn render_panel_keys<'a>(
             spans.push(dot());
             spans.push(key("/"));
             spans.push(desc(" filter"));
-            if !app.replay_mode {
+            if !app.is_replay_mode() {
                 spans.push(dot());
                 spans.push(key("C"));
                 spans.push(desc("/"));

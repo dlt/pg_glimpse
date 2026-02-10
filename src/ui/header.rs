@@ -9,8 +9,8 @@ use super::theme::Theme;
 use super::util::truncate;
 
 pub fn render(frame: &mut Frame, app: &App, area: Rect) {
-    if app.replay_mode {
-        render_replay(frame, app, area);
+    if let Some(ref replay) = app.replay {
+        render_replay(frame, app, replay, area);
     } else {
         render_live(frame, app, area);
     }
@@ -124,19 +124,14 @@ fn render_live(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, area);
 }
 
-fn render_replay(frame: &mut Frame, app: &App, area: Rect) {
-    let filename = app
-        .replay_filename
-        .as_deref()
-        .unwrap_or("unknown");
-
+fn render_replay(frame: &mut Frame, app: &App, replay: &crate::app::ReplayState, area: Rect) {
     let snap_ts = app
         .snapshot
         .as_ref()
         .map(|s| s.timestamp.format("%H:%M:%S").to_string())
         .unwrap_or_else(|| "--:--:--".to_string());
 
-    let speed_label = format_speed(app.replay_speed);
+    let speed_label = format_speed(replay.speed);
 
     let brand_style = Style::default()
         .fg(Theme::header_bg())
@@ -151,16 +146,16 @@ fn render_replay(frame: &mut Frame, app: &App, area: Rect) {
         Span::styled("  ", dim_style),
         Span::styled("◆ ", Style::default().fg(Theme::border_warn())),
         Span::styled(
-            truncate(filename, 35),
+            truncate(&replay.filename, 35),
             normal_style,
         ),
         Span::styled("  ", dim_style),
         Span::styled(
-            format!("{}", app.replay_position),
+            format!("{}", replay.position),
             Style::default().fg(Theme::border_active()).add_modifier(Modifier::BOLD),
         ),
         Span::styled(
-            format!("/{}", app.replay_total),
+            format!("/{}", replay.total),
             label_style,
         ),
         Span::styled("  ", dim_style),
@@ -169,7 +164,7 @@ fn render_replay(frame: &mut Frame, app: &App, area: Rect) {
         Span::styled("  ", dim_style),
     ];
 
-    if app.replay_playing {
+    if replay.playing {
         spans.push(Span::styled(
             " ▶ PLAYING ",
             Style::default()
