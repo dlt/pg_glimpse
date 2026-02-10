@@ -1502,217 +1502,100 @@ impl App {
         }
     }
 
-    fn handle_inspect_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
-                self.overlay_scroll = 0;
-                self.view_mode = ViewMode::Normal;
+    /// Get the text to copy for the current inspect overlay
+    fn get_inspect_copy_text(&self) -> Option<String> {
+        match self.view_mode {
+            ViewMode::Inspect => {
+                let snap = self.snapshot.as_ref()?;
+                let idx = self.queries.selected().unwrap_or(0);
+                let indices = self.sorted_query_indices();
+                let &real_idx = indices.get(idx)?;
+                snap.active_queries[real_idx].query.clone()
             }
-            KeyCode::Char('y') => {
-                if let Some(snap) = &self.snapshot {
-                    let idx = self.queries.selected().unwrap_or(0);
-                    let indices = self.sorted_query_indices();
-                    if let Some(&real_idx) = indices.get(idx) {
-                        if let Some(ref q) = snap.active_queries[real_idx].query {
-                            let text = q.clone();
-                            self.copy_to_clipboard(&text);
-                        }
-                    }
-                }
+            ViewMode::IndexInspect => {
+                let snap = self.snapshot.as_ref()?;
+                let idx = self.indexes.selected().unwrap_or(0);
+                let indices = self.sorted_index_indices();
+                let &real_idx = indices.get(idx)?;
+                Some(snap.indexes[real_idx].index_definition.clone())
             }
-            _ => {
-                self.handle_overlay_scroll(key);
+            ViewMode::StatementInspect => {
+                let snap = self.snapshot.as_ref()?;
+                let idx = self.statements.selected().unwrap_or(0);
+                let indices = self.sorted_stmt_indices();
+                let &real_idx = indices.get(idx)?;
+                Some(snap.stat_statements[real_idx].query.clone())
             }
-        }
-    }
-
-    fn handle_index_inspect_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Esc | KeyCode::Char('q') => {
-                self.overlay_scroll = 0;
-                self.view_mode = ViewMode::Normal;
+            ViewMode::ReplicationInspect => {
+                let snap = self.snapshot.as_ref()?;
+                let sel = self.replication_table_state.selected().unwrap_or(0);
+                let r = snap.replication.get(sel)?;
+                Some(r.application_name.clone().unwrap_or_default())
             }
-            KeyCode::Char('y') => {
-                if let Some(snap) = &self.snapshot {
-                    let idx = self.indexes.selected().unwrap_or(0);
-                    let indices = self.sorted_index_indices();
-                    if let Some(&real_idx) = indices.get(idx) {
-                        let text = snap.indexes[real_idx].index_definition.clone();
-                        self.copy_to_clipboard(&text);
-                    }
-                }
+            ViewMode::TableInspect => {
+                let snap = self.snapshot.as_ref()?;
+                let sel = self.table_stats.selected().unwrap_or(0);
+                let indices = self.sorted_table_stat_indices();
+                let &real_idx = indices.get(sel)?;
+                let t = &snap.table_stats[real_idx];
+                Some(format!("{}.{}", t.schemaname, t.relname))
             }
-            _ => {
-                self.handle_overlay_scroll(key);
+            ViewMode::BlockingInspect => {
+                let snap = self.snapshot.as_ref()?;
+                let sel = self.blocking_table_state.selected().unwrap_or(0);
+                let info = snap.blocking_info.get(sel)?;
+                Some(info.blocked_query.clone().unwrap_or_default())
             }
-        }
-    }
-
-    fn handle_statement_inspect_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Esc | KeyCode::Char('q') => {
-                self.overlay_scroll = 0;
-                self.view_mode = ViewMode::Normal;
+            ViewMode::VacuumInspect => {
+                let snap = self.snapshot.as_ref()?;
+                let sel = self.vacuum_table_state.selected().unwrap_or(0);
+                let vac = snap.vacuum_progress.get(sel)?;
+                Some(vac.table_name.clone())
             }
-            KeyCode::Char('y') => {
-                if let Some(snap) = &self.snapshot {
-                    let idx = self.statements.selected().unwrap_or(0);
-                    let indices = self.sorted_stmt_indices();
-                    if let Some(&real_idx) = indices.get(idx) {
-                        let text = snap.stat_statements[real_idx].query.clone();
-                        self.copy_to_clipboard(&text);
-                    }
-                }
+            ViewMode::WraparoundInspect => {
+                let snap = self.snapshot.as_ref()?;
+                let sel = self.wraparound_table_state.selected().unwrap_or(0);
+                let wrap = snap.wraparound.get(sel)?;
+                Some(wrap.datname.clone())
             }
-            _ => {
-                self.handle_overlay_scroll(key);
-            }
-        }
-    }
-
-    fn handle_replication_inspect_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Esc | KeyCode::Char('q') => {
-                self.overlay_scroll = 0;
-                self.view_mode = ViewMode::Normal;
-            }
-            KeyCode::Char('y') => {
-                if let Some(snap) = &self.snapshot {
-                    let sel = self.replication_table_state.selected().unwrap_or(0);
-                    if let Some(r) = snap.replication.get(sel) {
-                        let text = r.application_name.clone().unwrap_or_default();
-                        self.copy_to_clipboard(&text);
-                    }
-                }
-            }
-            _ => {
-                self.handle_overlay_scroll(key);
-            }
-        }
-    }
-
-    fn handle_table_inspect_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Esc | KeyCode::Char('q') => {
-                self.overlay_scroll = 0;
-                self.view_mode = ViewMode::Normal;
-            }
-            KeyCode::Char('y') => {
-                if let Some(snap) = &self.snapshot {
-                    let sel = self.table_stats.selected().unwrap_or(0);
-                    let indices = self.sorted_table_stat_indices();
-                    if let Some(&real_idx) = indices.get(sel) {
-                        let t = &snap.table_stats[real_idx];
-                        let text = format!("{}.{}", t.schemaname, t.relname);
-                        self.copy_to_clipboard(&text);
-                    }
-                }
-            }
-            _ => {
-                self.handle_overlay_scroll(key);
-            }
-        }
-    }
-
-    fn handle_blocking_inspect_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Esc | KeyCode::Char('q') => {
-                self.overlay_scroll = 0;
-                self.view_mode = ViewMode::Normal;
-            }
-            KeyCode::Char('y') => {
-                if let Some(snap) = &self.snapshot {
-                    let sel = self.blocking_table_state.selected().unwrap_or(0);
-                    if let Some(info) = snap.blocking_info.get(sel) {
-                        let text = info.blocked_query.clone().unwrap_or_default();
-                        self.copy_to_clipboard(&text);
-                    }
-                }
-            }
-            _ => {
-                self.handle_overlay_scroll(key);
-            }
-        }
-    }
-
-    fn handle_vacuum_inspect_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Esc | KeyCode::Char('q') => {
-                self.overlay_scroll = 0;
-                self.view_mode = ViewMode::Normal;
-            }
-            KeyCode::Char('y') => {
-                if let Some(snap) = &self.snapshot {
-                    let sel = self.vacuum_table_state.selected().unwrap_or(0);
-                    if let Some(vac) = snap.vacuum_progress.get(sel) {
-                        let text = vac.table_name.clone();
-                        self.copy_to_clipboard(&text);
-                    }
-                }
-            }
-            _ => {
-                self.handle_overlay_scroll(key);
-            }
-        }
-    }
-
-    fn handle_wraparound_inspect_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Esc | KeyCode::Char('q') => {
-                self.overlay_scroll = 0;
-                self.view_mode = ViewMode::Normal;
-            }
-            KeyCode::Char('y') => {
-                if let Some(snap) = &self.snapshot {
-                    let sel = self.wraparound_table_state.selected().unwrap_or(0);
-                    if let Some(wrap) = snap.wraparound.get(sel) {
-                        let text = wrap.datname.clone();
-                        self.copy_to_clipboard(&text);
-                    }
-                }
-            }
-            _ => {
-                self.handle_overlay_scroll(key);
-            }
-        }
-    }
-
-    fn handle_settings_inspect_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Esc | KeyCode::Char('q') => {
-                self.overlay_scroll = 0;
-                self.view_mode = ViewMode::Normal;
-            }
-            KeyCode::Char('y') => {
+            ViewMode::SettingsInspect => {
                 let indices = self.sorted_settings_indices();
-                if let Some(&idx) = indices.get(self.settings_table_state.selected().unwrap_or(0)) {
-                    let s = &self.server_info.settings[idx];
-                    self.copy_to_clipboard(&format!("{} = {}", s.name, s.setting));
-                }
+                let &idx = indices.get(self.settings_table_state.selected().unwrap_or(0))?;
+                let s = &self.server_info.settings[idx];
+                Some(format!("{} = {}", s.name, s.setting))
             }
-            _ => {
-                self.handle_overlay_scroll(key);
+            ViewMode::ExtensionsInspect => {
+                let indices = self.sorted_extensions_indices();
+                let &idx = indices.get(self.extensions_table_state.selected().unwrap_or(0))?;
+                Some(self.server_info.extensions_list[idx].name.clone())
             }
+            _ => None,
         }
     }
 
-    fn handle_extensions_inspect_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Esc | KeyCode::Char('q') => {
-                self.overlay_scroll = 0;
-                self.view_mode = ViewMode::Normal;
-            }
-            KeyCode::Char('y') => {
-                let indices = self.sorted_extensions_indices();
-                if let Some(&idx) = indices.get(self.extensions_table_state.selected().unwrap_or(0)) {
-                    let name = self.server_info.extensions_list[idx].name.clone();
-                    self.copy_to_clipboard(&name);
-                }
-            }
-            _ => {
-                self.handle_overlay_scroll(key);
-            }
+    /// Unified handler for all inspect overlay key events.
+    /// `allow_enter_close` is true for Query inspect (legacy behavior).
+    fn handle_inspect_overlay_key(&mut self, key: KeyEvent, allow_enter_close: bool) {
+        let close = match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => true,
+            KeyCode::Enter if allow_enter_close => true,
+            _ => false,
+        };
+
+        if close {
+            self.overlay_scroll = 0;
+            self.view_mode = ViewMode::Normal;
+            return;
         }
+
+        if key.code == KeyCode::Char('y') {
+            if let Some(text) = self.get_inspect_copy_text() {
+                self.copy_to_clipboard(&text);
+            }
+            return;
+        }
+
+        self.handle_overlay_scroll(key);
     }
 
     fn handle_config_key(&mut self, key: KeyEvent) {
@@ -1920,43 +1803,19 @@ impl App {
                 return;
             }
             ViewMode::Inspect => {
-                self.handle_inspect_key(key);
+                self.handle_inspect_overlay_key(key, true); // Query inspect allows Enter to close
                 return;
             }
-            ViewMode::IndexInspect => {
-                self.handle_index_inspect_key(key);
-                return;
-            }
-            ViewMode::StatementInspect => {
-                self.handle_statement_inspect_key(key);
-                return;
-            }
-            ViewMode::ReplicationInspect => {
-                self.handle_replication_inspect_key(key);
-                return;
-            }
-            ViewMode::TableInspect => {
-                self.handle_table_inspect_key(key);
-                return;
-            }
-            ViewMode::BlockingInspect => {
-                self.handle_blocking_inspect_key(key);
-                return;
-            }
-            ViewMode::VacuumInspect => {
-                self.handle_vacuum_inspect_key(key);
-                return;
-            }
-            ViewMode::WraparoundInspect => {
-                self.handle_wraparound_inspect_key(key);
-                return;
-            }
-            ViewMode::SettingsInspect => {
-                self.handle_settings_inspect_key(key);
-                return;
-            }
-            ViewMode::ExtensionsInspect => {
-                self.handle_extensions_inspect_key(key);
+            ViewMode::IndexInspect
+            | ViewMode::StatementInspect
+            | ViewMode::ReplicationInspect
+            | ViewMode::TableInspect
+            | ViewMode::BlockingInspect
+            | ViewMode::VacuumInspect
+            | ViewMode::WraparoundInspect
+            | ViewMode::SettingsInspect
+            | ViewMode::ExtensionsInspect => {
+                self.handle_inspect_overlay_key(key, false);
                 return;
             }
             ViewMode::Config => {
