@@ -1815,7 +1815,7 @@ mod tests {
         for (ch, expected) in cases {
             let mut app = make_app();
             app.handle_key(key(KeyCode::Char(ch)));
-            assert_eq!(app.bottom_panel, expected, "Key '{}' should switch to {:?}", ch, expected);
+            assert_eq!(app.bottom_panel, expected, "Key '{ch}' should switch to {expected:?}");
         }
     }
 
@@ -1845,7 +1845,7 @@ mod tests {
             let mut app = make_app();
             app.bottom_panel = panel;
             app.handle_key(key(KeyCode::Char('/')));
-            assert_eq!(app.view_mode, ViewMode::Filter, "Filter should open on {:?}", panel);
+            assert_eq!(app.view_mode, ViewMode::Filter, "Filter should open on {panel:?}");
         }
     }
 
@@ -1862,7 +1862,7 @@ mod tests {
             let mut app = make_app();
             app.bottom_panel = panel;
             app.handle_key(key(KeyCode::Char('/')));
-            assert_eq!(app.view_mode, ViewMode::Normal, "Filter should not open on {:?}", panel);
+            assert_eq!(app.view_mode, ViewMode::Normal, "Filter should not open on {panel:?}");
         }
     }
 
@@ -2099,14 +2099,14 @@ mod tests {
             app.overlay_scroll = 5;
 
             app.handle_key(key(KeyCode::Down));
-            assert_eq!(app.overlay_scroll, 6, "Down should scroll in {:?}", mode);
+            assert_eq!(app.overlay_scroll, 6, "Down should scroll in {mode:?}");
 
             app.handle_key(key(KeyCode::Char('k')));
-            assert_eq!(app.overlay_scroll, 5, "k should scroll up in {:?}", mode);
+            assert_eq!(app.overlay_scroll, 5, "k should scroll up in {mode:?}");
 
             app.handle_key(key(KeyCode::Esc));
-            assert_eq!(app.view_mode, ViewMode::Normal, "Esc should exit {:?}", mode);
-            assert_eq!(app.overlay_scroll, 0, "Overlay scroll should reset after {:?}", mode);
+            assert_eq!(app.view_mode, ViewMode::Normal, "Esc should exit {mode:?}");
+            assert_eq!(app.overlay_scroll, 0, "Overlay scroll should reset after {mode:?}");
         }
     }
 
@@ -2850,12 +2850,12 @@ mod tests {
         // TPS should be (190 + 10) / 2 = 100 TPS
         assert!(app.metrics.current_tps.is_some());
         let tps = app.metrics.current_tps.unwrap();
-        assert!((tps - 100.0).abs() < 0.1, "Expected ~100 TPS, got {}", tps);
+        assert!((tps - 100.0).abs() < 0.1, "Expected ~100 TPS, got {tps}");
 
         // Blks/sec should be 100 / 2 = 50
         assert!(app.metrics.current_blks_read_rate.is_some());
         let blks = app.metrics.current_blks_read_rate.unwrap();
-        assert!((blks - 50.0).abs() < 0.1, "Expected ~50 blks/s, got {}", blks);
+        assert!((blks - 50.0).abs() < 0.1, "Expected ~50 blks/s, got {blks}");
 
         // History should have one entry
         assert_eq!(app.metrics.tps.as_vec().len(), 1);
@@ -2915,8 +2915,7 @@ mod tests {
         let expected = 1_000_000.0; // 1 MB/s
         assert!(
             (wal_rate - expected).abs() < 1000.0,
-            "Expected ~1MB/s WAL rate, got {}",
-            wal_rate
+            "Expected ~1MB/s WAL rate, got {wal_rate}"
         );
 
         // History should have one entry (stored as KB/s)
@@ -3040,7 +3039,7 @@ mod tests {
         // TPS should be 10 / 0.1 = 100 TPS
         assert!(app.metrics.current_tps.is_some());
         let tps = app.metrics.current_tps.unwrap();
-        assert!((tps - 100.0).abs() < 1.0, "Expected ~100 TPS, got {}", tps);
+        assert!((tps - 100.0).abs() < 1.0, "Expected ~100 TPS, got {tps}");
     }
 
     #[test]

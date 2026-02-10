@@ -482,7 +482,7 @@ mod tests {
             ColorTheme::SolarizedLight,
             ColorTheme::CatppuccinLatte,
         ] {
-            assert!(!theme.label().is_empty(), "{:?} has empty label", theme);
+            assert!(!theme.label().is_empty(), "{theme:?} has empty label");
         }
     }
 
@@ -607,7 +607,7 @@ mod tests {
     #[test]
     fn config_item_labels_not_empty() {
         for item in ConfigItem::ALL {
-            assert!(!item.label().is_empty(), "{:?} has empty label", item);
+            assert!(!item.label().is_empty(), "{item:?} has empty label");
         }
     }
 
@@ -909,12 +909,11 @@ mod tests {
             ) {
                 let toml_str = format!(
                     r"
-                    refresh_interval_secs = {}
-                    warn_duration_secs = {}
-                    danger_duration_secs = {}
-                    recording_retention_secs = {}
-                    ",
-                    refresh, warn, danger, retention
+                    refresh_interval_secs = {refresh}
+                    warn_duration_secs = {warn}
+                    danger_duration_secs = {danger}
+                    recording_retention_secs = {retention}
+                    "
                 );
                 let result = toml::from_str::<AppConfig>(&toml_str);
                 prop_assert!(result.is_ok());
@@ -927,10 +926,9 @@ mod tests {
             fn toml_random_enum_values(marker in "[a-zA-Z0-9_]{1,20}", theme in "[a-zA-Z0-9_]{1,20}") {
                 let toml_str = format!(
                     r#"
-                    graph_marker = "{}"
-                    color_theme = "{}"
-                    "#,
-                    marker, theme
+                    graph_marker = "{marker}"
+                    color_theme = "{theme}"
+                    "#
                 );
                 // Should either parse (if valid enum) or return error
                 let _ = toml::from_str::<AppConfig>(&toml_str);
@@ -941,7 +939,7 @@ mod tests {
             fn toml_nested_structures(depth in 1usize..50) {
                 let open_brackets: String = "[".repeat(depth);
                 let close_brackets: String = "]".repeat(depth);
-                let input = format!("{}value{}", open_brackets, close_brackets);
+                let input = format!("{open_brackets}value{close_brackets}");
                 let _ = toml::from_str::<AppConfig>(&input);
             }
 
@@ -949,7 +947,7 @@ mod tests {
             #[test]
             fn toml_long_string_values(len in 100usize..10000) {
                 let long_value = "x".repeat(len);
-                let toml_str = format!(r#"graph_marker = "{}""#, long_value);
+                let toml_str = format!(r#"graph_marker = "{long_value}""#);
                 let _ = toml::from_str::<AppConfig>(&toml_str);
             }
 
@@ -963,7 +961,7 @@ mod tests {
             /// Negative numbers where unsigned expected should fail gracefully
             #[test]
             fn toml_negative_unsigned(n in -1_000_000i64..-1) {
-                let toml_str = format!("refresh_interval_secs = {}", n);
+                let toml_str = format!("refresh_interval_secs = {n}");
                 let result = toml::from_str::<AppConfig>(&toml_str);
                 prop_assert!(result.is_err());
             }
@@ -977,7 +975,7 @@ mod tests {
                 Just("NaN"),
                 Just("Infinity")
             ]) {
-                let toml_str = format!("warn_duration_secs = {}", special);
+                let toml_str = format!("warn_duration_secs = {special}");
                 // TOML doesn't support these, should fail
                 let _ = toml::from_str::<AppConfig>(&toml_str);
             }

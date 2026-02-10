@@ -75,15 +75,14 @@ const PG_INSTANCES: &[PgInstance] = &[
 /// Connect to a PostgreSQL test instance
 async fn connect(port: u16) -> Result<Client, tokio_postgres::Error> {
     let connstr = format!(
-        "host=localhost port={} user=test password=test dbname=test",
-        port
+        "host=localhost port={port} user=test password=test dbname=test"
     );
     let (client, connection) = tokio_postgres::connect(&connstr, NoTls).await?;
 
     // Spawn the connection handler
     tokio::spawn(async move {
         if let Err(e) = connection.await {
-            eprintln!("Connection error: {}", e);
+            eprintln!("Connection error: {e}");
         }
     });
 
@@ -121,7 +120,7 @@ async fn test_pg11_connection() {
         let row = client.query_one("SELECT version()", &[]).await.unwrap();
         let version: String = row.get(0);
         let major = extract_major_version(&version).unwrap();
-        assert_eq!(major, 11, "Expected PG11, got PG{}", major);
+        assert_eq!(major, 11, "Expected PG11, got PG{major}");
     } else {
         eprintln!("Skipping pg11 test - instance not available");
     }
@@ -133,7 +132,7 @@ async fn test_pg14_connection() {
         let row = client.query_one("SELECT version()", &[]).await.unwrap();
         let version: String = row.get(0);
         let major = extract_major_version(&version).unwrap();
-        assert_eq!(major, 14, "Expected PG14, got PG{}", major);
+        assert_eq!(major, 14, "Expected PG14, got PG{major}");
     } else {
         eprintln!("Skipping pg14 test - instance not available");
     }
@@ -145,7 +144,7 @@ async fn test_pg12_connection() {
         let row = client.query_one("SELECT version()", &[]).await.unwrap();
         let version: String = row.get(0);
         let major = extract_major_version(&version).unwrap();
-        assert_eq!(major, 12, "Expected PG12, got PG{}", major);
+        assert_eq!(major, 12, "Expected PG12, got PG{major}");
     } else {
         eprintln!("Skipping pg12 test - instance not available");
     }
@@ -157,7 +156,7 @@ async fn test_pg13_connection() {
         let row = client.query_one("SELECT version()", &[]).await.unwrap();
         let version: String = row.get(0);
         let major = extract_major_version(&version).unwrap();
-        assert_eq!(major, 13, "Expected PG13, got PG{}", major);
+        assert_eq!(major, 13, "Expected PG13, got PG{major}");
     } else {
         eprintln!("Skipping pg13 test - instance not available");
     }
@@ -169,7 +168,7 @@ async fn test_pg15_connection() {
         let row = client.query_one("SELECT version()", &[]).await.unwrap();
         let version: String = row.get(0);
         let major = extract_major_version(&version).unwrap();
-        assert_eq!(major, 15, "Expected PG15, got PG{}", major);
+        assert_eq!(major, 15, "Expected PG15, got PG{major}");
     } else {
         eprintln!("Skipping pg15 test - instance not available");
     }
@@ -181,7 +180,7 @@ async fn test_pg16_connection() {
         let row = client.query_one("SELECT version()", &[]).await.unwrap();
         let version: String = row.get(0);
         let major = extract_major_version(&version).unwrap();
-        assert_eq!(major, 16, "Expected PG16, got PG{}", major);
+        assert_eq!(major, 16, "Expected PG16, got PG{major}");
     } else {
         eprintln!("Skipping pg16 test - instance not available");
     }
@@ -193,7 +192,7 @@ async fn test_pg17_connection() {
         let row = client.query_one("SELECT version()", &[]).await.unwrap();
         let version: String = row.get(0);
         let major = extract_major_version(&version).unwrap();
-        assert_eq!(major, 17, "Expected PG17, got PG{}", major);
+        assert_eq!(major, 17, "Expected PG17, got PG{major}");
     } else {
         eprintln!("Skipping pg17 test - instance not available");
     }
@@ -205,7 +204,7 @@ async fn test_pg18_connection() {
         let row = client.query_one("SELECT version()", &[]).await.unwrap();
         let version: String = row.get(0);
         let major = extract_major_version(&version).unwrap();
-        assert_eq!(major, 18, "Expected PG18, got PG{}", major);
+        assert_eq!(major, 18, "Expected PG18, got PG{major}");
     } else {
         eprintln!("Skipping pg18 test - instance not available");
     }
@@ -550,8 +549,7 @@ async fn test_fetch_stat_statements_all_versions() {
             // Permission errors are acceptable in test environment
             assert!(
                 err.contains("permission") || err.contains("does not exist"),
-                "pg11: unexpected error: {}",
-                err
+                "pg11: unexpected error: {err}"
             );
         }
     }
@@ -572,8 +570,7 @@ async fn test_fetch_stat_statements_all_versions() {
         } else if let Some(ref err) = error {
             assert!(
                 err.contains("permission") || err.contains("does not exist"),
-                "pg14: unexpected error: {}",
-                err
+                "pg14: unexpected error: {err}"
             );
         }
     }
@@ -594,8 +591,7 @@ async fn test_fetch_stat_statements_all_versions() {
         } else if let Some(ref err) = error {
             assert!(
                 err.contains("permission") || err.contains("does not exist"),
-                "pg17: unexpected error: {}",
-                err
+                "pg17: unexpected error: {err}"
             );
         }
     }
@@ -998,20 +994,19 @@ async fn test_fetch_buffer_cache_all_versions() {
 async fn create_test_table(client: &Client, table_name: &str) -> Result<(), tokio_postgres::Error> {
     // Drop if exists
     let _ = client
-        .execute(&format!("DROP TABLE IF EXISTS {}", table_name), &[])
+        .execute(&format!("DROP TABLE IF EXISTS {table_name}"), &[])
         .await;
 
     // Create table with some data
     client
         .execute(
             &format!(
-                "CREATE TABLE {} (
+                "CREATE TABLE {table_name} (
                     id SERIAL PRIMARY KEY,
                     name TEXT NOT NULL,
                     value INTEGER,
                     created_at TIMESTAMP DEFAULT NOW()
-                )",
-                table_name
+                )"
             ),
             &[],
         )
@@ -1021,10 +1016,9 @@ async fn create_test_table(client: &Client, table_name: &str) -> Result<(), toki
     client
         .execute(
             &format!(
-                "INSERT INTO {} (name, value)
+                "INSERT INTO {table_name} (name, value)
                  SELECT 'item_' || i, i
-                 FROM generate_series(1, 100) AS i",
-                table_name
+                 FROM generate_series(1, 100) AS i"
             ),
             &[],
         )
@@ -1033,14 +1027,14 @@ async fn create_test_table(client: &Client, table_name: &str) -> Result<(), toki
     // Update some rows to create dead tuples
     client
         .execute(
-            &format!("UPDATE {} SET value = value + 1 WHERE id <= 10", table_name),
+            &format!("UPDATE {table_name} SET value = value + 1 WHERE id <= 10"),
             &[],
         )
         .await?;
 
     // Run ANALYZE to update statistics
     client
-        .execute(&format!("ANALYZE {}", table_name), &[])
+        .execute(&format!("ANALYZE {table_name}"), &[])
         .await?;
 
     Ok(())
@@ -1049,7 +1043,7 @@ async fn create_test_table(client: &Client, table_name: &str) -> Result<(), toki
 /// Helper to cleanup test table
 async fn cleanup_test_table(client: &Client, table_name: &str) {
     let _ = client
-        .execute(&format!("DROP TABLE IF EXISTS {}", table_name), &[])
+        .execute(&format!("DROP TABLE IF EXISTS {table_name}"), &[])
         .await;
 }
 
@@ -1068,7 +1062,7 @@ async fn test_fetch_table_stats_all_versions() {
 
             // Force stats update by doing a sequential scan
             let _ = client
-                .query(&format!("SELECT COUNT(*) FROM {}", table_name), &[])
+                .query(&format!("SELECT COUNT(*) FROM {table_name}"), &[])
                 .await;
 
             let result = queries::fetch_table_stats(&client).await;
@@ -1148,7 +1142,7 @@ async fn test_fetch_indexes_all_versions() {
             // Create additional index
             let _ = client
                 .execute(
-                    &format!("CREATE INDEX {} ON {} (value)", index_name, table_name),
+                    &format!("CREATE INDEX {index_name} ON {table_name} (value)"),
                     &[],
                 )
                 .await;
@@ -1156,7 +1150,7 @@ async fn test_fetch_indexes_all_versions() {
             // Use the index
             let _ = client
                 .query(
-                    &format!("SELECT * FROM {} WHERE value > 50", table_name),
+                    &format!("SELECT * FROM {table_name} WHERE value > 50"),
                     &[],
                 )
                 .await;
@@ -1168,7 +1162,7 @@ async fn test_fetch_indexes_all_versions() {
                 Ok(indexes) => indexes,
                 Err(e) => {
                     // Check both the error string and the debug representation for the race condition message
-                    let err_str = format!("{:?}", e);
+                    let err_str = format!("{e:?}");
                     if err_str.contains("could not open relation") || err_str.contains("does not exist") {
                         eprintln!("{}: skipping due to concurrent table drop: {}", instance.name, err_str);
                         cleanup_test_table(&client, &table_name).await;
@@ -1240,7 +1234,7 @@ async fn test_fetch_table_bloat_all_versions() {
             for _ in 0..5 {
                 let _ = client
                     .execute(
-                        &format!("UPDATE {} SET value = value + 1", table_name),
+                        &format!("UPDATE {table_name} SET value = value + 1"),
                         &[],
                     )
                     .await;
@@ -1248,7 +1242,7 @@ async fn test_fetch_table_bloat_all_versions() {
 
             // Force a scan to update stats
             let _ = client
-                .query(&format!("SELECT COUNT(*) FROM {}", table_name), &[])
+                .query(&format!("SELECT COUNT(*) FROM {table_name}"), &[])
                 .await;
 
             let result = queries::fetch_table_bloat(&client).await;
@@ -1262,7 +1256,7 @@ async fn test_fetch_table_bloat_all_versions() {
             let bloat_map = result.unwrap();
 
             // Find our test table (may not exist if stats aren't populated yet)
-            let key = format!("public.{}", table_name);
+            let key = format!("public.{table_name}");
             if let Some(bloat) = bloat_map.get(&key) {
                 // bloat_pct should be between 0 and 100
                 assert!(
@@ -1319,7 +1313,7 @@ async fn test_fetch_index_bloat_all_versions() {
             // Create index
             let _ = client
                 .execute(
-                    &format!("CREATE INDEX {} ON {} (value)", index_name, table_name),
+                    &format!("CREATE INDEX {index_name} ON {table_name} (value)"),
                     &[],
                 )
                 .await;
@@ -1328,7 +1322,7 @@ async fn test_fetch_index_bloat_all_versions() {
             for _ in 0..3 {
                 let _ = client
                     .execute(
-                        &format!("UPDATE {} SET value = value + 1", table_name),
+                        &format!("UPDATE {table_name} SET value = value + 1"),
                         &[],
                     )
                     .await;
@@ -1345,7 +1339,7 @@ async fn test_fetch_index_bloat_all_versions() {
             let bloat_map = result.unwrap();
 
             // Find our test index
-            let key = format!("public.{}", index_name);
+            let key = format!("public.{index_name}");
             let test_bloat = bloat_map.get(&key);
             assert!(
                 test_bloat.is_some(),
