@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config as MatcherConfig, Matcher};
@@ -356,6 +357,15 @@ impl FilterState {
     }
 }
 
+/// Lightweight struct for rate delta calculations (avoids cloning full PgSnapshot)
+struct PrevMetrics {
+    timestamp: DateTime<Utc>,
+    xact_commit: i64,
+    xact_rollback: i64,
+    blks_read: i64,
+    wal_bytes: Option<i64>,
+}
+
 /// Metrics history for sparklines and rate calculations
 pub struct MetricsHistory {
     // Sparkline data
@@ -375,8 +385,8 @@ pub struct MetricsHistory {
     pub current_wal_rate: Option<f64>,
     pub current_blks_read_rate: Option<f64>,
 
-    // Previous snapshot for delta calculation
-    prev_snapshot: Option<PgSnapshot>,
+    // Previous metrics for delta calculation
+    prev_metrics: Option<PrevMetrics>,
 }
 
 impl MetricsHistory {
@@ -393,7 +403,7 @@ impl MetricsHistory {
             current_tps: None,
             current_wal_rate: None,
             current_blks_read_rate: None,
-            prev_snapshot: None,
+            prev_metrics: None,
         }
     }
 
@@ -421,7 +431,7 @@ impl MetricsHistory {
 
     /// Calculate and update rate metrics from snapshot delta
     pub fn calculate_rates(&mut self, snap: &PgSnapshot) {
-        if let Some(prev) = &self.prev_snapshot {
+        if let (Some(prev), Some(curr_db)) = (&self.prev_metrics, &snap.db_stats) {
             let secs = snap
                 .timestamp
                 .signed_duration_since(prev.timestamp)
@@ -430,28 +440,28 @@ impl MetricsHistory {
 
             if secs > 0.0 {
                 // TPS and blocks read from pg_stat_database
-                if let (Some(curr), Some(prev_db)) = (&snap.db_stats, &prev.db_stats) {
-                    let commits = curr.xact_commit - prev_db.xact_commit;
-                    let rollbacks = curr.xact_rollback - prev_db.xact_rollback;
-                    // Guard against counter reset (server restart)
-                    if commits >= 0 && rollbacks >= 0 {
-                        let tps = (commits + rollbacks) as f64 / secs;
-                        self.current_tps = Some(tps);
-                        self.tps.push(tps as u64);
-                    }
+                let commits = curr_db.xact_commit - prev.xact_commit;
+                let rollbacks = curr_db.xact_rollback - prev.xact_rollback;
+                // Guard against counter reset (server restart)
+                if commits >= 0 && rollbacks >= 0 {
+                    let tps = (commits + rollbacks) as f64 / secs;
+                    self.current_tps = Some(tps);
+                    self.tps.push(tps as u64);
+                }
 
-                    // Blocks read rate (physical I/O)
-                    let blks = curr.blks_read - prev_db.blks_read;
-                    if blks >= 0 {
-                        let rate = blks as f64 / secs;
-                        self.current_blks_read_rate = Some(rate);
-                        self.blks_read.push(rate as u64);
-                    }
+                // Blocks read rate (physical I/O)
+                let blks = curr_db.blks_read - prev.blks_read;
+                if blks >= 0 {
+                    let rate = blks as f64 / secs;
+                    self.current_blks_read_rate = Some(rate);
+                    self.blks_read.push(rate as u64);
                 }
 
                 // WAL rate from pg_stat_wal
-                if let (Some(curr_wal), Some(prev_wal)) = (&snap.wal_stats, &prev.wal_stats) {
-                    let bytes = curr_wal.wal_bytes - prev_wal.wal_bytes;
+                if let (Some(curr_wal_bytes), Some(prev_wal_bytes)) =
+                    (snap.wal_stats.as_ref().map(|w| w.wal_bytes), prev.wal_bytes)
+                {
+                    let bytes = curr_wal_bytes - prev_wal_bytes;
                     if bytes >= 0 {
                         let rate = bytes as f64 / secs;
                         self.current_wal_rate = Some(rate);
@@ -461,7 +471,17 @@ impl MetricsHistory {
                 }
             }
         }
-        self.prev_snapshot = Some(snap.clone());
+
+        // Store only the fields needed for next delta calculation
+        if let Some(db) = &snap.db_stats {
+            self.prev_metrics = Some(PrevMetrics {
+                timestamp: snap.timestamp,
+                xact_commit: db.xact_commit,
+                xact_rollback: db.xact_rollback,
+                blks_read: db.blks_read,
+                wal_bytes: snap.wal_stats.as_ref().map(|w| w.wal_bytes),
+            });
+        }
     }
 }
 
