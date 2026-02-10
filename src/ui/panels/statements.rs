@@ -107,8 +107,8 @@ pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
     }
 
     let sort_indicator = |col: StatementSortColumn| -> &str {
-        if app.stmt_sort_column == col {
-            if app.stmt_sort_ascending {
+        if app.statements.sort_column == col {
+            if app.statements.sort_ascending {
                 " \u{2191}"
             } else {
                 " \u{2193}"
@@ -266,5 +266,5 @@ pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
     ];
 
     let table = styled_table(rows, widths, header, block);
-    frame.render_stateful_widget(table, area, &mut app.stmt_table_state);
+    frame.render_stateful_widget(table, area, &mut app.statements.state);
 }

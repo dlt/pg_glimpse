@@ -25,7 +25,7 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let idx = app.query_table_state.selected().unwrap_or(0);
+    let idx = app.queries.selected().unwrap_or(0);
     let indices = app.sorted_query_indices();
     let Some(&real_idx) = indices.get(idx) else {
         frame.render_widget(
@@ -117,7 +117,7 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let sel = app.index_table_state.selected().unwrap_or(0);
+    let sel = app.indexes.selected().unwrap_or(0);
     let indices = app.sorted_index_indices();
     let Some(&real_idx) = indices.get(sel) else {
         frame.render_widget(
@@ -347,7 +347,7 @@ pub fn render_table_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let sel = app.table_stat_table_state.selected().unwrap_or(0);
+    let sel = app.table_stats.selected().unwrap_or(0);
     let indices = app.sorted_table_stat_indices();
     let Some(&real_idx) = indices.get(sel) else {
         frame.render_widget(
@@ -849,7 +849,7 @@ pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let sel = app.stmt_table_state.selected().unwrap_or(0);
+    let sel = app.statements.selected().unwrap_or(0);
     let indices = app.sorted_stmt_indices();
     let Some(&real_idx) = indices.get(sel) else {
         frame.render_widget(

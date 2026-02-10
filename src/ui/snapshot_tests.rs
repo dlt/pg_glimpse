@@ -1162,7 +1162,7 @@ fn overlay_query_inspect() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
     app.view_mode = ViewMode::Inspect;
-    app.query_table_state.select(Some(0));
+    app.queries.state.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_inspect(frame, &app, frame.area());
@@ -1192,7 +1192,7 @@ fn overlay_index_inspect() {
     let mut app = make_app(Some(make_snapshot()));
     app.bottom_panel = BottomPanel::Indexes;
     app.view_mode = ViewMode::Inspect;
-    app.index_table_state.select(Some(0));
+    app.indexes.state.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_index_inspect(frame, &app, frame.area());
@@ -1209,7 +1209,7 @@ fn overlay_index_inspect_unused() {
     app.bottom_panel = BottomPanel::Indexes;
     app.view_mode = ViewMode::Inspect;
     // Select the second index which has 0 scans (unused)
-    app.index_table_state.select(Some(1));
+    app.indexes.state.select(Some(1));
 
     terminal.draw(|frame| {
         super::overlay::render_index_inspect(frame, &app, frame.area());
@@ -1225,7 +1225,7 @@ fn overlay_statement_inspect() {
     let mut app = make_app(Some(make_snapshot()));
     app.bottom_panel = BottomPanel::Statements;
     app.view_mode = ViewMode::Inspect;
-    app.stmt_table_state.select(Some(0));
+    app.statements.state.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_statement_inspect(frame, &app, frame.area());
@@ -1241,7 +1241,7 @@ fn overlay_table_inspect() {
     let mut app = make_app(Some(make_snapshot()));
     app.bottom_panel = BottomPanel::TableStats;
     app.view_mode = ViewMode::Inspect;
-    app.table_stat_table_state.select(Some(0));
+    app.table_stats.state.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_table_inspect(frame, &app, frame.area());
@@ -1469,8 +1469,8 @@ fn panel_active_queries_sorted_by_duration() {
     let backend = TestBackend::new(140, 12);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
-    app.sort_column = SortColumn::Duration;
-    app.sort_ascending = false;
+    app.queries.sort_column = SortColumn::Duration;
+    app.queries.sort_ascending = false;
 
     terminal.draw(|frame| {
         super::active_queries::render(frame, &mut app, frame.area());
@@ -1484,8 +1484,8 @@ fn panel_active_queries_sorted_ascending() {
     let backend = TestBackend::new(140, 12);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
-    app.sort_column = SortColumn::Duration;
-    app.sort_ascending = true;
+    app.queries.sort_column = SortColumn::Duration;
+    app.queries.sort_ascending = true;
 
     terminal.draw(|frame| {
         super::active_queries::render(frame, &mut app, frame.area());
@@ -1960,7 +1960,7 @@ fn overlay_query_inspect_extreme_values() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_extreme_snapshot()));
     app.view_mode = ViewMode::Inspect;
-    app.query_table_state.select(Some(0));
+    app.queries.state.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_inspect(frame, &app, frame.area());
@@ -1976,7 +1976,7 @@ fn overlay_query_inspect_all_none_fields() {
     let mut app = make_app(Some(make_extreme_snapshot()));
     app.view_mode = ViewMode::Inspect;
     // Select the query with all None fields
-    app.query_table_state.select(Some(1));
+    app.queries.state.select(Some(1));
 
     terminal.draw(|frame| {
         super::overlay::render_inspect(frame, &app, frame.area());
@@ -1992,7 +1992,7 @@ fn overlay_query_inspect_unicode() {
     let mut app = make_app(Some(make_extreme_snapshot()));
     app.view_mode = ViewMode::Inspect;
     // Select the Unicode query
-    app.query_table_state.select(Some(2));
+    app.queries.state.select(Some(2));
 
     terminal.draw(|frame| {
         super::overlay::render_inspect(frame, &app, frame.area());
@@ -2144,7 +2144,7 @@ fn overlay_query_inspect_sql_injection() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_special_chars_snapshot()));
     app.view_mode = ViewMode::Inspect;
-    app.query_table_state.select(Some(0));
+    app.queries.state.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_inspect(frame, &app, frame.area());
@@ -2159,7 +2159,7 @@ fn overlay_query_inspect_newlines_tabs() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_special_chars_snapshot()));
     app.view_mode = ViewMode::Inspect;
-    app.query_table_state.select(Some(1));
+    app.queries.state.select(Some(1));
 
     terminal.draw(|frame| {
         super::overlay::render_inspect(frame, &app, frame.area());
@@ -2174,7 +2174,7 @@ fn overlay_query_inspect_ansi_escapes() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_special_chars_snapshot()));
     app.view_mode = ViewMode::Inspect;
-    app.query_table_state.select(Some(2));
+    app.queries.state.select(Some(2));
 
     terminal.draw(|frame| {
         super::overlay::render_inspect(frame, &app, frame.area());
@@ -2189,7 +2189,7 @@ fn overlay_query_inspect_empty_strings() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_special_chars_snapshot()));
     app.view_mode = ViewMode::Inspect;
-    app.query_table_state.select(Some(3));
+    app.queries.state.select(Some(3));
 
     terminal.draw(|frame| {
         super::overlay::render_inspect(frame, &app, frame.area());
@@ -2352,7 +2352,7 @@ fn overlay_table_inspect_zero_values() {
     let mut app = make_app(Some(make_zero_values_snapshot()));
     app.bottom_panel = BottomPanel::TableStats;
     app.view_mode = ViewMode::Inspect;
-    app.table_stat_table_state.select(Some(0));
+    app.table_stats.state.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_table_inspect(frame, &app, frame.area());

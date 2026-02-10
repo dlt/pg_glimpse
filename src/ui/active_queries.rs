@@ -19,8 +19,8 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
     let filtered_count = indices.len();
 
     let sort_indicator = |col: SortColumn| -> &str {
-        if app.sort_column == col {
-            if app.sort_ascending {
+        if app.queries.sort_column == col {
+            if app.queries.sort_ascending {
                 " ↑"
             } else {
                 " ↓"
@@ -139,7 +139,7 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
     ];
 
     let table = styled_table(rows, widths, header, block);
-    frame.render_stateful_widget(table, area, &mut app.query_table_state);
+    frame.render_stateful_widget(table, area, &mut app.queries.state);
 }
 
 
