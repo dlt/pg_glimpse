@@ -1567,7 +1567,7 @@ impl App {
                 self.pending_action = Some(AppAction::RefreshIntervalChanged);
             }
             ConfigItem::WarnDuration => {
-                let val = self.config.warn_duration_secs + direction as f64 * 0.5;
+                let val = (direction as f64).mul_add(0.5, self.config.warn_duration_secs);
                 self.config.warn_duration_secs = val.clamp(0.1, self.config.danger_duration_secs);
                 theme::set_duration_thresholds(
                     self.config.warn_duration_secs,
@@ -1575,7 +1575,7 @@ impl App {
                 );
             }
             ConfigItem::DangerDuration => {
-                let val = self.config.danger_duration_secs + direction as f64 * 1.0;
+                let val = (direction as f64).mul_add(1.0, self.config.danger_duration_secs);
                 self.config.danger_duration_secs = val.clamp(self.config.warn_duration_secs, 300.0);
                 theme::set_duration_thresholds(
                     self.config.warn_duration_secs,

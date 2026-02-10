@@ -81,8 +81,7 @@ pub fn render_line_chart(
                 let lo = (x as usize).min(data_owned.len().saturating_sub(1));
                 let hi = (lo + 1).min(data_owned.len().saturating_sub(1));
                 let frac = if lo == hi { 0.0 } else { x - lo as f64 };
-                let y = data_owned[lo] as f64 * (1.0 - frac)
-                    + data_owned[hi] as f64 * frac;
+                let y = (data_owned[lo] as f64).mul_add(1.0 - frac, data_owned[hi] as f64 * frac);
                 if y > 0.0 {
                     ctx.draw(&CanvasLine {
                         x1: x,
@@ -148,8 +147,7 @@ pub fn render_ratio_chart(
                 let lo = (x as usize).min(data_owned.len().saturating_sub(1));
                 let hi = (lo + 1).min(data_owned.len().saturating_sub(1));
                 let frac = if lo == hi { 0.0 } else { x - lo as f64 };
-                let y = data_owned[lo] as f64 * (1.0 - frac)
-                    + data_owned[hi] as f64 * frac;
+                let y = (data_owned[lo] as f64).mul_add(1.0 - frac, data_owned[hi] as f64 * frac);
                 if y > 0.0 {
                     ctx.draw(&CanvasLine {
                         x1: x,
