@@ -1299,439 +1299,356 @@ impl App {
         }
     }
 
-    pub fn handle_key(&mut self, key: KeyEvent) {
-        // Layer 1: Modal overlays consume all input
-        match &self.view_mode {
-            ViewMode::ConfirmCancel(pid) => {
-                let pid = *pid;
-                match key.code {
-                    KeyCode::Char('y') | KeyCode::Char('Y') => {
-                        self.pending_action = Some(AppAction::CancelQuery(pid));
-                        self.view_mode = ViewMode::Normal;
-                    }
-                    _ => {
-                        self.view_mode = ViewMode::Normal;
-                        self.status_message = Some("Cancel aborted".into());
-                    }
-                }
-                return;
-            }
-            ViewMode::ConfirmKill(pid) => {
-                let pid = *pid;
-                match key.code {
-                    KeyCode::Char('y') | KeyCode::Char('Y') => {
-                        self.pending_action = Some(AppAction::TerminateBackend(pid));
-                        self.view_mode = ViewMode::Normal;
-                    }
-                    _ => {
-                        self.view_mode = ViewMode::Normal;
-                        self.status_message = Some("Kill aborted".into());
-                    }
-                }
-                return;
-            }
-            ViewMode::ConfirmCancelChoice { selected_pid, all_pids } => {
-                let selected_pid = *selected_pid;
-                let all_pids = all_pids.clone();
-                match key.code {
-                    KeyCode::Char('1') | KeyCode::Char('o') => {
-                        // Cancel ONE (selected)
-                        self.pending_action = Some(AppAction::CancelQuery(selected_pid));
-                        self.view_mode = ViewMode::Normal;
-                    }
-                    KeyCode::Char('a') => {
-                        // Cancel ALL matching - show batch confirmation
-                        self.view_mode = ViewMode::ConfirmCancelBatch(all_pids);
-                    }
-                    KeyCode::Esc => {
-                        self.view_mode = ViewMode::Normal;
-                        self.status_message = Some("Cancel aborted".into());
-                    }
-                    _ => {}
-                }
-                return;
-            }
-            ViewMode::ConfirmKillChoice { selected_pid, all_pids } => {
-                let selected_pid = *selected_pid;
-                let all_pids = all_pids.clone();
-                match key.code {
-                    KeyCode::Char('1') | KeyCode::Char('o') => {
-                        // Kill ONE (selected)
-                        self.pending_action = Some(AppAction::TerminateBackend(selected_pid));
-                        self.view_mode = ViewMode::Normal;
-                    }
-                    KeyCode::Char('a') => {
-                        // Kill ALL matching - show batch confirmation
-                        self.view_mode = ViewMode::ConfirmKillBatch(all_pids);
-                    }
-                    KeyCode::Esc => {
-                        self.view_mode = ViewMode::Normal;
-                        self.status_message = Some("Kill aborted".into());
-                    }
-                    _ => {}
-                }
-                return;
-            }
-            ViewMode::ConfirmCancelBatch(pids) => {
-                let pids = pids.clone();
-                match key.code {
-                    KeyCode::Char('y') | KeyCode::Char('Y') => {
-                        self.pending_action = Some(AppAction::CancelQueries(pids));
-                        self.view_mode = ViewMode::Normal;
-                    }
-                    _ => {
-                        self.view_mode = ViewMode::Normal;
-                        self.status_message = Some("Batch cancel aborted".into());
-                    }
-                }
-                return;
-            }
-            ViewMode::ConfirmKillBatch(pids) => {
-                let pids = pids.clone();
-                match key.code {
-                    KeyCode::Char('y') | KeyCode::Char('Y') => {
-                        self.pending_action = Some(AppAction::TerminateBackends(pids));
-                        self.view_mode = ViewMode::Normal;
-                    }
-                    _ => {
-                        self.view_mode = ViewMode::Normal;
-                        self.status_message = Some("Batch kill aborted".into());
-                    }
-                }
-                return;
-            }
-            ViewMode::Inspect => {
-                match key.code {
-                    KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
-                        self.overlay_scroll = 0;
-                        self.view_mode = ViewMode::Normal;
-                    }
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        self.overlay_scroll = self.overlay_scroll.saturating_sub(1);
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        self.overlay_scroll = self.overlay_scroll.saturating_add(1);
-                    }
-                    KeyCode::Char('g') => {
-                        self.overlay_scroll = 0;
-                    }
-                    KeyCode::Char('G') => {
-                        self.overlay_scroll = u16::MAX;
-                    }
-                    KeyCode::Char('y') => {
-                        if let Some(snap) = &self.snapshot {
-                            let idx = self.query_table_state.selected().unwrap_or(0);
-                            let indices = self.sorted_query_indices();
-                            if let Some(&real_idx) = indices.get(idx) {
-                                if let Some(ref q) = snap.active_queries[real_idx].query {
-                                    let text = q.clone();
-                                    self.copy_to_clipboard(&text);
-                                }
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-                return;
-            }
-            ViewMode::IndexInspect => {
-                match key.code {
-                    KeyCode::Esc | KeyCode::Char('q') => {
-                        self.overlay_scroll = 0;
-                        self.view_mode = ViewMode::Normal;
-                    }
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        self.overlay_scroll = self.overlay_scroll.saturating_sub(1);
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        self.overlay_scroll = self.overlay_scroll.saturating_add(1);
-                    }
-                    KeyCode::Char('g') => {
-                        self.overlay_scroll = 0;
-                    }
-                    KeyCode::Char('G') => {
-                        self.overlay_scroll = u16::MAX;
-                    }
-                    KeyCode::Char('y') => {
-                        if let Some(snap) = &self.snapshot {
-                            let idx = self.index_table_state.selected().unwrap_or(0);
-                            let indices = self.sorted_index_indices();
-                            if let Some(&real_idx) = indices.get(idx) {
-                                let text = snap.indexes[real_idx].index_definition.clone();
-                                self.copy_to_clipboard(&text);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-                return;
-            }
-            ViewMode::StatementInspect => {
-                match key.code {
-                    KeyCode::Esc | KeyCode::Char('q') => {
-                        self.overlay_scroll = 0;
-                        self.view_mode = ViewMode::Normal;
-                    }
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        self.overlay_scroll = self.overlay_scroll.saturating_sub(1);
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        self.overlay_scroll = self.overlay_scroll.saturating_add(1);
-                    }
-                    KeyCode::Char('g') => {
-                        self.overlay_scroll = 0;
-                    }
-                    KeyCode::Char('G') => {
-                        self.overlay_scroll = u16::MAX;
-                    }
-                    KeyCode::Char('y') => {
-                        if let Some(snap) = &self.snapshot {
-                            let idx = self.stmt_table_state.selected().unwrap_or(0);
-                            let indices = self.sorted_stmt_indices();
-                            if let Some(&real_idx) = indices.get(idx) {
-                                let text = snap.stat_statements[real_idx].query.clone();
-                                self.copy_to_clipboard(&text);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-                return;
-            }
-            ViewMode::ReplicationInspect => {
-                match key.code {
-                    KeyCode::Esc | KeyCode::Char('q') => {
-                        self.overlay_scroll = 0;
-                        self.view_mode = ViewMode::Normal;
-                    }
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        self.overlay_scroll = self.overlay_scroll.saturating_sub(1);
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        self.overlay_scroll = self.overlay_scroll.saturating_add(1);
-                    }
-                    KeyCode::Char('g') => {
-                        self.overlay_scroll = 0;
-                    }
-                    KeyCode::Char('G') => {
-                        self.overlay_scroll = u16::MAX;
-                    }
-                    KeyCode::Char('y') => {
-                        if let Some(snap) = &self.snapshot {
-                            let sel = self.replication_table_state.selected().unwrap_or(0);
-                            if let Some(r) = snap.replication.get(sel) {
-                                let text = r.application_name.clone().unwrap_or_default();
-                                self.copy_to_clipboard(&text);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-                return;
-            }
-            ViewMode::TableInspect => {
-                match key.code {
-                    KeyCode::Esc | KeyCode::Char('q') => {
-                        self.overlay_scroll = 0;
-                        self.view_mode = ViewMode::Normal;
-                    }
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        self.overlay_scroll = self.overlay_scroll.saturating_sub(1);
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        self.overlay_scroll = self.overlay_scroll.saturating_add(1);
-                    }
-                    KeyCode::Char('g') => {
-                        self.overlay_scroll = 0;
-                    }
-                    KeyCode::Char('G') => {
-                        self.overlay_scroll = u16::MAX;
-                    }
-                    KeyCode::Char('y') => {
-                        if let Some(snap) = &self.snapshot {
-                            let sel = self.table_stat_table_state.selected().unwrap_or(0);
-                            let indices = self.sorted_table_stat_indices();
-                            if let Some(&real_idx) = indices.get(sel) {
-                                let t = &snap.table_stats[real_idx];
-                                let text = format!("{}.{}", t.schemaname, t.relname);
-                                self.copy_to_clipboard(&text);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-                return;
-            }
-            ViewMode::BlockingInspect => {
-                match key.code {
-                    KeyCode::Esc | KeyCode::Char('q') => {
-                        self.overlay_scroll = 0;
-                        self.view_mode = ViewMode::Normal;
-                    }
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        self.overlay_scroll = self.overlay_scroll.saturating_sub(1);
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        self.overlay_scroll = self.overlay_scroll.saturating_add(1);
-                    }
-                    KeyCode::Char('g') => {
-                        self.overlay_scroll = 0;
-                    }
-                    KeyCode::Char('G') => {
-                        self.overlay_scroll = u16::MAX;
-                    }
-                    KeyCode::Char('y') => {
-                        if let Some(snap) = &self.snapshot {
-                            let sel = self.blocking_table_state.selected().unwrap_or(0);
-                            if let Some(info) = snap.blocking_info.get(sel) {
-                                let text = info.blocked_query.clone().unwrap_or_default();
-                                self.copy_to_clipboard(&text);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-                return;
-            }
-            ViewMode::VacuumInspect => {
-                match key.code {
-                    KeyCode::Esc | KeyCode::Char('q') => {
-                        self.overlay_scroll = 0;
-                        self.view_mode = ViewMode::Normal;
-                    }
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        self.overlay_scroll = self.overlay_scroll.saturating_sub(1);
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        self.overlay_scroll = self.overlay_scroll.saturating_add(1);
-                    }
-                    KeyCode::Char('g') => {
-                        self.overlay_scroll = 0;
-                    }
-                    KeyCode::Char('G') => {
-                        self.overlay_scroll = u16::MAX;
-                    }
-                    KeyCode::Char('y') => {
-                        if let Some(snap) = &self.snapshot {
-                            let sel = self.vacuum_table_state.selected().unwrap_or(0);
-                            if let Some(vac) = snap.vacuum_progress.get(sel) {
-                                let text = vac.table_name.clone();
-                                self.copy_to_clipboard(&text);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-                return;
-            }
-            ViewMode::WraparoundInspect => {
-                match key.code {
-                    KeyCode::Esc | KeyCode::Char('q') => {
-                        self.overlay_scroll = 0;
-                        self.view_mode = ViewMode::Normal;
-                    }
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        self.overlay_scroll = self.overlay_scroll.saturating_sub(1);
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        self.overlay_scroll = self.overlay_scroll.saturating_add(1);
-                    }
-                    KeyCode::Char('g') => {
-                        self.overlay_scroll = 0;
-                    }
-                    KeyCode::Char('G') => {
-                        self.overlay_scroll = u16::MAX;
-                    }
-                    KeyCode::Char('y') => {
-                        if let Some(snap) = &self.snapshot {
-                            let sel = self.wraparound_table_state.selected().unwrap_or(0);
-                            if let Some(wrap) = snap.wraparound.get(sel) {
-                                let text = wrap.datname.clone();
-                                self.copy_to_clipboard(&text);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-                return;
-            }
-            ViewMode::Config => {
-                match key.code {
-                    KeyCode::Esc => {
-                        self.pending_action = Some(AppAction::SaveConfig);
-                        self.view_mode = ViewMode::Normal;
-                    }
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        if self.config_selected > 0 {
-                            self.config_selected -= 1;
-                        }
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        if self.config_selected < ConfigItem::ALL.len() - 1 {
-                            self.config_selected += 1;
-                        }
-                    }
-                    KeyCode::Left | KeyCode::Char('h') => {
-                        self.config_adjust(-1);
-                    }
-                    KeyCode::Right | KeyCode::Char('l') => {
-                        self.config_adjust(1);
-                    }
-                    _ => {}
-                }
-                return;
-            }
-            ViewMode::Help => {
-                match key.code {
-                    KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
-                        self.overlay_scroll = 0;
-                        self.view_mode = ViewMode::Normal;
-                    }
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        self.overlay_scroll = self.overlay_scroll.saturating_sub(1);
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        self.overlay_scroll = self.overlay_scroll.saturating_add(1);
-                    }
-                    KeyCode::Char('g') => {
-                        self.overlay_scroll = 0;
-                    }
-                    KeyCode::Char('G') => {
-                        self.overlay_scroll = u16::MAX;
-                    }
-                    _ => {}
-                }
-                return;
-            }
-            ViewMode::Filter => {
-                match key.code {
-                    KeyCode::Esc => {
-                        self.filter_text.clear();
-                        self.filter_active = false;
-                        self.view_mode = ViewMode::Normal;
-                        self.reset_panel_selection();
-                    }
-                    KeyCode::Enter => {
-                        self.filter_active = !self.filter_text.is_empty();
-                        self.view_mode = ViewMode::Normal;
-                        self.reset_panel_selection();
-                    }
-                    KeyCode::Backspace => {
-                        self.filter_text.pop();
-                        self.reset_panel_selection();
-                    }
-                    KeyCode::Char(c) => {
-                        self.filter_text.push(c);
-                        self.reset_panel_selection();
-                    }
-                    _ => {}
-                }
-                return;
-            }
-            ViewMode::Normal => {}
-        }
+    // --- Modal overlay handlers ---
 
-        // Layer 2: Normal mode global keys
+    fn handle_confirm_cancel_key(&mut self, key: KeyEvent, pid: i32) {
+        match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                self.pending_action = Some(AppAction::CancelQuery(pid));
+                self.view_mode = ViewMode::Normal;
+            }
+            _ => {
+                self.view_mode = ViewMode::Normal;
+                self.status_message = Some("Cancel aborted".into());
+            }
+        }
+    }
+
+    fn handle_confirm_kill_key(&mut self, key: KeyEvent, pid: i32) {
+        match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                self.pending_action = Some(AppAction::TerminateBackend(pid));
+                self.view_mode = ViewMode::Normal;
+            }
+            _ => {
+                self.view_mode = ViewMode::Normal;
+                self.status_message = Some("Kill aborted".into());
+            }
+        }
+    }
+
+    fn handle_confirm_cancel_choice_key(&mut self, key: KeyEvent, selected_pid: i32, all_pids: Vec<i32>) {
+        match key.code {
+            KeyCode::Char('1') | KeyCode::Char('o') => {
+                self.pending_action = Some(AppAction::CancelQuery(selected_pid));
+                self.view_mode = ViewMode::Normal;
+            }
+            KeyCode::Char('a') => {
+                self.view_mode = ViewMode::ConfirmCancelBatch(all_pids);
+            }
+            KeyCode::Esc => {
+                self.view_mode = ViewMode::Normal;
+                self.status_message = Some("Cancel aborted".into());
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_confirm_kill_choice_key(&mut self, key: KeyEvent, selected_pid: i32, all_pids: Vec<i32>) {
+        match key.code {
+            KeyCode::Char('1') | KeyCode::Char('o') => {
+                self.pending_action = Some(AppAction::TerminateBackend(selected_pid));
+                self.view_mode = ViewMode::Normal;
+            }
+            KeyCode::Char('a') => {
+                self.view_mode = ViewMode::ConfirmKillBatch(all_pids);
+            }
+            KeyCode::Esc => {
+                self.view_mode = ViewMode::Normal;
+                self.status_message = Some("Kill aborted".into());
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_confirm_cancel_batch_key(&mut self, key: KeyEvent, pids: Vec<i32>) {
+        match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                self.pending_action = Some(AppAction::CancelQueries(pids));
+                self.view_mode = ViewMode::Normal;
+            }
+            _ => {
+                self.view_mode = ViewMode::Normal;
+                self.status_message = Some("Batch cancel aborted".into());
+            }
+        }
+    }
+
+    fn handle_confirm_kill_batch_key(&mut self, key: KeyEvent, pids: Vec<i32>) {
+        match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                self.pending_action = Some(AppAction::TerminateBackends(pids));
+                self.view_mode = ViewMode::Normal;
+            }
+            _ => {
+                self.view_mode = ViewMode::Normal;
+                self.status_message = Some("Batch kill aborted".into());
+            }
+        }
+    }
+
+    /// Handle overlay scroll keys, returns true if handled
+    fn handle_overlay_scroll(&mut self, key: KeyEvent) -> bool {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.overlay_scroll = self.overlay_scroll.saturating_sub(1);
+                true
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                self.overlay_scroll = self.overlay_scroll.saturating_add(1);
+                true
+            }
+            KeyCode::Char('g') => {
+                self.overlay_scroll = 0;
+                true
+            }
+            KeyCode::Char('G') => {
+                self.overlay_scroll = u16::MAX;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn handle_inspect_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
+                self.overlay_scroll = 0;
+                self.view_mode = ViewMode::Normal;
+            }
+            KeyCode::Char('y') => {
+                if let Some(snap) = &self.snapshot {
+                    let idx = self.query_table_state.selected().unwrap_or(0);
+                    let indices = self.sorted_query_indices();
+                    if let Some(&real_idx) = indices.get(idx) {
+                        if let Some(ref q) = snap.active_queries[real_idx].query {
+                            let text = q.clone();
+                            self.copy_to_clipboard(&text);
+                        }
+                    }
+                }
+            }
+            _ => {
+                self.handle_overlay_scroll(key);
+            }
+        }
+    }
+
+    fn handle_index_inspect_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.overlay_scroll = 0;
+                self.view_mode = ViewMode::Normal;
+            }
+            KeyCode::Char('y') => {
+                if let Some(snap) = &self.snapshot {
+                    let idx = self.index_table_state.selected().unwrap_or(0);
+                    let indices = self.sorted_index_indices();
+                    if let Some(&real_idx) = indices.get(idx) {
+                        let text = snap.indexes[real_idx].index_definition.clone();
+                        self.copy_to_clipboard(&text);
+                    }
+                }
+            }
+            _ => {
+                self.handle_overlay_scroll(key);
+            }
+        }
+    }
+
+    fn handle_statement_inspect_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.overlay_scroll = 0;
+                self.view_mode = ViewMode::Normal;
+            }
+            KeyCode::Char('y') => {
+                if let Some(snap) = &self.snapshot {
+                    let idx = self.stmt_table_state.selected().unwrap_or(0);
+                    let indices = self.sorted_stmt_indices();
+                    if let Some(&real_idx) = indices.get(idx) {
+                        let text = snap.stat_statements[real_idx].query.clone();
+                        self.copy_to_clipboard(&text);
+                    }
+                }
+            }
+            _ => {
+                self.handle_overlay_scroll(key);
+            }
+        }
+    }
+
+    fn handle_replication_inspect_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.overlay_scroll = 0;
+                self.view_mode = ViewMode::Normal;
+            }
+            KeyCode::Char('y') => {
+                if let Some(snap) = &self.snapshot {
+                    let sel = self.replication_table_state.selected().unwrap_or(0);
+                    if let Some(r) = snap.replication.get(sel) {
+                        let text = r.application_name.clone().unwrap_or_default();
+                        self.copy_to_clipboard(&text);
+                    }
+                }
+            }
+            _ => {
+                self.handle_overlay_scroll(key);
+            }
+        }
+    }
+
+    fn handle_table_inspect_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.overlay_scroll = 0;
+                self.view_mode = ViewMode::Normal;
+            }
+            KeyCode::Char('y') => {
+                if let Some(snap) = &self.snapshot {
+                    let sel = self.table_stat_table_state.selected().unwrap_or(0);
+                    let indices = self.sorted_table_stat_indices();
+                    if let Some(&real_idx) = indices.get(sel) {
+                        let t = &snap.table_stats[real_idx];
+                        let text = format!("{}.{}", t.schemaname, t.relname);
+                        self.copy_to_clipboard(&text);
+                    }
+                }
+            }
+            _ => {
+                self.handle_overlay_scroll(key);
+            }
+        }
+    }
+
+    fn handle_blocking_inspect_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.overlay_scroll = 0;
+                self.view_mode = ViewMode::Normal;
+            }
+            KeyCode::Char('y') => {
+                if let Some(snap) = &self.snapshot {
+                    let sel = self.blocking_table_state.selected().unwrap_or(0);
+                    if let Some(info) = snap.blocking_info.get(sel) {
+                        let text = info.blocked_query.clone().unwrap_or_default();
+                        self.copy_to_clipboard(&text);
+                    }
+                }
+            }
+            _ => {
+                self.handle_overlay_scroll(key);
+            }
+        }
+    }
+
+    fn handle_vacuum_inspect_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.overlay_scroll = 0;
+                self.view_mode = ViewMode::Normal;
+            }
+            KeyCode::Char('y') => {
+                if let Some(snap) = &self.snapshot {
+                    let sel = self.vacuum_table_state.selected().unwrap_or(0);
+                    if let Some(vac) = snap.vacuum_progress.get(sel) {
+                        let text = vac.table_name.clone();
+                        self.copy_to_clipboard(&text);
+                    }
+                }
+            }
+            _ => {
+                self.handle_overlay_scroll(key);
+            }
+        }
+    }
+
+    fn handle_wraparound_inspect_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.overlay_scroll = 0;
+                self.view_mode = ViewMode::Normal;
+            }
+            KeyCode::Char('y') => {
+                if let Some(snap) = &self.snapshot {
+                    let sel = self.wraparound_table_state.selected().unwrap_or(0);
+                    if let Some(wrap) = snap.wraparound.get(sel) {
+                        let text = wrap.datname.clone();
+                        self.copy_to_clipboard(&text);
+                    }
+                }
+            }
+            _ => {
+                self.handle_overlay_scroll(key);
+            }
+        }
+    }
+
+    fn handle_config_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                self.pending_action = Some(AppAction::SaveConfig);
+                self.view_mode = ViewMode::Normal;
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.config_selected > 0 {
+                    self.config_selected -= 1;
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if self.config_selected < ConfigItem::ALL.len() - 1 {
+                    self.config_selected += 1;
+                }
+            }
+            KeyCode::Left | KeyCode::Char('h') => {
+                self.config_adjust(-1);
+            }
+            KeyCode::Right | KeyCode::Char('l') => {
+                self.config_adjust(1);
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_help_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
+                self.overlay_scroll = 0;
+                self.view_mode = ViewMode::Normal;
+            }
+            _ => {
+                self.handle_overlay_scroll(key);
+            }
+        }
+    }
+
+    fn handle_filter_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                self.filter_text.clear();
+                self.filter_active = false;
+                self.view_mode = ViewMode::Normal;
+                self.reset_panel_selection();
+            }
+            KeyCode::Enter => {
+                self.filter_active = !self.filter_text.is_empty();
+                self.view_mode = ViewMode::Normal;
+                self.reset_panel_selection();
+            }
+            KeyCode::Backspace => {
+                self.filter_text.pop();
+                self.reset_panel_selection();
+            }
+            KeyCode::Char(c) => {
+                self.filter_text.push(c);
+                self.reset_panel_selection();
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_normal_global_key(&mut self, key: KeyEvent) -> bool {
         match key.code {
             KeyCode::Char('q') => {
                 if self.bottom_panel == BottomPanel::Queries {
@@ -1739,98 +1656,191 @@ impl App {
                 } else {
                     self.switch_panel(BottomPanel::Queries);
                 }
-                return;
+                true
             }
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.running = false;
-                return;
+                true
             }
             KeyCode::Esc => {
                 if self.bottom_panel != BottomPanel::Queries {
-                    // Go back to Queries panel
                     self.switch_panel(BottomPanel::Queries);
                 } else {
                     self.running = false;
                 }
-                return;
+                true
             }
             KeyCode::Char('p') if !self.replay_mode => {
                 self.paused = !self.paused;
-                return;
+                true
             }
             KeyCode::Char('r') if !self.replay_mode => {
                 self.pending_action = Some(AppAction::ForceRefresh);
-                return;
+                true
             }
             KeyCode::Char('?') => {
                 self.overlay_scroll = 0;
                 self.view_mode = ViewMode::Help;
-                return;
+                true
             }
             KeyCode::Char(',') => {
                 self.view_mode = ViewMode::Config;
-                return;
+                true
             }
             KeyCode::Char('y') => {
                 self.yank_selected();
-                return;
+                true
             }
-            _ => {}
+            _ => false,
         }
+    }
 
-        // Layer 3: Panel-switch keys
+    fn handle_panel_switch_key(&mut self, key: KeyEvent) -> bool {
         match key.code {
             KeyCode::Char('Q') => {
                 self.switch_panel(BottomPanel::Queries);
-                return;
+                true
             }
             KeyCode::Tab => {
                 self.switch_panel(BottomPanel::Blocking);
-                return;
+                true
             }
             KeyCode::Char('w') => {
                 self.switch_panel(BottomPanel::WaitEvents);
-                return;
+                true
             }
             KeyCode::Char('t') => {
                 self.switch_panel(BottomPanel::TableStats);
-                return;
+                true
             }
             KeyCode::Char('R') => {
                 self.switch_panel(BottomPanel::Replication);
-                return;
+                true
             }
             KeyCode::Char('v') => {
                 self.switch_panel(BottomPanel::VacuumProgress);
-                return;
+                true
             }
             KeyCode::Char('x') => {
                 self.switch_panel(BottomPanel::Wraparound);
-                return;
+                true
             }
             KeyCode::Char('I') => {
                 self.switch_panel(BottomPanel::Indexes);
-                return;
+                true
             }
             KeyCode::Char('S') => {
                 self.switch_panel(BottomPanel::Statements);
-                return;
+                true
             }
             KeyCode::Char('A') => {
                 self.switch_panel(BottomPanel::WalIo);
-                return;
+                true
             }
             KeyCode::Char('P') => {
                 self.switch_panel(BottomPanel::Settings);
-                return;
+                true
             }
             KeyCode::Char('/') => {
                 if self.bottom_panel.supports_filter() {
                     self.view_mode = ViewMode::Filter;
                 }
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn handle_key(&mut self, key: KeyEvent) {
+        // Layer 1: Modal overlays consume all input
+        match &self.view_mode {
+            ViewMode::ConfirmCancel(pid) => {
+                let pid = *pid;
+                self.handle_confirm_cancel_key(key, pid);
                 return;
             }
-            _ => {}
+            ViewMode::ConfirmKill(pid) => {
+                let pid = *pid;
+                self.handle_confirm_kill_key(key, pid);
+                return;
+            }
+            ViewMode::ConfirmCancelChoice { selected_pid, all_pids } => {
+                let selected_pid = *selected_pid;
+                let all_pids = all_pids.clone();
+                self.handle_confirm_cancel_choice_key(key, selected_pid, all_pids);
+                return;
+            }
+            ViewMode::ConfirmKillChoice { selected_pid, all_pids } => {
+                let selected_pid = *selected_pid;
+                let all_pids = all_pids.clone();
+                self.handle_confirm_kill_choice_key(key, selected_pid, all_pids);
+                return;
+            }
+            ViewMode::ConfirmCancelBatch(pids) => {
+                let pids = pids.clone();
+                self.handle_confirm_cancel_batch_key(key, pids);
+                return;
+            }
+            ViewMode::ConfirmKillBatch(pids) => {
+                let pids = pids.clone();
+                self.handle_confirm_kill_batch_key(key, pids);
+                return;
+            }
+            ViewMode::Inspect => {
+                self.handle_inspect_key(key);
+                return;
+            }
+            ViewMode::IndexInspect => {
+                self.handle_index_inspect_key(key);
+                return;
+            }
+            ViewMode::StatementInspect => {
+                self.handle_statement_inspect_key(key);
+                return;
+            }
+            ViewMode::ReplicationInspect => {
+                self.handle_replication_inspect_key(key);
+                return;
+            }
+            ViewMode::TableInspect => {
+                self.handle_table_inspect_key(key);
+                return;
+            }
+            ViewMode::BlockingInspect => {
+                self.handle_blocking_inspect_key(key);
+                return;
+            }
+            ViewMode::VacuumInspect => {
+                self.handle_vacuum_inspect_key(key);
+                return;
+            }
+            ViewMode::WraparoundInspect => {
+                self.handle_wraparound_inspect_key(key);
+                return;
+            }
+            ViewMode::Config => {
+                self.handle_config_key(key);
+                return;
+            }
+            ViewMode::Help => {
+                self.handle_help_key(key);
+                return;
+            }
+            ViewMode::Filter => {
+                self.handle_filter_key(key);
+                return;
+            }
+            ViewMode::Normal => {}
+        }
+
+        // Layer 2: Normal mode global keys
+        if self.handle_normal_global_key(key) {
+            return;
+        }
+
+        // Layer 3: Panel-switch keys
+        if self.handle_panel_switch_key(key) {
+            return;
         }
 
         // Layer 4: Panel-specific keys
