@@ -1909,6 +1909,32 @@ mod tests {
     }
 
     #[test]
+    fn bloat_refresh_disabled_in_replay_mode_tables() {
+        let mut app = make_replay_app();
+        app.bottom_panel = BottomPanel::TableStats;
+        app.handle_key(key(KeyCode::Char('b')));
+        assert!(app.pending_action.is_none());
+        assert!(!app.bloat_loading);
+    }
+
+    #[test]
+    fn bloat_refresh_disabled_in_replay_mode_indexes() {
+        let mut app = make_replay_app();
+        app.bottom_panel = BottomPanel::Indexes;
+        app.handle_key(key(KeyCode::Char('b')));
+        assert!(app.pending_action.is_none());
+        assert!(!app.bloat_loading);
+    }
+
+    #[test]
+    fn recordings_browser_disabled_in_replay_mode() {
+        let mut app = make_replay_app();
+        app.handle_key(key(KeyCode::Char('L')));
+        // Should not open recordings browser since we're already in replay
+        assert_eq!(app.view_mode, ViewMode::Normal);
+    }
+
+    #[test]
     fn help_opens() {
         let mut app = make_app();
         app.handle_key(key(KeyCode::Char('?')));

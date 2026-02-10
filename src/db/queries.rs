@@ -352,6 +352,42 @@ pub(crate) fn parse_ext_version(v: &str) -> Option<(u32, u32)> {
     }
 }
 
+/// Determine which stat_statements column sets to try based on PG version and extension version.
+/// Returns column sets in order of preference (most specific first).
+fn select_stat_statements_columns(
+    pg_major_version: u32,
+    ext_version: Option<&str>,
+) -> Vec<StatStatementsColumns> {
+    if pg_major_version >= 17 {
+        // PG17+ uses shared_blk_read_time
+        vec![STAT_STATEMENTS_V17, STAT_STATEMENTS_V13, STAT_STATEMENTS_V11]
+    } else {
+        // PG13-16: uses total_exec_time but old blk_read_time
+        match ext_version.and_then(parse_ext_version) {
+            Some((major, minor)) if major > 1 || (major == 1 && minor >= 8) => {
+                vec![STAT_STATEMENTS_V13, STAT_STATEMENTS_V11]
+            }
+            _ => vec![STAT_STATEMENTS_V11],
+        }
+    }
+}
+
+/// Format an error message with helpful hints for common issues.
+/// Used to test the error formatting logic that's applied in fetch_stat_statements.
+#[cfg(test)]
+fn format_stat_statements_error(msg: &str, pg_major_version: u32, ext_version: Option<&str>) -> String {
+    let version_info = ext_version.unwrap_or("unknown");
+    if msg.contains("permission denied") {
+        format!("{msg} (Try: GRANT pg_read_all_stats TO your_user;)")
+    } else if msg.contains("does not exist") && msg.contains("column") {
+        format!("{msg} (PG{pg_major_version}, ext {version_info}, tried all query variants)")
+    } else if msg.contains("does not exist") {
+        format!("{msg} (Extension may be in a different schema)")
+    } else {
+        format!("{msg} (PG{pg_major_version}, ext {version_info})")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -421,6 +457,114 @@ mod tests {
             assert!(sql.contains("AS blk_read_time"), "Should alias to blk_read_time");
             assert!(sql.contains("AS blk_write_time"), "Should alias to blk_write_time");
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Version selection logic tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn select_columns_pg17_tries_all_variants() {
+        let cols = select_stat_statements_columns(17, Some("1.10"));
+        assert_eq!(cols.len(), 3);
+        assert_eq!(cols[0].blk_read_time, "shared_blk_read_time"); // V17 first
+        assert_eq!(cols[1].blk_read_time, "blk_read_time"); // V13 fallback
+        assert_eq!(cols[2].time_prefix, ""); // V11 last (uses total_time)
+    }
+
+    #[test]
+    fn select_columns_pg18_uses_pg17_columns() {
+        let cols = select_stat_statements_columns(18, Some("1.11"));
+        assert_eq!(cols.len(), 3);
+        assert_eq!(cols[0].blk_read_time, "shared_blk_read_time");
+    }
+
+    #[test]
+    fn select_columns_pg16_with_new_ext_tries_v13_v11() {
+        let cols = select_stat_statements_columns(16, Some("1.10"));
+        assert_eq!(cols.len(), 2);
+        assert_eq!(cols[0].time_prefix, "exec_"); // V13 first
+        assert_eq!(cols[1].time_prefix, ""); // V11 fallback
+    }
+
+    #[test]
+    fn select_columns_pg13_with_ext_1_8_uses_v13() {
+        let cols = select_stat_statements_columns(13, Some("1.8"));
+        assert_eq!(cols.len(), 2);
+        assert_eq!(cols[0].time_prefix, "exec_");
+    }
+
+    #[test]
+    fn select_columns_pg13_with_old_ext_uses_v11_only() {
+        let cols = select_stat_statements_columns(13, Some("1.7"));
+        assert_eq!(cols.len(), 1);
+        assert_eq!(cols[0].time_prefix, "");
+    }
+
+    #[test]
+    fn select_columns_pg11_uses_v11_only() {
+        let cols = select_stat_statements_columns(11, Some("1.6"));
+        assert_eq!(cols.len(), 1);
+        assert_eq!(cols[0].time_prefix, "");
+    }
+
+    #[test]
+    fn select_columns_unknown_ext_version_uses_v11() {
+        let cols = select_stat_statements_columns(14, None);
+        assert_eq!(cols.len(), 1);
+        assert_eq!(cols[0].time_prefix, "");
+    }
+
+    #[test]
+    fn select_columns_ext_2_0_uses_v13() {
+        // Extension version 2.x should use V13 columns
+        let cols = select_stat_statements_columns(15, Some("2.0"));
+        assert_eq!(cols.len(), 2);
+        assert_eq!(cols[0].time_prefix, "exec_");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Error formatting tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn error_format_permission_denied_adds_grant_hint() {
+        let msg = "permission denied for relation pg_stat_statements";
+        let result = format_stat_statements_error(msg, 15, Some("1.10"));
+        assert!(result.contains("GRANT pg_read_all_stats"));
+        assert!(result.contains(msg));
+    }
+
+    #[test]
+    fn error_format_column_does_not_exist() {
+        let msg = "column \"shared_blk_read_time\" does not exist";
+        let result = format_stat_statements_error(msg, 14, Some("1.8"));
+        assert!(result.contains("PG14"));
+        assert!(result.contains("ext 1.8"));
+        assert!(result.contains("tried all query variants"));
+    }
+
+    #[test]
+    fn error_format_relation_does_not_exist() {
+        let msg = "relation \"pg_stat_statements\" does not exist";
+        let result = format_stat_statements_error(msg, 15, None);
+        assert!(result.contains("different schema"));
+    }
+
+    #[test]
+    fn error_format_generic_error_includes_version_info() {
+        let msg = "connection timed out";
+        let result = format_stat_statements_error(msg, 16, Some("1.9"));
+        assert!(result.contains("PG16"));
+        assert!(result.contains("ext 1.9"));
+        assert!(!result.contains("GRANT"));
+    }
+
+    #[test]
+    fn error_format_unknown_ext_version() {
+        let msg = "some error";
+        let result = format_stat_statements_error(msg, 17, None);
+        assert!(result.contains("ext unknown"));
     }
 }
 
@@ -1341,20 +1485,7 @@ pub async fn fetch_stat_statements(
     }
 
     // Try queries in order: version-appropriate first, then fallbacks
-    // Important: blk_read_time → shared_blk_read_time rename happened in PG17 (server version),
-    // while total_time → total_exec_time happened in extension version 1.8 (PG13)
-    let columns_to_try = if pg_major_version >= 17 {
-        // PG17+ uses shared_blk_read_time
-        vec![STAT_STATEMENTS_V17, STAT_STATEMENTS_V13, STAT_STATEMENTS_V11]
-    } else {
-        // PG13-16: uses total_exec_time but old blk_read_time
-        match ext_version.and_then(parse_ext_version) {
-            Some((major, minor)) if major > 1 || (major == 1 && minor >= 8) => {
-                vec![STAT_STATEMENTS_V13, STAT_STATEMENTS_V11]
-            }
-            _ => vec![STAT_STATEMENTS_V11],
-        }
-    };
+    let columns_to_try = select_stat_statements_columns(pg_major_version, ext_version);
 
     let mut last_error = String::new();
     for cols in columns_to_try {

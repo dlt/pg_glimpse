@@ -1068,4 +1068,196 @@ mod tests {
         let diff = (loaded.timestamp - original_timestamp).num_microseconds().unwrap_or(0).abs();
         assert!(diff < 1000); // Allow 1ms tolerance for serialization rounding
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // list_recordings tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn list_recordings_empty_dir() {
+        let tmp = TempDir::new().unwrap();
+        let recordings = Recorder::list_recordings(Some(tmp.path().to_str().unwrap()));
+        assert!(recordings.is_empty());
+    }
+
+    #[test]
+    fn list_recordings_finds_valid_files() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("test.jsonl");
+
+        // Create a valid recording
+        let _recorder = Recorder::new_with_path(
+            path.clone(),
+            "testhost",
+            5432,
+            "testdb",
+            "testuser",
+            &make_server_info(),
+        )
+        .unwrap();
+
+        let recordings = Recorder::list_recordings(Some(tmp.path().to_str().unwrap()));
+        assert_eq!(recordings.len(), 1);
+        assert_eq!(recordings[0].host, "testhost");
+        assert_eq!(recordings[0].port, 5432);
+        assert_eq!(recordings[0].dbname, "testdb");
+    }
+
+    #[test]
+    fn list_recordings_ignores_invalid_files() {
+        let tmp = TempDir::new().unwrap();
+
+        // Create a file with invalid JSON
+        let invalid_path = tmp.path().join("invalid.jsonl");
+        fs::write(&invalid_path, "not valid json\n").unwrap();
+
+        // Create a valid recording
+        let valid_path = tmp.path().join("valid.jsonl");
+        let _recorder = Recorder::new_with_path(
+            valid_path,
+            "host",
+            5432,
+            "db",
+            "user",
+            &make_server_info(),
+        )
+        .unwrap();
+
+        let recordings = Recorder::list_recordings(Some(tmp.path().to_str().unwrap()));
+        assert_eq!(recordings.len(), 1); // Only the valid one
+    }
+
+    #[test]
+    fn list_recordings_ignores_non_jsonl() {
+        let tmp = TempDir::new().unwrap();
+
+        // Create a .txt file (should be ignored)
+        fs::write(tmp.path().join("test.txt"), "some content").unwrap();
+
+        // Create a valid recording
+        let valid_path = tmp.path().join("test.jsonl");
+        let _recorder = Recorder::new_with_path(
+            valid_path,
+            "host",
+            5432,
+            "db",
+            "user",
+            &make_server_info(),
+        )
+        .unwrap();
+
+        let recordings = Recorder::list_recordings(Some(tmp.path().to_str().unwrap()));
+        assert_eq!(recordings.len(), 1);
+    }
+
+    #[test]
+    fn list_recordings_sorted_newest_first() {
+        let tmp = TempDir::new().unwrap();
+
+        // Create first recording
+        let path1 = tmp.path().join("first.jsonl");
+        let _recorder1 = Recorder::new_with_path(
+            path1,
+            "first",
+            5432,
+            "db",
+            "user",
+            &make_server_info(),
+        )
+        .unwrap();
+
+        // Small delay to ensure different timestamps
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        // Create second recording
+        let path2 = tmp.path().join("second.jsonl");
+        let _recorder2 = Recorder::new_with_path(
+            path2,
+            "second",
+            5432,
+            "db",
+            "user",
+            &make_server_info(),
+        )
+        .unwrap();
+
+        let recordings = Recorder::list_recordings(Some(tmp.path().to_str().unwrap()));
+        assert_eq!(recordings.len(), 2);
+        // Second (newer) should be first
+        assert_eq!(recordings[0].host, "second");
+        assert_eq!(recordings[1].host, "first");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // delete_recording tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn delete_recording_removes_file() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("to_delete.jsonl");
+
+        let _recorder = Recorder::new_with_path(
+            path.clone(),
+            "host",
+            5432,
+            "db",
+            "user",
+            &make_server_info(),
+        )
+        .unwrap();
+
+        assert!(path.exists());
+        Recorder::delete_recording(&path).unwrap();
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn delete_recording_nonexistent_fails() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("nonexistent.jsonl");
+
+        let result = Recorder::delete_recording(&path);
+        assert!(result.is_err());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // cleanup_old tests with actual function
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn cleanup_old_preserves_recent_files() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("recent.jsonl");
+
+        let _recorder = Recorder::new_with_path(
+            path.clone(),
+            "host",
+            5432,
+            "db",
+            "user",
+            &make_server_info(),
+        )
+        .unwrap();
+
+        // Cleanup with 1 hour retention - file just created should survive
+        Recorder::cleanup_old(3600, Some(tmp.path().to_str().unwrap()));
+        assert!(path.exists());
+    }
+
+    #[test]
+    fn cleanup_old_removes_old_files() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("old.jsonl");
+
+        File::create(&path).unwrap();
+
+        // Set mtime to 2 hours ago
+        let old_time = std::time::SystemTime::now() - std::time::Duration::from_secs(7200);
+        filetime::set_file_mtime(&path, filetime::FileTime::from_system_time(old_time)).unwrap();
+
+        // Cleanup with 1 hour retention
+        Recorder::cleanup_old(3600, Some(tmp.path().to_str().unwrap()));
+        assert!(!path.exists());
+    }
 }
