@@ -14,11 +14,10 @@ services:
     command:
       - postgres
       - -c
-      - shared_preload_libraries=pg_stat_statements
-      - -c
-      - pg_stat_statements.track=all
+      - config_file=/etc/postgresql/postgresql.conf
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U test"]
       interval: 5s
@@ -36,11 +35,10 @@ services:
     command:
       - postgres
       - -c
-      - shared_preload_libraries=pg_stat_statements
-      - -c
-      - pg_stat_statements.track=all
+      - config_file=/etc/postgresql/postgresql.conf
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U test"]
       interval: 5s
@@ -58,11 +56,10 @@ services:
     command:
       - postgres
       - -c
-      - shared_preload_libraries=pg_stat_statements
-      - -c
-      - pg_stat_statements.track=all
+      - config_file=/etc/postgresql/postgresql.conf
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U test"]
       interval: 5s
@@ -80,11 +77,10 @@ services:
     command:
       - postgres
       - -c
-      - shared_preload_libraries=pg_stat_statements
-      - -c
-      - pg_stat_statements.track=all
+      - config_file=/etc/postgresql/postgresql.conf
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U test"]
       interval: 5s
@@ -102,11 +98,10 @@ services:
     command:
       - postgres
       - -c
-      - shared_preload_libraries=pg_stat_statements
-      - -c
-      - pg_stat_statements.track=all
+      - config_file=/etc/postgresql/postgresql.conf
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U test"]
       interval: 5s
@@ -124,11 +119,10 @@ services:
     command:
       - postgres
       - -c
-      - shared_preload_libraries=pg_stat_statements
-      - -c
-      - pg_stat_statements.track=all
+      - config_file=/etc/postgresql/postgresql.conf
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U test"]
       interval: 5s
@@ -146,11 +140,10 @@ services:
     command:
       - postgres
       - -c
-      - shared_preload_libraries=pg_stat_statements
-      - -c
-      - pg_stat_statements.track=all
+      - config_file=/etc/postgresql/postgresql.conf
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U test"]
       interval: 5s
@@ -168,11 +161,10 @@ services:
     command:
       - postgres
       - -c
-      - shared_preload_libraries=pg_stat_statements
-      - -c
-      - pg_stat_statements.track=all
+      - config_file=/etc/postgresql/postgresql.conf
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U test"]
       interval: 5s
