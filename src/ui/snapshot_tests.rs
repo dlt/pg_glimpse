@@ -4,7 +4,7 @@
 //! rendered frames against stored snapshots. Changes to UI appearance will fail
 //! tests until the snapshots are reviewed and updated.
 
-use chrono::{TimeZone, Utc};
+use chrono::{Duration, TimeZone, Utc};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
@@ -19,7 +19,8 @@ use crate::db::models::*;
 fn make_server_info() -> ServerInfo {
     ServerInfo {
         version: "PostgreSQL 15.4 on x86_64-pc-linux-gnu".to_string(),
-        start_time: Utc.with_ymd_and_hms(2024, 1, 15, 10, 30, 0).unwrap(),
+        // Use relative time to get stable "756d 10h" uptime (9 chars = "XXXd XXh")
+        start_time: Utc::now() - Duration::days(756) - Duration::hours(10),
         max_connections: 100,
         extensions: DetectedExtensions {
             pg_stat_statements: true,
@@ -297,9 +298,10 @@ fn make_snapshot() -> PgSnapshot {
             archived_count: 500,
             failed_count: 2,
             last_archived_wal: Some("00000001000000000000000F".to_string()),
-            last_archived_time: Some(Utc.with_ymd_and_hms(2024, 1, 15, 12, 25, 0).unwrap()),
+            // Use relative time to get consistent "10h 15m ago" output (11 chars = "XXh XXm ago")
+            last_archived_time: Some(Utc::now() - Duration::hours(10) - Duration::minutes(15)),
             last_failed_wal: Some("00000001000000000000000E".to_string()),
-            last_failed_time: Some(Utc.with_ymd_and_hms(2024, 1, 14, 10, 0, 0).unwrap()),
+            last_failed_time: Some(Utc::now() - Duration::hours(34) - Duration::minutes(25)),
         }),
         bgwriter_stats: Some(BgwriterStats {
             buffers_clean: 5000,
