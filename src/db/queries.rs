@@ -4,7 +4,7 @@ use tokio_postgres::Client;
 
 use super::error::{DbError, Result as DbResult};
 use super::models::{
-    ActiveQuery, ActivitySummary, ArchiverStats, BgwriterStats, BlockingInfo,
+    ActiveQuery, ActivitySummary, ArchiverStats, BgwriterStats, BlockingInfo, BloatSource,
     BufferCacheStats, CheckpointStats, DatabaseStats, DetectedExtensions, IndexInfo,
     PgExtension, PgSetting, PgSnapshot, ReplicationInfo, ReplicationSlot, ServerInfo,
     StatStatement, Subscription, TableStat, VacuumProgress, WaitEventCount, WalStats,
@@ -440,7 +440,7 @@ WHERE backend_type = 'client backend'
 
 const EXTENSIONS_SQL: &str = "
 SELECT extname, extversion FROM pg_extension
-WHERE extname IN ('pg_stat_statements', 'pg_stat_kcache', 'pg_wait_sampling', 'pg_buffercache')
+WHERE extname IN ('pg_stat_statements', 'pg_stat_kcache', 'pg_wait_sampling', 'pg_buffercache', 'pgstattuple')
 ";
 
 const SERVER_INFO_SQL: &str = "
@@ -572,9 +572,185 @@ FROM pg_stat_database
 WHERE datname = current_database()
 ";
 
-/// Table bloat estimation query - simplified version
+/// Table bloat estimation using pgstattuple_approx (most accurate)
+/// Requires pgstattuple extension and appropriate permissions
+const TABLE_BLOAT_PGSTATTUPLE_SQL: &str = "
+SELECT
+    s.schemaname,
+    s.relname,
+    (t.dead_tuple_percent + t.free_percent) AS bloat_pct,
+    ((t.table_len * (t.dead_tuple_percent + t.free_percent) / 100.0))::bigint AS bloat_bytes
+FROM pg_stat_user_tables s,
+LATERAL pgstattuple_approx(s.relid) t
+WHERE s.n_live_tup > 100
+ORDER BY bloat_bytes DESC
+";
+
+/// Index bloat estimation using pgstatindex (accurate for B-tree indexes)
+/// Requires pgstattuple extension
+const INDEX_BLOAT_PGSTATTUPLE_SQL: &str = "
+SELECT
+    sui.schemaname,
+    sui.relname AS table_name,
+    sui.indexrelname AS index_name,
+    (100.0 - t.avg_leaf_density) AS bloat_pct,
+    ((pg_relation_size(sui.indexrelid) * (100.0 - t.avg_leaf_density) / 100.0))::bigint AS bloat_bytes
+FROM pg_stat_user_indexes sui
+JOIN pg_class c ON c.oid = sui.indexrelid
+JOIN pg_index i ON i.indexrelid = sui.indexrelid,
+LATERAL pgstatindex(sui.indexrelid) t
+WHERE pg_relation_size(sui.indexrelid) > 65536
+  AND i.indisvalid
+  AND c.relam = (SELECT oid FROM pg_am WHERE amname = 'btree')
+ORDER BY bloat_bytes DESC
+";
+
+/// Statistical table bloat estimation (ioguix method)
+/// Uses pg_stats to calculate expected row widths and compare to actual table size
+/// More accurate than naive but less accurate than pgstattuple
+const TABLE_BLOAT_STATISTICAL_SQL: &str = "
+WITH constants AS (
+    SELECT
+        current_setting('block_size')::numeric AS bs,
+        23 AS page_hdr,
+        8 AS tuple_hdr
+),
+table_stats AS (
+    SELECT
+        s.schemaname,
+        s.relname,
+        s.relid,
+        c.relpages,
+        c.reltuples,
+        COALESCE(
+            (SELECT (CASE WHEN regexp_replace(reloptions::text, '.*fillfactor=([0-9]+).*', '\\1') ~ '^[0-9]+$'
+                          THEN regexp_replace(reloptions::text, '.*fillfactor=([0-9]+).*', '\\1')::int
+                          ELSE 100 END)
+             FROM pg_class WHERE oid = s.relid), 100
+        ) AS fillfactor
+    FROM pg_stat_user_tables s
+    JOIN pg_class c ON c.oid = s.relid
+    WHERE c.reltuples > 100
+),
+col_stats AS (
+    SELECT
+        ts.schemaname,
+        ts.relname,
+        ts.relid,
+        ts.relpages,
+        ts.reltuples,
+        ts.fillfactor,
+        SUM(
+            (1 - COALESCE(s.null_frac, 0)) *
+            COALESCE(s.avg_width,
+                CASE
+                    WHEN a.atttypid = 'int4'::regtype THEN 4
+                    WHEN a.atttypid = 'int8'::regtype THEN 8
+                    WHEN a.atttypid = 'int2'::regtype THEN 2
+                    WHEN a.atttypid = 'bool'::regtype THEN 1
+                    WHEN a.atttypid = 'float4'::regtype THEN 4
+                    WHEN a.atttypid = 'float8'::regtype THEN 8
+                    WHEN a.atttypid = 'timestamp'::regtype THEN 8
+                    WHEN a.atttypid = 'timestamptz'::regtype THEN 8
+                    WHEN a.atttypid = 'uuid'::regtype THEN 16
+                    ELSE 10
+                END
+            )
+        ) AS avg_row_width
+    FROM table_stats ts
+    JOIN pg_attribute a ON a.attrelid = ts.relid AND a.attnum > 0 AND NOT a.attisdropped
+    LEFT JOIN pg_stats s ON s.schemaname = ts.schemaname
+                        AND s.tablename = ts.relname
+                        AND s.attname = a.attname
+    GROUP BY ts.schemaname, ts.relname, ts.relid, ts.relpages, ts.reltuples, ts.fillfactor
+),
+bloat_calc AS (
+    SELECT
+        cs.schemaname,
+        cs.relname,
+        cs.relpages,
+        cs.reltuples,
+        c.bs,
+        cs.fillfactor,
+        -- Tuple size with alignment (round up to 8 bytes)
+        (c.tuple_hdr + cs.avg_row_width + 7)::int / 8 * 8 AS tpl_size,
+        -- Usable page size accounting for page header and fillfactor
+        ((c.bs - c.page_hdr) * cs.fillfactor / 100)::int AS usable_page
+    FROM col_stats cs
+    CROSS JOIN constants c
+),
+expected AS (
+    SELECT
+        schemaname,
+        relname,
+        relpages,
+        bs,
+        -- Expected pages needed
+        CEIL(reltuples * tpl_size / NULLIF(usable_page, 0)) AS expected_pages
+    FROM bloat_calc
+    WHERE tpl_size > 0 AND usable_page > 0
+)
+SELECT
+    schemaname,
+    relname,
+    GREATEST(0.0, 100.0 * (relpages - expected_pages) / NULLIF(relpages, 0))::float8 AS bloat_pct,
+    GREATEST(0, (relpages - expected_pages) * bs)::bigint AS bloat_bytes
+FROM expected
+WHERE relpages > 0
+ORDER BY bloat_bytes DESC
+";
+
+/// Statistical index bloat estimation
+/// Estimates based on relation size vs expected entries
+const INDEX_BLOAT_STATISTICAL_SQL: &str = "
+WITH index_stats AS (
+    SELECT
+        sui.schemaname,
+        sui.relname AS table_name,
+        sui.indexrelname AS index_name,
+        pg_relation_size(sui.indexrelid) AS index_size,
+        c.reltuples AS table_tuples,
+        -- Estimate index tuple size: key width + tuple overhead
+        COALESCE(
+            (SELECT SUM(COALESCE(s.avg_width, 8))
+             FROM pg_index i
+             JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+             LEFT JOIN pg_stats s ON s.schemaname = sui.schemaname
+                                  AND s.tablename = sui.relname
+                                  AND s.attname = a.attname
+             WHERE i.indexrelid = sui.indexrelid),
+            24
+        ) + 8 AS est_idx_tuple_size
+    FROM pg_stat_user_indexes sui
+    JOIN pg_class c ON c.oid = sui.relid
+    JOIN pg_index i ON i.indexrelid = sui.indexrelid
+    WHERE pg_relation_size(sui.indexrelid) > 65536
+      AND i.indisvalid
+),
+bloat_calc AS (
+    SELECT
+        schemaname,
+        table_name,
+        index_name,
+        index_size,
+        -- Expected index size (tuples * tuple size, with some overhead for B-tree structure ~1.3x)
+        GREATEST(8192, (table_tuples * est_idx_tuple_size * 1.3)::bigint) AS expected_size
+    FROM index_stats
+    WHERE table_tuples > 0
+)
+SELECT
+    schemaname,
+    table_name,
+    index_name,
+    GREATEST(0.0, 100.0 * (index_size - expected_size) / NULLIF(index_size, 0))::float8 AS bloat_pct,
+    GREATEST(0, index_size - expected_size)::bigint AS bloat_bytes
+FROM bloat_calc
+ORDER BY bloat_bytes DESC
+";
+
+/// Naive table bloat estimation - simplified version (fallback)
 /// Estimates bloat by comparing actual table size to expected size based on row count
-const TABLE_BLOAT_SQL: &str = "
+const TABLE_BLOAT_NAIVE_SQL: &str = "
 SELECT
     schemaname,
     relname,
@@ -589,8 +765,8 @@ WHERE n_live_tup > 0
 ORDER BY bloat_bytes DESC
 ";
 
-/// Index bloat estimation query - simplified version
-const INDEX_BLOAT_SQL: &str = "
+/// Naive index bloat estimation - simplified version (fallback)
+const INDEX_BLOAT_NAIVE_SQL: &str = "
 SELECT
     sui.schemaname,
     sui.relname AS table_name,
@@ -623,6 +799,10 @@ pub async fn detect_extensions(client: &Client) -> DetectedExtensions {
             "pg_stat_kcache" => ext.pg_stat_kcache = true,
             "pg_wait_sampling" => ext.pg_wait_sampling = true,
             "pg_buffercache" => ext.pg_buffercache = true,
+            "pgstattuple" => {
+                ext.pgstattuple = true;
+                ext.pgstattuple_version = Some(version);
+            }
             _ => {}
         }
     }
@@ -939,6 +1119,7 @@ pub async fn fetch_table_stats(client: &Client) -> DbResult<Vec<TableStat>> {
             autovacuum_count: row.get("autovacuum_count"),
             bloat_bytes: None,
             bloat_pct: None,
+            bloat_source: None,
         });
     }
     Ok(results)
@@ -1103,6 +1284,7 @@ pub async fn fetch_indexes(client: &Client) -> DbResult<Vec<IndexInfo>> {
             index_definition: row.get("index_definition"),
             bloat_bytes: None,
             bloat_pct: None,
+            bloat_source: None,
         });
     }
     Ok(results)
@@ -1249,6 +1431,7 @@ use std::collections::HashMap;
 pub struct TableBloat {
     pub bloat_bytes: i64,
     pub bloat_pct: f64,
+    pub source: BloatSource,
 }
 
 /// Bloat estimation result for an index
@@ -1256,12 +1439,53 @@ pub struct TableBloat {
 pub struct IndexBloat {
     pub bloat_bytes: i64,
     pub bloat_pct: f64,
+    pub source: BloatSource,
 }
 
-/// Fetch table bloat estimates. Returns map of "schema.table" -> bloat info.
-pub async fn fetch_table_bloat(client: &Client) -> DbResult<HashMap<String, TableBloat>> {
+/// Try pgstattuple-based table bloat query
+async fn try_pgstattuple_table_bloat(client: &Client) -> Option<HashMap<String, TableBloat>> {
+    let rows = client.query(TABLE_BLOAT_PGSTATTUPLE_SQL, &[]).await.ok()?;
+    let mut results = HashMap::with_capacity(rows.len());
+    for row in rows {
+        let schema: String = row.get("schemaname");
+        let table: String = row.get("relname");
+        let key = format!("{schema}.{table}");
+        results.insert(
+            key,
+            TableBloat {
+                bloat_bytes: row.get("bloat_bytes"),
+                bloat_pct: row.get("bloat_pct"),
+                source: BloatSource::Pgstattuple,
+            },
+        );
+    }
+    Some(results)
+}
+
+/// Try statistical table bloat estimation
+async fn try_statistical_table_bloat(client: &Client) -> Option<HashMap<String, TableBloat>> {
+    let rows = client.query(TABLE_BLOAT_STATISTICAL_SQL, &[]).await.ok()?;
+    let mut results = HashMap::with_capacity(rows.len());
+    for row in rows {
+        let schema: String = row.get("schemaname");
+        let table: String = row.get("relname");
+        let key = format!("{schema}.{table}");
+        results.insert(
+            key,
+            TableBloat {
+                bloat_bytes: row.get("bloat_bytes"),
+                bloat_pct: row.get("bloat_pct"),
+                source: BloatSource::Statistical,
+            },
+        );
+    }
+    Some(results)
+}
+
+/// Naive table bloat estimation (fallback)
+async fn naive_table_bloat(client: &Client) -> DbResult<HashMap<String, TableBloat>> {
     let rows = client
-        .query(TABLE_BLOAT_SQL, &[])
+        .query(TABLE_BLOAT_NAIVE_SQL, &[])
         .await
         .map_err(|e| DbError::Query {
             context: "fetch_table_bloat",
@@ -1277,16 +1501,83 @@ pub async fn fetch_table_bloat(client: &Client) -> DbResult<HashMap<String, Tabl
             TableBloat {
                 bloat_bytes: row.get("bloat_bytes"),
                 bloat_pct: row.get("bloat_pct"),
+                source: BloatSource::Naive,
             },
         );
     }
     Ok(results)
 }
 
-/// Fetch index bloat estimates. Returns map of "`schema.index_name`" -> bloat info.
-pub async fn fetch_index_bloat(client: &Client) -> DbResult<HashMap<String, IndexBloat>> {
+/// Fetch table bloat estimates. Returns map of "schema.table" -> bloat info.
+/// Uses pgstattuple if available, falls back to statistical, then naive estimation.
+pub async fn fetch_table_bloat(
+    client: &Client,
+    extensions: &DetectedExtensions,
+) -> DbResult<HashMap<String, TableBloat>> {
+    // Try pgstattuple first if available
+    if extensions.pgstattuple {
+        if let Some(results) = try_pgstattuple_table_bloat(client).await {
+            if !results.is_empty() {
+                return Ok(results);
+            }
+        }
+    }
+
+    // Try statistical estimation
+    if let Some(results) = try_statistical_table_bloat(client).await {
+        if !results.is_empty() {
+            return Ok(results);
+        }
+    }
+
+    // Fall back to naive estimation
+    naive_table_bloat(client).await
+}
+
+/// Try pgstattuple-based index bloat query
+async fn try_pgstattuple_index_bloat(client: &Client) -> Option<HashMap<String, IndexBloat>> {
+    let rows = client.query(INDEX_BLOAT_PGSTATTUPLE_SQL, &[]).await.ok()?;
+    let mut results = HashMap::with_capacity(rows.len());
+    for row in rows {
+        let schema: String = row.get("schemaname");
+        let index: String = row.get("index_name");
+        let key = format!("{schema}.{index}");
+        results.insert(
+            key,
+            IndexBloat {
+                bloat_bytes: row.get("bloat_bytes"),
+                bloat_pct: row.get("bloat_pct"),
+                source: BloatSource::Pgstattuple,
+            },
+        );
+    }
+    Some(results)
+}
+
+/// Try statistical index bloat estimation
+async fn try_statistical_index_bloat(client: &Client) -> Option<HashMap<String, IndexBloat>> {
+    let rows = client.query(INDEX_BLOAT_STATISTICAL_SQL, &[]).await.ok()?;
+    let mut results = HashMap::with_capacity(rows.len());
+    for row in rows {
+        let schema: String = row.get("schemaname");
+        let index: String = row.get("index_name");
+        let key = format!("{schema}.{index}");
+        results.insert(
+            key,
+            IndexBloat {
+                bloat_bytes: row.get("bloat_bytes"),
+                bloat_pct: row.get("bloat_pct"),
+                source: BloatSource::Statistical,
+            },
+        );
+    }
+    Some(results)
+}
+
+/// Naive index bloat estimation (fallback)
+async fn naive_index_bloat(client: &Client) -> DbResult<HashMap<String, IndexBloat>> {
     let rows = client
-        .query(INDEX_BLOAT_SQL, &[])
+        .query(INDEX_BLOAT_NAIVE_SQL, &[])
         .await
         .map_err(|e| DbError::Query {
             context: "fetch_index_bloat",
@@ -1302,10 +1593,37 @@ pub async fn fetch_index_bloat(client: &Client) -> DbResult<HashMap<String, Inde
             IndexBloat {
                 bloat_bytes: row.get("bloat_bytes"),
                 bloat_pct: row.get("bloat_pct"),
+                source: BloatSource::Naive,
             },
         );
     }
     Ok(results)
+}
+
+/// Fetch index bloat estimates. Returns map of "`schema.index_name`" -> bloat info.
+/// Uses pgstattuple if available, falls back to statistical, then naive estimation.
+pub async fn fetch_index_bloat(
+    client: &Client,
+    extensions: &DetectedExtensions,
+) -> DbResult<HashMap<String, IndexBloat>> {
+    // Try pgstattuple first if available
+    if extensions.pgstattuple {
+        if let Some(results) = try_pgstattuple_index_bloat(client).await {
+            if !results.is_empty() {
+                return Ok(results);
+            }
+        }
+    }
+
+    // Try statistical estimation
+    if let Some(results) = try_statistical_index_bloat(client).await {
+        if !results.is_empty() {
+            return Ok(results);
+        }
+    }
+
+    // Fall back to naive estimation
+    naive_index_bloat(client).await
 }
 
 pub async fn cancel_backend(client: &Client, pid: i32) -> DbResult<bool> {

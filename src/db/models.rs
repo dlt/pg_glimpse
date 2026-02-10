@@ -2,12 +2,27 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct DetectedExtensions {
     pub pg_stat_statements: bool,
     pub pg_stat_statements_version: Option<String>,
     pub pg_stat_kcache: bool,
     pub pg_wait_sampling: bool,
     pub pg_buffercache: bool,
+    pub pgstattuple: bool,
+    pub pgstattuple_version: Option<String>,
+}
+
+/// Source of bloat estimation - indicates accuracy level
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum BloatSource {
+    /// Accurate measurement using pgstattuple extension
+    Pgstattuple,
+    /// Estimated from pg_stats column widths (ioguix method)
+    Statistical,
+    /// Simple formula based on assumed row size (legacy, least accurate)
+    #[default]
+    Naive,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -182,6 +197,8 @@ pub struct TableStat {
     pub bloat_bytes: Option<i64>,
     #[serde(default)]
     pub bloat_pct: Option<f64>,
+    #[serde(default)]
+    pub bloat_source: Option<BloatSource>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -272,6 +289,8 @@ pub struct IndexInfo {
     pub bloat_bytes: Option<i64>,
     #[serde(default)]
     pub bloat_pct: Option<f64>,
+    #[serde(default)]
+    pub bloat_source: Option<BloatSource>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -418,7 +437,9 @@ mod tests {
         assert!(!ext.pg_stat_kcache);
         assert!(!ext.pg_wait_sampling);
         assert!(!ext.pg_buffercache);
+        assert!(!ext.pgstattuple);
         assert!(ext.pg_stat_statements_version.is_none());
+        assert!(ext.pgstattuple_version.is_none());
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -437,6 +458,8 @@ mod tests {
                 pg_stat_kcache: false,
                 pg_wait_sampling: true,
                 pg_buffercache: false,
+                pgstattuple: false,
+                pgstattuple_version: None,
             },
             settings: vec![PgSetting {
                 name: "max_connections".to_string(),
@@ -605,5 +628,123 @@ mod tests {
         assert_eq!(parsed.slot_name, "my_slot");
         assert!(parsed.active);
         assert_eq!(parsed.wal_retained_bytes, Some(1_048_576));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // BloatSource tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn bloat_source_default_is_naive() {
+        assert_eq!(BloatSource::default(), BloatSource::Naive);
+    }
+
+    #[test]
+    fn bloat_source_serde_roundtrip() {
+        for source in [BloatSource::Pgstattuple, BloatSource::Statistical, BloatSource::Naive] {
+            let json = serde_json::to_string(&source).unwrap();
+            let parsed: BloatSource = serde_json::from_str(&json).unwrap();
+            assert_eq!(parsed, source);
+        }
+    }
+
+    #[test]
+    fn table_stat_bloat_source_defaults_to_none() {
+        let json = r#"{
+            "schemaname": "public",
+            "relname": "users",
+            "total_size_bytes": 1000000,
+            "table_size_bytes": 800000,
+            "indexes_size_bytes": 200000,
+            "seq_scan": 100,
+            "seq_tup_read": 5000,
+            "idx_scan": 500,
+            "idx_tup_fetch": 2000,
+            "n_live_tup": 1000,
+            "n_dead_tup": 50,
+            "dead_ratio": 5.0,
+            "n_tup_ins": 100,
+            "n_tup_upd": 50,
+            "n_tup_del": 10,
+            "n_tup_hot_upd": 20,
+            "last_vacuum": null,
+            "last_autovacuum": null,
+            "last_analyze": null,
+            "last_autoanalyze": null,
+            "vacuum_count": 5,
+            "autovacuum_count": 10
+        }"#;
+
+        let parsed: TableStat = serde_json::from_str(json).unwrap();
+        assert!(parsed.bloat_source.is_none());
+    }
+
+    #[test]
+    fn table_stat_bloat_source_with_value() {
+        let json = r#"{
+            "schemaname": "public",
+            "relname": "users",
+            "total_size_bytes": 1000000,
+            "table_size_bytes": 800000,
+            "indexes_size_bytes": 200000,
+            "seq_scan": 100,
+            "seq_tup_read": 5000,
+            "idx_scan": 500,
+            "idx_tup_fetch": 2000,
+            "n_live_tup": 1000,
+            "n_dead_tup": 50,
+            "dead_ratio": 5.0,
+            "n_tup_ins": 100,
+            "n_tup_upd": 50,
+            "n_tup_del": 10,
+            "n_tup_hot_upd": 20,
+            "last_vacuum": null,
+            "last_autovacuum": null,
+            "last_analyze": null,
+            "last_autoanalyze": null,
+            "vacuum_count": 5,
+            "autovacuum_count": 10,
+            "bloat_bytes": 50000,
+            "bloat_pct": 5.0,
+            "bloat_source": "Pgstattuple"
+        }"#;
+
+        let parsed: TableStat = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.bloat_bytes, Some(50000));
+        assert_eq!(parsed.bloat_pct, Some(5.0));
+        assert_eq!(parsed.bloat_source, Some(BloatSource::Pgstattuple));
+    }
+
+    #[test]
+    fn detected_extensions_missing_pgstattuple_defaults() {
+        // Old JSON without pgstattuple fields should deserialize with defaults
+        let json = r#"{
+            "pg_stat_statements": true,
+            "pg_stat_statements_version": "1.10",
+            "pg_stat_kcache": false,
+            "pg_wait_sampling": false,
+            "pg_buffercache": true
+        }"#;
+
+        let parsed: DetectedExtensions = serde_json::from_str(json).unwrap();
+        assert!(!parsed.pgstattuple);
+        assert!(parsed.pgstattuple_version.is_none());
+    }
+
+    #[test]
+    fn detected_extensions_with_pgstattuple() {
+        let json = r#"{
+            "pg_stat_statements": true,
+            "pg_stat_statements_version": "1.10",
+            "pg_stat_kcache": false,
+            "pg_wait_sampling": false,
+            "pg_buffercache": true,
+            "pgstattuple": true,
+            "pgstattuple_version": "1.5"
+        }"#;
+
+        let parsed: DetectedExtensions = serde_json::from_str(json).unwrap();
+        assert!(parsed.pgstattuple);
+        assert_eq!(parsed.pgstattuple_version, Some("1.5".to_string()));
     }
 }

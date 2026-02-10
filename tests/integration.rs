@@ -1245,7 +1245,8 @@ async fn test_fetch_table_bloat_all_versions() {
                 .query(&format!("SELECT COUNT(*) FROM {table_name}"), &[])
                 .await;
 
-            let result = queries::fetch_table_bloat(&client).await;
+            let extensions = queries::detect_extensions(&client).await;
+            let result = queries::fetch_table_bloat(&client, &extensions).await;
             assert!(
                 result.is_ok(),
                 "{}: fetch_table_bloat should succeed: {:?}",
@@ -1328,7 +1329,8 @@ async fn test_fetch_index_bloat_all_versions() {
                     .await;
             }
 
-            let result = queries::fetch_index_bloat(&client).await;
+            let extensions = queries::detect_extensions(&client).await;
+            let result = queries::fetch_index_bloat(&client, &extensions).await;
             assert!(
                 result.is_ok(),
                 "{}: fetch_index_bloat should succeed: {:?}",

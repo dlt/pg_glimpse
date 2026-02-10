@@ -318,8 +318,8 @@ async fn run(cli: Cli) -> Result<()> {
                     )
                 }
                 DbCommand::RefreshBloat => {
-                    let table_bloat = db::queries::fetch_table_bloat(&db_client).await;
-                    let index_bloat = db::queries::fetch_index_bloat(&db_client).await;
+                    let table_bloat = db::queries::fetch_table_bloat(&db_client, &extensions).await;
+                    let index_bloat = db::queries::fetch_index_bloat(&db_client, &extensions).await;
                     match (table_bloat, index_bloat) {
                         (Ok(tb), Ok(ib)) => DbResult::BloatData(Ok((tb, ib))),
                         (Err(e), Ok(_)) => DbResult::BloatData(Err(format!("Table bloat query failed: {e}"))),

@@ -5,6 +5,7 @@ use ratatui::widgets::{Cell, Paragraph, Row};
 use ratatui::Frame;
 
 use crate::app::{App, BottomPanel, IndexSortColumn, ViewMode};
+use crate::db::models::BloatSource;
 use crate::ui::theme::Theme;
 use crate::ui::util::{compute_match_indices, empty_state, format_bytes, highlight_matches, styled_table};
 
@@ -110,7 +111,12 @@ pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {
                 || Cell::from("-"),
                 |pct| {
                     let color = Theme::bloat_color(pct);
-                    Cell::from(format!("{pct:.1}%")).style(Style::default().fg(color))
+                    // Show ~ prefix for estimated values (non-pgstattuple)
+                    let prefix = match idx.bloat_source {
+                        Some(BloatSource::Pgstattuple) => "",
+                        _ => "~",
+                    };
+                    Cell::from(format!("{prefix}{pct:.1}%")).style(Style::default().fg(color))
                 },
             );
 

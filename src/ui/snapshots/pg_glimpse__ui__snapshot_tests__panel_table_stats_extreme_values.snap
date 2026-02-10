@@ -4,7 +4,7 @@ expression: buffer_to_string(&terminal)
 ---
 ╭ Table Stats [1] ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │Table                                                          Size      SeqScan    IdxScan    Dead ↓     Dead%     Bloat[b] Last Vacuum  │
-│public.テ ー ブ ル _with_unicode_名 前                               429496729 9223372036 0          4611686018 100.0%    99.9%    never        │
+│public.テ ー ブ ル _with_unicode_名 前                               429496729 9223372036 0          4611686018 100.0%    ~99.9%   never        │
 │                                                                                                                                          │
 │                                                                                                                                          │
 │                                                                                                                                          │

@@ -28,6 +28,8 @@ fn make_server_info() -> ServerInfo {
             pg_stat_kcache: false,
             pg_wait_sampling: false,
             pg_buffercache: true,
+            pgstattuple: false,
+            pgstattuple_version: None,
         },
         settings: vec![],
         extensions_list: vec![],
@@ -130,6 +132,7 @@ fn make_snapshot() -> PgSnapshot {
                 autovacuum_count: 20,
                 bloat_bytes: Some(52_428_800),
                 bloat_pct: Some(6.1),
+                bloat_source: None,
             },
             TableStat {
                 schemaname: "public".to_string(),
@@ -156,6 +159,7 @@ fn make_snapshot() -> PgSnapshot {
                 autovacuum_count: 5,
                 bloat_bytes: None,
                 bloat_pct: None,
+                bloat_source: None,
             },
         ],
         replication: vec![ReplicationInfo {
@@ -230,6 +234,7 @@ fn make_snapshot() -> PgSnapshot {
                 index_definition: "CREATE UNIQUE INDEX orders_pkey ON public.orders USING btree (id)".to_string(),
                 bloat_bytes: None,
                 bloat_pct: None,
+                bloat_source: None,
             },
             IndexInfo {
                 schemaname: "public".to_string(),
@@ -242,6 +247,7 @@ fn make_snapshot() -> PgSnapshot {
                 index_definition: "CREATE INDEX orders_user_id_idx ON public.orders USING btree (user_id)".to_string(),
                 bloat_bytes: Some(5_242_880),
                 bloat_pct: Some(20.0),
+                bloat_source: None,
             },
         ],
         stat_statements: vec![StatStatement {
@@ -275,6 +281,8 @@ fn make_snapshot() -> PgSnapshot {
             pg_stat_kcache: false,
             pg_wait_sampling: false,
             pg_buffercache: true,
+            pgstattuple: false,
+            pgstattuple_version: None,
         },
         db_size: 10_737_418_240,
         checkpoint_stats: Some(CheckpointStats {
@@ -1827,6 +1835,7 @@ fn make_extreme_snapshot() -> PgSnapshot {
                 autovacuum_count: 0,
                 bloat_bytes: Some(i64::MAX),
                 bloat_pct: Some(99.9),
+                bloat_source: None,
             },
         ],
         replication: vec![
@@ -1891,6 +1900,7 @@ fn make_extreme_snapshot() -> PgSnapshot {
                 index_definition: "CREATE INDEX unused_idx_with_very_long_name_that_should_be_truncated_in_display ON public.t USING btree (col1, col2, col3, col4, col5)".to_string(),
                 bloat_bytes: Some(0),
                 bloat_pct: Some(0.0),
+                bloat_source: None,
             },
         ],
         stat_statements: vec![
@@ -2439,6 +2449,7 @@ fn make_zero_values_snapshot() -> PgSnapshot {
                 autovacuum_count: 0,
                 bloat_bytes: Some(0),
                 bloat_pct: Some(0.0),
+                bloat_source: None,
             },
         ],
         replication: vec![],

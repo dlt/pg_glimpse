@@ -693,6 +693,7 @@ impl App {
                 if let Some(bloat) = table_bloat.get(&key) {
                     table.bloat_bytes = Some(bloat.bloat_bytes);
                     table.bloat_pct = Some(bloat.bloat_pct);
+                    table.bloat_source = Some(bloat.source);
                 }
             }
             // Apply index bloat
@@ -701,6 +702,7 @@ impl App {
                 if let Some(bloat) = index_bloat.get(&key) {
                     index.bloat_bytes = Some(bloat.bloat_bytes);
                     index.bloat_pct = Some(bloat.bloat_pct);
+                    index.bloat_source = Some(bloat.source);
                 }
             }
         }
@@ -2851,6 +2853,7 @@ mod tests {
             autovacuum_count: 0,
             bloat_bytes: Some(100_000),
             bloat_pct: Some(12.5),
+            bloat_source: Some(crate::db::models::BloatSource::Statistical),
         }];
         app.update(snap1);
 
@@ -2881,6 +2884,7 @@ mod tests {
             autovacuum_count: 0,
             bloat_bytes: None, // No bloat in new snapshot
             bloat_pct: None,
+            bloat_source: None,
         }];
         app.update(snap2);
 

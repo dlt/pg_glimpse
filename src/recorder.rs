@@ -652,6 +652,8 @@ mod tests {
                 pg_stat_kcache: false,
                 pg_wait_sampling: true,
                 pg_buffercache: true,
+                pgstattuple: false,
+                pgstattuple_version: None,
             },
             settings: vec![],
             extensions_list: vec![],
@@ -740,6 +742,7 @@ mod tests {
                 autovacuum_count: 10,
                 bloat_bytes: Some(500_000),
                 bloat_pct: Some(6.25),
+                bloat_source: None,
             }],
             replication: vec![ReplicationInfo {
                 pid: 9999,
@@ -815,6 +818,7 @@ mod tests {
                     .to_string(),
                 bloat_bytes: Some(25000),
                 bloat_pct: Some(5.0),
+                bloat_source: None,
             }],
             stat_statements: vec![StatStatement {
                 queryid: 123_456_789,
@@ -847,6 +851,8 @@ mod tests {
                 pg_stat_kcache: false,
                 pg_wait_sampling: true,
                 pg_buffercache: true,
+                pgstattuple: false,
+                pgstattuple_version: None,
             },
             db_size: 5_000_000_000,
             checkpoint_stats: Some(CheckpointStats {
