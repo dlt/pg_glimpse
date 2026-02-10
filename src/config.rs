@@ -904,8 +904,9 @@ mod tests {
             #[test]
             fn toml_unwrap_or_default_always_works(input in ".*") {
                 let config: AppConfig = toml::from_str(&input).unwrap_or_default();
-                // Should always get a valid config
-                prop_assert!(config.refresh_interval_secs <= u64::MAX);
+                // Should always get a valid config with sensible defaults
+                prop_assert!(config.refresh_interval_secs > 0);
+                prop_assert!(config.warn_duration_secs > 0.0);
             }
 
             /// Valid TOML with random field values should parse or fail gracefully
