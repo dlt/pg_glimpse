@@ -369,18 +369,18 @@ fn make_app(snapshot: Option<PgSnapshot>) -> App {
     app.snapshot = snapshot;
     // Populate history buffers for graphs
     for i in 0..30 {
-        app.connection_history.push((20 + i % 10) as u64);
-        app.hit_ratio_history.push(900 + (i % 50) as u64);
-        app.avg_query_time_history.push((100 + i * 10) as u64);
-        app.active_query_history.push((3 + i % 5) as u64);
-        app.lock_count_history.push((i % 3) as u64);
-        app.tps_history.push((1000 + i * 50) as u64);
-        app.wal_rate_history.push((1024 * 1024 + i * 10000) as u64);
-        app.blks_read_history.push((500 + i * 10) as u64);
+        app.metrics.connections.push((20 + i % 10) as u64);
+        app.metrics.hit_ratio.push(900 + (i % 50) as u64);
+        app.metrics.avg_query_time.push((100 + i * 10) as u64);
+        app.metrics.active_queries.push((3 + i % 5) as u64);
+        app.metrics.lock_count.push((i % 3) as u64);
+        app.metrics.tps.push((1000 + i * 50) as u64);
+        app.metrics.wal_rate.push((1024 * 1024 + i * 10000) as u64);
+        app.metrics.blks_read.push((500 + i * 10) as u64);
     }
-    app.current_tps = Some(1500.0);
-    app.current_wal_rate = Some(1.5 * 1024.0 * 1024.0);
-    app.current_blks_read_rate = Some(650.0);
+    app.metrics.current_tps = Some(1500.0);
+    app.metrics.current_wal_rate = Some(1.5 * 1024.0 * 1024.0);
+    app.metrics.current_blks_read_rate = Some(650.0);
     app
 }
 

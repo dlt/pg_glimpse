@@ -39,7 +39,7 @@ pub fn render_wal_io(frame: &mut Frame, app: &App, area: Rect) {
         .split(sections[0]);
 
     // Render WAL Generation (PG14+ only)
-    render_wal_column(frame, snap.wal_stats.as_ref(), app.current_wal_rate, columns[0]);
+    render_wal_column(frame, snap.wal_stats.as_ref(), app.metrics.current_wal_rate, columns[0]);
 
     // Render Checkpoints
     render_checkpoint_column(frame, snap.checkpoint_stats.as_ref(), columns[1]);

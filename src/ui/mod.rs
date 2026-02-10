@@ -25,8 +25,8 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     header::render(frame, app, areas.header);
 
     // Top half: 2x2 graph grid
-    let conn_data = app.connection_history.as_vec();
-    let conn_current = app.connection_history.last().unwrap_or(0);
+    let conn_data = app.metrics.connections.as_vec();
+    let conn_current = app.metrics.connections.last().unwrap_or(0);
     graph::render_line_chart(
         frame,
         areas.graph_tl,
@@ -40,8 +40,8 @@ pub fn render(frame: &mut Frame, app: &mut App) {
 
     stats_panel::render(frame, app, areas.graph_tr);
 
-    let cache_data = app.hit_ratio_history.as_vec();
-    let cache_current = app.hit_ratio_history.last().unwrap_or(0);
+    let cache_data = app.metrics.hit_ratio.as_vec();
+    let cache_current = app.metrics.hit_ratio.last().unwrap_or(0);
     let cache_pct = cache_current as f64 / 10.0;
     let cache_color = Theme::hit_ratio_color(cache_pct);
     graph::render_ratio_chart(
@@ -55,8 +55,8 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         marker,
     );
 
-    let avg_data = app.avg_query_time_history.as_vec();
-    let avg_current = app.avg_query_time_history.last().unwrap_or(0);
+    let avg_data = app.metrics.avg_query_time.as_vec();
+    let avg_current = app.metrics.avg_query_time.last().unwrap_or(0);
     let avg_label = format_duration(avg_current as f64 / 1000.0);
     graph::render_line_chart(
         frame,

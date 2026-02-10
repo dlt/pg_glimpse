@@ -233,6 +233,115 @@ impl ReplayState {
     }
 }
 
+/// Metrics history for sparklines and rate calculations
+pub struct MetricsHistory {
+    // Sparkline data
+    pub connections: RingBuffer<u64>,
+    pub avg_query_time: RingBuffer<u64>,
+    pub hit_ratio: RingBuffer<u64>,
+    pub active_queries: RingBuffer<u64>,
+    pub lock_count: RingBuffer<u64>,
+
+    // Rate tracking
+    pub tps: RingBuffer<u64>,
+    pub wal_rate: RingBuffer<u64>,
+    pub blks_read: RingBuffer<u64>,
+
+    // Current values for display
+    pub current_tps: Option<f64>,
+    pub current_wal_rate: Option<f64>,
+    pub current_blks_read_rate: Option<f64>,
+
+    // Previous snapshot for delta calculation
+    prev_snapshot: Option<PgSnapshot>,
+}
+
+impl MetricsHistory {
+    pub fn new(capacity: usize) -> Self {
+        Self {
+            connections: RingBuffer::new(capacity),
+            avg_query_time: RingBuffer::new(capacity),
+            hit_ratio: RingBuffer::new(capacity),
+            active_queries: RingBuffer::new(capacity),
+            lock_count: RingBuffer::new(capacity),
+            tps: RingBuffer::new(capacity),
+            wal_rate: RingBuffer::new(capacity),
+            blks_read: RingBuffer::new(capacity),
+            current_tps: None,
+            current_wal_rate: None,
+            current_blks_read_rate: None,
+            prev_snapshot: None,
+        }
+    }
+
+    /// Push basic metrics from a snapshot
+    pub fn push_snapshot_metrics(&mut self, snap: &PgSnapshot) {
+        self.connections.push(snap.summary.total_backends as u64);
+
+        let active: Vec<&_> = snap
+            .active_queries
+            .iter()
+            .filter(|q| matches!(q.state.as_deref(), Some("active") | Some("idle in transaction")))
+            .collect();
+        let avg_ms = if active.is_empty() {
+            0u64
+        } else {
+            let sum: f64 = active.iter().map(|q| q.duration_secs).sum();
+            (sum / active.len() as f64 * 1000.0) as u64
+        };
+        self.avg_query_time.push(avg_ms);
+
+        self.hit_ratio.push((snap.buffer_cache.hit_ratio * 1000.0) as u64);
+        self.active_queries.push(snap.summary.active_query_count as u64);
+        self.lock_count.push(snap.summary.lock_count as u64);
+    }
+
+    /// Calculate and update rate metrics from snapshot delta
+    pub fn calculate_rates(&mut self, snap: &PgSnapshot) {
+        if let Some(prev) = &self.prev_snapshot {
+            let secs = snap
+                .timestamp
+                .signed_duration_since(prev.timestamp)
+                .num_milliseconds() as f64
+                / 1000.0;
+
+            if secs > 0.0 {
+                // TPS and blocks read from pg_stat_database
+                if let (Some(curr), Some(prev_db)) = (&snap.db_stats, &prev.db_stats) {
+                    let commits = curr.xact_commit - prev_db.xact_commit;
+                    let rollbacks = curr.xact_rollback - prev_db.xact_rollback;
+                    // Guard against counter reset (server restart)
+                    if commits >= 0 && rollbacks >= 0 {
+                        let tps = (commits + rollbacks) as f64 / secs;
+                        self.current_tps = Some(tps);
+                        self.tps.push(tps as u64);
+                    }
+
+                    // Blocks read rate (physical I/O)
+                    let blks = curr.blks_read - prev_db.blks_read;
+                    if blks >= 0 {
+                        let rate = blks as f64 / secs;
+                        self.current_blks_read_rate = Some(rate);
+                        self.blks_read.push(rate as u64);
+                    }
+                }
+
+                // WAL rate from pg_stat_wal
+                if let (Some(curr_wal), Some(prev_wal)) = (&snap.wal_stats, &prev.wal_stats) {
+                    let bytes = curr_wal.wal_bytes - prev_wal.wal_bytes;
+                    if bytes >= 0 {
+                        let rate = bytes as f64 / secs;
+                        self.current_wal_rate = Some(rate);
+                        // Store as KB/s for sparkline (fits in u64 better)
+                        self.wal_rate.push((rate / 1024.0) as u64);
+                    }
+                }
+            }
+        }
+        self.prev_snapshot = Some(snap.clone());
+    }
+}
+
 pub struct App {
     pub running: bool,
     pub paused: bool,
@@ -257,22 +366,7 @@ pub struct App {
     pub wraparound_table_state: TableState,
     pub settings_table_state: TableState,
 
-    pub connection_history: RingBuffer<u64>,
-    pub avg_query_time_history: RingBuffer<u64>,
-    pub hit_ratio_history: RingBuffer<u64>,
-    pub active_query_history: RingBuffer<u64>,
-    pub lock_count_history: RingBuffer<u64>,
-
-    // Rate tracking
-    pub prev_snapshot: Option<PgSnapshot>,
-    pub tps_history: RingBuffer<u64>,
-    pub wal_rate_history: RingBuffer<u64>,
-    pub blks_read_history: RingBuffer<u64>,
-
-    // Current rates (for display)
-    pub current_tps: Option<f64>,
-    pub current_wal_rate: Option<f64>,
-    pub current_blks_read_rate: Option<f64>,
+    pub metrics: MetricsHistory,
 
     pub server_info: ServerInfo,
 
@@ -333,18 +427,7 @@ impl App {
             vacuum_table_state: TableState::default(),
             wraparound_table_state: TableState::default(),
             settings_table_state: TableState::default(),
-            connection_history: RingBuffer::new(history_len),
-            avg_query_time_history: RingBuffer::new(history_len),
-            hit_ratio_history: RingBuffer::new(history_len),
-            active_query_history: RingBuffer::new(history_len),
-            lock_count_history: RingBuffer::new(history_len),
-            prev_snapshot: None,
-            tps_history: RingBuffer::new(history_len),
-            wal_rate_history: RingBuffer::new(history_len),
-            blks_read_history: RingBuffer::new(history_len),
-            current_tps: None,
-            current_wal_rate: None,
-            current_blks_read_rate: None,
+            metrics: MetricsHistory::new(history_len),
             server_info,
             host,
             port,
@@ -393,31 +476,9 @@ impl App {
     }
 
     pub fn update(&mut self, mut snapshot: PgSnapshot) {
-        self.connection_history
-            .push(snapshot.summary.total_backends as u64);
-
-        let active: Vec<&_> = snapshot
-            .active_queries
-            .iter()
-            .filter(|q| matches!(q.state.as_deref(), Some("active") | Some("idle in transaction")))
-            .collect();
-        let avg_ms = if active.is_empty() {
-            0u64
-        } else {
-            let sum: f64 = active.iter().map(|q| q.duration_secs).sum();
-            (sum / active.len() as f64 * 1000.0) as u64
-        };
-        self.avg_query_time_history.push(avg_ms);
-
-        self.hit_ratio_history
-            .push((snapshot.buffer_cache.hit_ratio * 1000.0) as u64);
-        self.active_query_history
-            .push(snapshot.summary.active_query_count as u64);
-        self.lock_count_history
-            .push(snapshot.summary.lock_count as u64);
-
-        // Calculate rates from delta
-        self.calculate_rates(&snapshot);
+        // Update metrics history
+        self.metrics.push_snapshot_metrics(&snapshot);
+        self.metrics.calculate_rates(&snapshot);
 
         // Preserve bloat data from previous snapshot
         if let Some(ref old_snap) = self.snapshot {
@@ -462,50 +523,6 @@ impl App {
 
         self.snapshot = Some(snapshot);
         self.last_error = None;
-    }
-
-    fn calculate_rates(&mut self, snap: &PgSnapshot) {
-        if let Some(prev) = &self.prev_snapshot {
-            let secs = snap
-                .timestamp
-                .signed_duration_since(prev.timestamp)
-                .num_milliseconds() as f64
-                / 1000.0;
-
-            if secs > 0.0 {
-                // TPS and blocks read from pg_stat_database
-                if let (Some(curr), Some(prev_db)) = (&snap.db_stats, &prev.db_stats) {
-                    let commits = curr.xact_commit - prev_db.xact_commit;
-                    let rollbacks = curr.xact_rollback - prev_db.xact_rollback;
-                    // Guard against counter reset (server restart)
-                    if commits >= 0 && rollbacks >= 0 {
-                        let tps = (commits + rollbacks) as f64 / secs;
-                        self.current_tps = Some(tps);
-                        self.tps_history.push(tps as u64);
-                    }
-
-                    // Blocks read rate (physical I/O)
-                    let blks = curr.blks_read - prev_db.blks_read;
-                    if blks >= 0 {
-                        let rate = blks as f64 / secs;
-                        self.current_blks_read_rate = Some(rate);
-                        self.blks_read_history.push(rate as u64);
-                    }
-                }
-
-                // WAL rate from pg_stat_wal
-                if let (Some(curr_wal), Some(prev_wal)) = (&snap.wal_stats, &prev.wal_stats) {
-                    let bytes = curr_wal.wal_bytes - prev_wal.wal_bytes;
-                    if bytes >= 0 {
-                        let rate = bytes as f64 / secs;
-                        self.current_wal_rate = Some(rate);
-                        // Store as KB/s for sparkline (fits in u64 better)
-                        self.wal_rate_history.push((rate / 1024.0) as u64);
-                    }
-                }
-            }
-        }
-        self.prev_snapshot = Some(snap.clone());
     }
 
     pub fn update_error(&mut self, err: String) {
@@ -2612,7 +2629,7 @@ mod tests {
         assert!(app.snapshot.is_some());
         assert_eq!(app.snapshot.as_ref().unwrap().active_queries.len(), 0);
         // History should still be updated
-        assert!(!app.connection_history.as_vec().is_empty());
+        assert!(!app.metrics.connections.as_vec().is_empty());
     }
 
     #[test]
@@ -2628,16 +2645,16 @@ mod tests {
     #[test]
     fn update_populates_histories() {
         let mut app = make_app();
-        assert!(app.connection_history.as_vec().is_empty());
-        assert!(app.hit_ratio_history.as_vec().is_empty());
+        assert!(app.metrics.connections.as_vec().is_empty());
+        assert!(app.metrics.hit_ratio.as_vec().is_empty());
 
         let mut snap = make_snapshot();
         snap.summary.total_backends = 25;
         snap.buffer_cache.hit_ratio = 0.95;
         app.update(snap);
 
-        assert_eq!(app.connection_history.as_vec().len(), 1);
-        assert_eq!(app.hit_ratio_history.as_vec().len(), 1);
+        assert_eq!(app.metrics.connections.as_vec().len(), 1);
+        assert_eq!(app.metrics.hit_ratio.as_vec().len(), 1);
     }
 
     #[test]
@@ -2674,7 +2691,7 @@ mod tests {
         app.update(snap);
 
         // Average of 2.0 and 4.0 = 3.0 seconds = 3000ms
-        let last_avg = app.avg_query_time_history.last().unwrap();
+        let last_avg = app.metrics.avg_query_time.last().unwrap();
         assert_eq!(last_avg, 3000);
     }
 
@@ -2699,7 +2716,7 @@ mod tests {
         app.update(snap);
 
         // No active queries, so avg should be 0
-        let last_avg = app.avg_query_time_history.last().unwrap();
+        let last_avg = app.metrics.avg_query_time.last().unwrap();
         assert_eq!(last_avg, 0);
     }
 
@@ -3144,8 +3161,8 @@ mod tests {
         app.update(snap);
 
         // No previous snapshot, so no rate should be calculated
-        assert!(app.current_tps.is_none());
-        assert!(app.current_blks_read_rate.is_none());
+        assert!(app.metrics.current_tps.is_none());
+        assert!(app.metrics.current_blks_read_rate.is_none());
     }
 
     #[test]
@@ -3176,18 +3193,18 @@ mod tests {
         app.update(snap2);
 
         // TPS should be (190 + 10) / 2 = 100 TPS
-        assert!(app.current_tps.is_some());
-        let tps = app.current_tps.unwrap();
+        assert!(app.metrics.current_tps.is_some());
+        let tps = app.metrics.current_tps.unwrap();
         assert!((tps - 100.0).abs() < 0.1, "Expected ~100 TPS, got {}", tps);
 
         // Blks/sec should be 100 / 2 = 50
-        assert!(app.current_blks_read_rate.is_some());
-        let blks = app.current_blks_read_rate.unwrap();
+        assert!(app.metrics.current_blks_read_rate.is_some());
+        let blks = app.metrics.current_blks_read_rate.unwrap();
         assert!((blks - 50.0).abs() < 0.1, "Expected ~50 blks/s, got {}", blks);
 
         // History should have one entry
-        assert_eq!(app.tps_history.as_vec().len(), 1);
-        assert_eq!(app.blks_read_history.as_vec().len(), 1);
+        assert_eq!(app.metrics.tps.as_vec().len(), 1);
+        assert_eq!(app.metrics.blks_read.as_vec().len(), 1);
     }
 
     #[test]
@@ -3238,8 +3255,8 @@ mod tests {
         app.update(snap2);
 
         // WAL rate should be 2MB / 2s = 1MB/s
-        assert!(app.current_wal_rate.is_some());
-        let wal_rate = app.current_wal_rate.unwrap();
+        assert!(app.metrics.current_wal_rate.is_some());
+        let wal_rate = app.metrics.current_wal_rate.unwrap();
         let expected = 1_000_000.0; // 1 MB/s
         assert!(
             (wal_rate - expected).abs() < 1000.0,
@@ -3248,7 +3265,7 @@ mod tests {
         );
 
         // History should have one entry (stored as KB/s)
-        assert_eq!(app.wal_rate_history.as_vec().len(), 1);
+        assert_eq!(app.metrics.wal_rate.as_vec().len(), 1);
     }
 
     #[test]
@@ -3269,8 +3286,8 @@ mod tests {
         app.update(snap2);
 
         // No rates should be calculated
-        assert!(app.current_tps.is_none());
-        assert!(app.current_blks_read_rate.is_none());
+        assert!(app.metrics.current_tps.is_none());
+        assert!(app.metrics.current_blks_read_rate.is_none());
     }
 
     #[test]
@@ -3303,8 +3320,8 @@ mod tests {
         app.update(snap2);
 
         // TPS should be calculated, but WAL rate should not
-        assert!(app.current_tps.is_some());
-        assert!(app.current_wal_rate.is_none());
+        assert!(app.metrics.current_tps.is_some());
+        assert!(app.metrics.current_wal_rate.is_none());
     }
 
     #[test]
@@ -3335,7 +3352,7 @@ mod tests {
 
         // No rate should be calculated with zero time difference
         // (would cause division by zero)
-        assert!(app.current_tps.is_none());
+        assert!(app.metrics.current_tps.is_none());
     }
 
     #[test]
@@ -3366,8 +3383,8 @@ mod tests {
         app.update(snap2);
 
         // TPS should be 10 / 0.1 = 100 TPS
-        assert!(app.current_tps.is_some());
-        let tps = app.current_tps.unwrap();
+        assert!(app.metrics.current_tps.is_some());
+        let tps = app.metrics.current_tps.unwrap();
         assert!((tps - 100.0).abs() < 1.0, "Expected ~100 TPS, got {}", tps);
     }
 
@@ -3401,8 +3418,8 @@ mod tests {
         }
 
         // Should have 5 history entries
-        assert_eq!(app.tps_history.as_vec().len(), 5);
-        assert_eq!(app.blks_read_history.as_vec().len(), 5);
+        assert_eq!(app.metrics.tps.as_vec().len(), 5);
+        assert_eq!(app.metrics.blks_read.as_vec().len(), 5);
     }
 
     #[test]
@@ -3433,7 +3450,7 @@ mod tests {
         app.update(snap2);
 
         // TPS should be calculated (commits/rollbacks increased normally)
-        assert!(app.current_tps.is_some());
+        assert!(app.metrics.current_tps.is_some());
         // But blks rate should not be in history (counter went backwards)
         // Note: current_blks_read_rate may still have old value
     }
