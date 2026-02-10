@@ -108,7 +108,9 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
         Line::from(""),
         section_header("Overlay"),
         entry("Esc / q", "Close"),
-        entry("j / k", "Scroll"),
+        entry("j / k", "Scroll line"),
+        entry("Ctrl+d/u", "Scroll page"),
+        entry("PgDn/PgUp", "Scroll page"),
         entry("g / G", "Top / bottom"),
     ]);
 

@@ -1188,6 +1188,7 @@ impl App {
 
     /// Handle overlay scroll keys, returns true if handled
     fn handle_overlay_scroll(&mut self, key: KeyEvent) -> bool {
+        const PAGE_SIZE: u16 = 10;
         match key.code {
             KeyCode::Up | KeyCode::Char('k') => {
                 self.overlay_scroll = self.overlay_scroll.saturating_sub(1);
@@ -1195,6 +1196,22 @@ impl App {
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 self.overlay_scroll = self.overlay_scroll.saturating_add(1);
+                true
+            }
+            KeyCode::PageUp => {
+                self.overlay_scroll = self.overlay_scroll.saturating_sub(PAGE_SIZE);
+                true
+            }
+            KeyCode::PageDown => {
+                self.overlay_scroll = self.overlay_scroll.saturating_add(PAGE_SIZE);
+                true
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.overlay_scroll = self.overlay_scroll.saturating_sub(PAGE_SIZE);
+                true
+            }
+            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.overlay_scroll = self.overlay_scroll.saturating_add(PAGE_SIZE);
                 true
             }
             KeyCode::Char('g') => {
@@ -2108,6 +2125,34 @@ mod tests {
 
         app.handle_key(key(KeyCode::Char('G')));
         assert_eq!(app.overlay_scroll, u16::MAX);
+    }
+
+    #[test]
+    fn help_scroll_page() {
+        let mut app = make_app();
+        app.view_mode = ViewMode::Help;
+        app.overlay_scroll = 20;
+
+        // Ctrl+D scrolls down by page (10 lines)
+        app.handle_key(key_ctrl(KeyCode::Char('d')));
+        assert_eq!(app.overlay_scroll, 30);
+
+        // Ctrl+U scrolls up by page
+        app.handle_key(key_ctrl(KeyCode::Char('u')));
+        assert_eq!(app.overlay_scroll, 20);
+
+        // PageDown
+        app.handle_key(key(KeyCode::PageDown));
+        assert_eq!(app.overlay_scroll, 30);
+
+        // PageUp
+        app.handle_key(key(KeyCode::PageUp));
+        assert_eq!(app.overlay_scroll, 20);
+
+        // Ctrl+U at top doesn't underflow
+        app.overlay_scroll = 5;
+        app.handle_key(key_ctrl(KeyCode::Char('u')));
+        assert_eq!(app.overlay_scroll, 0);
     }
 
     #[test]
