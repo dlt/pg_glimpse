@@ -104,9 +104,7 @@ pub fn render_table_stats(frame: &mut Frame, app: &mut App, area: Rect) {
                     .style(Style::default().fg(dead_color)),
                 bloat_cell,
                 Cell::from(
-                    t.last_autovacuum
-                        .map(|ts| ts.format("%m-%d %H:%M").to_string())
-                        .unwrap_or_else(|| "never".into()),
+                    t.last_autovacuum.map_or_else(|| "never".into(), |ts| ts.format("%m-%d %H:%M").to_string()),
                 ),
             ])
         })

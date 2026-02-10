@@ -1081,25 +1081,25 @@ impl App {
     }
 
     fn handle_replication_key(&mut self, key: KeyEvent) {
-        let len = self.snapshot.as_ref().map(|s| s.replication.len()).unwrap_or(0);
+        let len = self.snapshot.as_ref().map_or(0, |s| s.replication.len());
         simple_table_nav(key, &mut self.replication_table_state, len, ViewMode::ReplicationInspect,
             &mut self.overlay_scroll, &mut self.view_mode);
     }
 
     fn handle_blocking_key(&mut self, key: KeyEvent) {
-        let len = self.snapshot.as_ref().map(|s| s.blocking_info.len()).unwrap_or(0);
+        let len = self.snapshot.as_ref().map_or(0, |s| s.blocking_info.len());
         simple_table_nav(key, &mut self.blocking_table_state, len, ViewMode::BlockingInspect,
             &mut self.overlay_scroll, &mut self.view_mode);
     }
 
     fn handle_vacuum_key(&mut self, key: KeyEvent) {
-        let len = self.snapshot.as_ref().map(|s| s.vacuum_progress.len()).unwrap_or(0);
+        let len = self.snapshot.as_ref().map_or(0, |s| s.vacuum_progress.len());
         simple_table_nav(key, &mut self.vacuum_table_state, len, ViewMode::VacuumInspect,
             &mut self.overlay_scroll, &mut self.view_mode);
     }
 
     fn handle_wraparound_key(&mut self, key: KeyEvent) {
-        let len = self.snapshot.as_ref().map(|s| s.wraparound.len()).unwrap_or(0);
+        let len = self.snapshot.as_ref().map_or(0, |s| s.wraparound.len());
         simple_table_nav(key, &mut self.wraparound_table_state, len, ViewMode::WraparoundInspect,
             &mut self.overlay_scroll, &mut self.view_mode);
     }

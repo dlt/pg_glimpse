@@ -127,9 +127,7 @@ fn render_live(frame: &mut Frame, app: &App, area: Rect) {
 fn render_replay(frame: &mut Frame, app: &App, replay: &crate::app::ReplayState, area: Rect) {
     let snap_ts = app
         .snapshot
-        .as_ref()
-        .map(|s| s.timestamp.format("%H:%M:%S").to_string())
-        .unwrap_or_else(|| "--:--:--".to_string());
+        .as_ref().map_or_else(|| "--:--:--".to_string(), |s| s.timestamp.format("%H:%M:%S").to_string());
 
     let speed_label = format_speed(replay.speed);
 

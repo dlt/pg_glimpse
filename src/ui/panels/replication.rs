@@ -205,7 +205,7 @@ fn render_replication_slots(
                 Cell::from(s.slot_type.clone()),
                 Cell::from(s.database.clone().unwrap_or_else(|| "-".into())),
                 Cell::from(if s.active { "yes" } else { "no" }).style(active_style),
-                Cell::from(s.wal_retained_bytes.map(format_bytes).unwrap_or_else(|| "-".into()))
+                Cell::from(s.wal_retained_bytes.map_or_else(|| "-".into(), format_bytes))
                     .style(Style::default().fg(retained_color)),
                 Cell::from(s.restart_lsn.clone().unwrap_or_else(|| "-".into())),
             ])
@@ -278,7 +278,7 @@ fn render_subscriptions(
             Row::new(vec![
                 Cell::from(truncate(&s.subname, 20)),
                 Cell::from(if s.enabled { "yes" } else { "no" }).style(enabled_style),
-                Cell::from(s.pid.map(|p| p.to_string()).unwrap_or_else(|| "-".into())),
+                Cell::from(s.pid.map_or_else(|| "-".into(), |p| p.to_string())),
                 Cell::from(s.relcount.to_string()),
                 Cell::from(s.received_lsn.clone().unwrap_or_else(|| "-".into())),
                 Cell::from(last_msg),

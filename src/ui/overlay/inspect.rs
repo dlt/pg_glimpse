@@ -248,7 +248,7 @@ pub fn render_replication_inspect(frame: &mut Frame, app: &App, area: Rect) {
             label("  User:            "),
             val_opt(&r.usename),
             label("      User SysID:    "),
-            val(r.usesysid.map(|id| id.to_string()).unwrap_or_else(|| "-".into())),
+            val(r.usesysid.map_or_else(|| "-".into(), |id| id.to_string())),
         ]),
         Line::from(vec![
             label("  Application:     "),
@@ -258,7 +258,7 @@ pub fn render_replication_inspect(frame: &mut Frame, app: &App, area: Rect) {
             label("  Client Addr:     "),
             val_opt(&r.client_addr),
             label("      Port:          "),
-            val(r.client_port.map(|p| p.to_string()).unwrap_or_else(|| "-".into())),
+            val(r.client_port.map_or_else(|| "-".into(), |p| p.to_string())),
         ]),
         Line::from(vec![
             label("  Client Hostname: "),
@@ -281,7 +281,7 @@ pub fn render_replication_inspect(frame: &mut Frame, app: &App, area: Rect) {
             label("  Sync State:      "),
             val_opt(&r.sync_state),
             label("      Sync Priority: "),
-            val(r.sync_priority.map(|p| p.to_string()).unwrap_or_else(|| "-".into())),
+            val(r.sync_priority.map_or_else(|| "-".into(), |p| p.to_string())),
         ]),
         Line::from(vec![
             label("  Backend Xmin:    "),

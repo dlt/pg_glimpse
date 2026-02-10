@@ -232,11 +232,11 @@ pub fn render_confirm_cancel_batch(frame: &mut Frame, pids: &[i32], area: Rect) 
     let count = pids.len();
     let pids_str = if count <= 8 {
         pids.iter()
-            .map(|p| p.to_string())
+            .map(std::string::ToString::to_string)
             .collect::<Vec<_>>()
             .join(", ")
     } else {
-        let first_six: Vec<_> = pids.iter().take(6).map(|p| p.to_string()).collect();
+        let first_six: Vec<_> = pids.iter().take(6).map(std::string::ToString::to_string).collect();
         format!("{}, ... (+{} more)", first_six.join(", "), count - 6)
     };
 
@@ -287,11 +287,11 @@ pub fn render_confirm_kill_batch(frame: &mut Frame, pids: &[i32], area: Rect) {
     let count = pids.len();
     let pids_str = if count <= 8 {
         pids.iter()
-            .map(|p| p.to_string())
+            .map(std::string::ToString::to_string)
             .collect::<Vec<_>>()
             .join(", ")
     } else {
-        let first_six: Vec<_> = pids.iter().take(6).map(|p| p.to_string()).collect();
+        let first_six: Vec<_> = pids.iter().take(6).map(std::string::ToString::to_string).collect();
         format!("{}, ... (+{} more)", first_six.join(", "), count - 6)
     };
 

@@ -94,13 +94,9 @@ impl Cli {
                     .unwrap_or_else(|| self.host.clone());
                 let port = config.get_ports().first().copied().unwrap_or(self.port);
                 let dbname = config
-                    .get_dbname()
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| self.dbname.clone());
+                    .get_dbname().map_or_else(|| self.dbname.clone(), std::string::ToString::to_string);
                 let user = config
-                    .get_user()
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| self.user.clone());
+                    .get_user().map_or_else(|| self.user.clone(), std::string::ToString::to_string);
                 return ConnectionInfo {
                     host,
                     port,
