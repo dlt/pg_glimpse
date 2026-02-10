@@ -134,7 +134,9 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         ViewMode::ConfirmKillBatch(pids) => {
             overlay::render_confirm_kill_batch(frame, pids, frame.area());
         }
-        ViewMode::Config => overlay::render_config(frame, app, frame.area()),
+        ViewMode::Config | ViewMode::ConfigEditRecordingsDir => {
+            overlay::render_config(frame, app, frame.area());
+        }
         ViewMode::Help => overlay::render_help(frame, app, frame.area()),
         ViewMode::Recordings => overlay::render_recordings(frame, app, frame.area()),
         ViewMode::ConfirmDeleteRecording(ref path) => {

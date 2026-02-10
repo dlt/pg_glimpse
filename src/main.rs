@@ -236,7 +236,7 @@ async fn run(cli: Cli) -> Result<()> {
     let refresh = cli.refresh.unwrap_or(config.refresh_interval_secs);
 
     // Clean up old recordings on startup
-    recorder::Recorder::cleanup_old(config.recording_retention_secs);
+    recorder::Recorder::cleanup_old(config.recording_retention_secs, config.recordings_dir.as_deref());
 
     // Fetch server info and extensions at startup
     let server_info = db::queries::fetch_server_info(&client).await?;
@@ -246,7 +246,7 @@ async fn run(cli: Cli) -> Result<()> {
 
     // Start recorder
     let mut recorder =
-        recorder::Recorder::new(&conn_info.host, conn_info.port, &conn_info.dbname, &conn_info.user, &server_info).ok();
+        recorder::Recorder::new(&conn_info.host, conn_info.port, &conn_info.dbname, &conn_info.user, &server_info, config.recordings_dir.as_deref()).ok();
 
     let mut app = app::App::new(
         conn_info.host,

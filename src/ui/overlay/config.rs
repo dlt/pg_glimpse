@@ -4,8 +4,9 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 use ratatui::Frame;
 
-use crate::app::App;
+use crate::app::{App, ViewMode};
 use crate::config::ConfigItem;
+use crate::recorder::Recorder;
 use crate::ui::theme::Theme;
 
 use super::{centered_rect, overlay_block, section_header};
@@ -14,7 +15,7 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(70, 75, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block(" Configuration  [←→] change  [Esc] save & close ", Theme::border_active());
+    let block = overlay_block(" Configuration  [←→] change  [q/Esc] save & close ", Theme::border_active());
 
     let logo_style = Style::default().fg(Theme::border_active());
     let mut lines = vec![
@@ -29,9 +30,14 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
         section_header("Settings"),
     ];
 
+    let is_editing_dir = matches!(app.view_mode, ViewMode::ConfigEditRecordingsDir);
+
     for (i, item) in ConfigItem::ALL.iter().enumerate() {
         let selected = i == app.config_selected;
         let indicator = if selected { "▸ " } else { "  " };
+
+        // Check if this item is being edited
+        let is_editing_this = is_editing_dir && *item == ConfigItem::RecordingsDir;
 
         let value_str = match item {
             ConfigItem::GraphMarker => app.config.graph_marker.label().to_string(),
@@ -47,6 +53,16 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
                     format!("{}m", secs / 60)
                 }
             }
+            ConfigItem::RecordingsDir => {
+                if is_editing_this {
+                    format!("{}█", app.config_input_buffer)
+                } else {
+                    app.config
+                        .recordings_dir
+                        .clone()
+                        .unwrap_or_else(|| Recorder::default_recordings_dir().to_string_lossy().into_owned())
+                }
+            }
         };
 
         let label_style = if selected {
@@ -57,7 +73,12 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
             Style::default().fg(Theme::fg())
         };
 
-        let value_style = if selected {
+        let value_style = if is_editing_this {
+            // Editing mode: different style
+            Style::default()
+                .fg(Theme::fg())
+                .bg(Theme::highlight_bg())
+        } else if selected {
             Style::default()
                 .fg(Theme::overlay_bg())
                 .bg(Theme::border_active())
@@ -66,18 +87,33 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
             Style::default().fg(Theme::fg_dim())
         };
 
-        let arrow_style = if selected {
+        let arrow_style = if selected && !is_editing_this {
             Style::default().fg(Theme::border_active())
         } else {
             Style::default().fg(Theme::border_dim())
         };
 
-        lines.push(Line::from(vec![
-            Span::styled(format!("  {}{:<20}", indicator, item.label()), label_style),
-            Span::styled("◀ ", arrow_style),
-            Span::styled(format!(" {value_str} "), value_style),
-            Span::styled(" ▶", arrow_style),
-        ]));
+        // For RecordingsDir, show Enter hint instead of arrows when selected
+        if *item == ConfigItem::RecordingsDir && selected && !is_editing_this {
+            lines.push(Line::from(vec![
+                Span::styled(format!("  {}{:<20}", indicator, item.label()), label_style),
+                Span::styled("[Enter] ", arrow_style),
+                Span::styled(format!(" {value_str} "), value_style),
+            ]));
+        } else if is_editing_this {
+            lines.push(Line::from(vec![
+                Span::styled(format!("  {}{:<20}", indicator, item.label()), label_style),
+                Span::styled(format!(" {value_str} "), value_style),
+                Span::styled(" [Enter] save  [Esc] cancel", Style::default().fg(Theme::fg_dim())),
+            ]));
+        } else {
+            lines.push(Line::from(vec![
+                Span::styled(format!("  {}{:<20}", indicator, item.label()), label_style),
+                Span::styled("◀ ", arrow_style),
+                Span::styled(format!(" {value_str} "), value_style),
+                Span::styled(" ▶", arrow_style),
+            ]));
+        }
     }
 
     // About section

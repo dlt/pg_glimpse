@@ -8,7 +8,7 @@ expression: buffer_to_string(&terminal)
 │                                                                    ││DB: 10.0 GB · 25/100 conn (25%)                                     │
 │                                                                    ││──────────────────────────────────────────────────────────────────  │
 │           ⢀⣀⣀⣀⣠⣤⣤⣤⣶⣶⣦⡀            ⣀⣀⣀⣠⣤⣤⣤⣴⣶⣦⡀            ⣀⣀⣀⣀⣤⣤⣤⣤⣶⣶││Active: 5 ▁▃▅▆█▁▃▅▆█  Idle/Txn: 2  Wait: 1  AV: 1                   │
-│⣠⣤⣤⣤⣶⣶⣶⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿╭  Configuration  [←→] change  [Esc] save & close  ──────────────────────────────────────────────╮                    │
+│⣠⣤⣤⣤⣶⣶⣶⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿╭  Configuration  [←→] change  [q/Esc] save & close  ────────────────────────────────────────────╮                    │
 │⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│                                                                                                │                    │
 │⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│ ██████╗  ██████╗     ██████╗ ██╗     ██╗███╗   ███╗██████╗ ███████╗███████╗                    │                    │
 │⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│ ██╔══██╗██╔════╝    ██╔════╝ ██║     ██║████╗ ████║██╔══██╗██╔════╝██╔════╝                    │                    │
@@ -24,15 +24,15 @@ expression: buffer_to_string(&terminal)
 │⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│    Warn Duration       ◀  1.0s  ▶                                                              │⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│
 ╰────────────────────│    Danger Duration     ◀  10.0s  ▶                                                             │────────────────────╯
 ╭ Queries [2] ───────│    Recording Retention ◀  1h  ▶                                                                │────────────────────╮
-│PID      Query      │                                                                                                │    Wait            │
-│12346    UPDATE orde│  About ────────────────────────────────────────                                                │    ClientRead      │
-│12345    SELECT * FR│    Version:    X.X.X                                                                           │    DataFileRead    │
+│PID      Query      │    Recordings Dir      ◀  <RECORDINGS_DIR> ▶      │    Wait            │
+│12346    UPDATE orde│                                                                                                │    ClientRead      │
+│12345    SELECT * FR│  About ────────────────────────────────────────                                                │    DataFileRead    │
+│                    │    Version:    X.X.X                                                                           │                    │
 │                    │    License:    MIT                                                                             │                    │
 │                    │    Built with: Rust + ratatui + tokio-postgres                                                 │                    │
 │                    │                                                                                                │                    │
 │                    │    GitHub:     github.com/dlt/pg_glimpse                                                       │                    │
 │                    │    Issues:     github.com/dlt/pg_glimpse/issues                                                │                    │
-│                    │                                                                                                │                    │
 │                    │                                                                                                │                    │
 │                    │                                                                                                │                    │
 │                    │                                                                                                │                    │

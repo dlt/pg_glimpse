@@ -124,6 +124,7 @@ pub enum ViewMode {
     ConfirmCancelBatch(Vec<i32>),
     ConfirmKillBatch(Vec<i32>),
     Config,
+    ConfigEditRecordingsDir,
     Help,
     Recordings,
     ConfirmDeleteRecording(PathBuf),
@@ -489,6 +490,7 @@ pub struct App {
 
     pub config: AppConfig,
     pub config_selected: usize,
+    pub config_input_buffer: String,
 
     pub filter: FilterState,
     pub replay: Option<ReplayState>,
@@ -588,6 +590,7 @@ impl App {
             spinner_frame: 0,
             config,
             config_selected: 0,
+            config_input_buffer: String::new(),
             filter: FilterState::default(),
             replay: None,
             overlay_scroll: 0,
@@ -1304,7 +1307,7 @@ impl App {
 
     fn handle_config_key(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Esc => {
+            KeyCode::Esc | KeyCode::Char('q') => {
                 self.pending_action = Some(AppAction::SaveConfig);
                 self.view_mode = ViewMode::Normal;
             }
@@ -1323,6 +1326,41 @@ impl App {
             }
             KeyCode::Right | KeyCode::Char('l') => {
                 self.config_adjust(1);
+            }
+            KeyCode::Enter => {
+                // Enter edit mode for RecordingsDir
+                if ConfigItem::ALL[self.config_selected] == ConfigItem::RecordingsDir {
+                    self.config_input_buffer = self.config.recordings_dir.clone().unwrap_or_default();
+                    self.view_mode = ViewMode::ConfigEditRecordingsDir;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_config_edit_recordings_dir_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                // Cancel editing
+                self.config_input_buffer.clear();
+                self.view_mode = ViewMode::Config;
+            }
+            KeyCode::Enter => {
+                // Save the input
+                let input = self.config_input_buffer.trim();
+                if input.is_empty() {
+                    self.config.recordings_dir = None;
+                } else {
+                    self.config.recordings_dir = Some(input.to_string());
+                }
+                self.config_input_buffer.clear();
+                self.view_mode = ViewMode::Config;
+            }
+            KeyCode::Backspace => {
+                self.config_input_buffer.pop();
+            }
+            KeyCode::Char(c) => {
+                self.config_input_buffer.push(c);
             }
             _ => {}
         }
@@ -1377,7 +1415,7 @@ impl App {
             if crate::recorder::Recorder::delete_recording(&path).is_ok() {
                 self.status_message = Some("Recording deleted".into());
                 // Refresh the list
-                self.recordings_list = crate::recorder::Recorder::list_recordings();
+                self.recordings_list = crate::recorder::Recorder::list_recordings(self.config.recordings_dir.as_deref());
                 // Adjust selection if needed
                 if self.recordings_selected >= self.recordings_list.len() && !self.recordings_list.is_empty() {
                     self.recordings_selected = self.recordings_list.len() - 1;
@@ -1452,7 +1490,7 @@ impl App {
             }
             KeyCode::Char('L') if self.replay.is_none() => {
                 // Open recordings browser (live mode only)
-                self.recordings_list = crate::recorder::Recorder::list_recordings();
+                self.recordings_list = crate::recorder::Recorder::list_recordings(self.config.recordings_dir.as_deref());
                 self.recordings_selected = 0;
                 self.view_mode = ViewMode::Recordings;
                 true
@@ -1576,6 +1614,10 @@ impl App {
                 self.handle_config_key(key);
                 return;
             }
+            ViewMode::ConfigEditRecordingsDir => {
+                self.handle_config_edit_recordings_dir_key(key);
+                return;
+            }
             ViewMode::Help => {
                 self.handle_help_key(key);
                 return;
@@ -1658,6 +1700,9 @@ impl App {
                 };
                 let val = self.config.recording_retention_secs as i64 + i64::from(direction) * step;
                 self.config.recording_retention_secs = val.clamp(600, 86400) as u64;
+            }
+            ConfigItem::RecordingsDir => {
+                // Path cannot be adjusted with arrows - edit config.toml to change
             }
         }
     }

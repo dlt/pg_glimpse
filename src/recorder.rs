@@ -78,8 +78,9 @@ impl Recorder {
         dbname: &str,
         user: &str,
         server_info: &ServerInfo,
+        custom_dir: Option<&str>,
     ) -> Result<Self> {
-        let dir = Self::recordings_dir();
+        let dir = Self::recordings_dir(custom_dir);
         fs::create_dir_all(&dir)?;
 
         let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
@@ -116,15 +117,23 @@ impl Recorder {
         Ok(())
     }
 
-    pub fn recordings_dir() -> PathBuf {
+    /// Returns the default recordings directory.
+    pub fn default_recordings_dir() -> PathBuf {
         dirs::data_local_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("pg_glimpse")
             .join("recordings")
     }
 
-    pub fn cleanup_old(max_age_secs: u64) {
-        let dir = Self::recordings_dir();
+    /// Returns the recordings directory, using custom path if provided.
+    pub fn recordings_dir(custom_dir: Option<&str>) -> PathBuf {
+        custom_dir
+            .map(PathBuf::from)
+            .unwrap_or_else(Self::default_recordings_dir)
+    }
+
+    pub fn cleanup_old(max_age_secs: u64, custom_dir: Option<&str>) {
+        let dir = Self::recordings_dir(custom_dir);
         let Ok(entries) = fs::read_dir(&dir) else {
             return;
         };
@@ -148,8 +157,8 @@ impl Recorder {
 
     /// List all recordings, sorted by date (newest first).
     /// Parses only the header line of each file for efficiency.
-    pub fn list_recordings() -> Vec<RecordingInfo> {
-        let dir = Self::recordings_dir();
+    pub fn list_recordings(custom_dir: Option<&str>) -> Vec<RecordingInfo> {
+        let dir = Self::recordings_dir(custom_dir);
         let Ok(entries) = fs::read_dir(&dir) else {
             return vec![];
         };
@@ -595,9 +604,16 @@ mod tests {
 
     #[test]
     fn recordings_dir_returns_path() {
-        let dir = Recorder::recordings_dir();
+        let dir = Recorder::recordings_dir(None);
         assert!(dir.to_string_lossy().contains("pg_glimpse"));
         assert!(dir.to_string_lossy().contains("recordings"));
+    }
+
+    #[test]
+    fn recordings_dir_with_custom_path() {
+        let custom = "/tmp/my_recordings";
+        let dir = Recorder::recordings_dir(Some(custom));
+        assert_eq!(dir.to_string_lossy(), custom);
     }
 
     #[test]

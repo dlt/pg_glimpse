@@ -1,12 +1,11 @@
 ---
 source: src/ui/snapshot_tests.rs
-assertion_line: 885
 expression: buffer_to_string(&terminal)
 ---
                                                                       
                                                                       
                                                                       
-           ╭  Configuration  [←→] change  [Esc] save & clos╮          
+           ╭  Configuration  [←→] change  [q/Esc] save & cl╮          
            │                                               │          
            │ ██████╗  ██████╗     ██████╗ ██╗     ██╗███╗  │          
            │ ██╔══██╗██╔════╝    ██╔════╝ ██║     ██║████╗ │          
@@ -22,6 +21,6 @@ expression: buffer_to_string(&terminal)
            │    Warn Duration       ◀  1.0s  ▶             │          
            │    Danger Duration     ◀  10.0s  ▶            │          
            │    Recording Retention ◀  1h  ▶               │          
+           │    Recordings Dir      ◀  <RECORDINGS_DIR>│          
            │                                               │          
-           │  About ───────────────────────────────────────│          
            ╰───────────────────────────────────────────────╯

@@ -301,6 +301,7 @@ pub struct AppConfig {
     pub warn_duration_secs: f64,
     pub danger_duration_secs: f64,
     pub recording_retention_secs: u64,
+    pub recordings_dir: Option<String>,
 }
 
 impl Default for AppConfig {
@@ -312,6 +313,7 @@ impl Default for AppConfig {
             warn_duration_secs: 1.0,
             danger_duration_secs: 10.0,
             recording_retention_secs: 3600,
+            recordings_dir: None,
         }
     }
 }
@@ -350,16 +352,18 @@ pub enum ConfigItem {
     WarnDuration,
     DangerDuration,
     RecordingRetention,
+    RecordingsDir,
 }
 
 impl ConfigItem {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::GraphMarker,
         Self::ColorTheme,
         Self::RefreshInterval,
         Self::WarnDuration,
         Self::DangerDuration,
         Self::RecordingRetention,
+        Self::RecordingsDir,
     ];
 
     pub const fn label(self) -> &'static str {
@@ -370,6 +374,7 @@ impl ConfigItem {
             Self::WarnDuration => "Warn Duration",
             Self::DangerDuration => "Danger Duration",
             Self::RecordingRetention => "Recording Retention",
+            Self::RecordingsDir => "Recordings Dir",
         }
     }
 }
@@ -532,6 +537,7 @@ mod tests {
             warn_duration_secs: 2.5,
             danger_duration_secs: 15.0,
             recording_retention_secs: 7200,
+            recordings_dir: None,
         };
 
         let toml_str = toml::to_string_pretty(&config).unwrap();
@@ -577,6 +583,7 @@ mod tests {
             warn_duration_secs: 0.5,
             danger_duration_secs: 5.0,
             recording_retention_secs: 1800,
+            recordings_dir: None,
         };
 
         let json_str = serde_json::to_string(&config).unwrap();
@@ -593,7 +600,7 @@ mod tests {
     #[test]
     fn config_item_all_contains_all_variants() {
         // Ensure ALL array has correct count
-        assert_eq!(ConfigItem::ALL.len(), 6);
+        assert_eq!(ConfigItem::ALL.len(), 7);
 
         // Ensure all variants are present
         assert!(ConfigItem::ALL.contains(&ConfigItem::GraphMarker));
@@ -602,6 +609,7 @@ mod tests {
         assert!(ConfigItem::ALL.contains(&ConfigItem::WarnDuration));
         assert!(ConfigItem::ALL.contains(&ConfigItem::DangerDuration));
         assert!(ConfigItem::ALL.contains(&ConfigItem::RecordingRetention));
+        assert!(ConfigItem::ALL.contains(&ConfigItem::RecordingsDir));
     }
 
     #[test]
@@ -790,6 +798,7 @@ mod tests {
             warn_duration_secs: 2.5,
             danger_duration_secs: 15.0,
             recording_retention_secs: 7200,
+            recordings_dir: None,
         };
 
         let toml_str = toml::to_string_pretty(&config).unwrap();
@@ -995,6 +1004,7 @@ mod tests {
                     warn_duration_secs: warn,
                     danger_duration_secs: danger,
                     recording_retention_secs: retention,
+                    recordings_dir: None,
                 };
 
                 let toml_str = toml::to_string_pretty(&config).unwrap();

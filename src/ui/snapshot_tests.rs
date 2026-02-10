@@ -403,7 +403,47 @@ fn buffer_to_string(terminal: &Terminal<TestBackend>) -> String {
     // This simple approach replaces any sequence that looks like a time
     let result = redact_timestamps(&result);
     // Replace version numbers to avoid snapshot churn on version bumps
-    redact_version(&result)
+    let result = redact_version(&result);
+    // Replace recordings directory path to avoid machine-specific paths
+    redact_recordings_dir(&result)
+}
+
+/// Replace recordings directory path with placeholder for reproducible snapshots
+fn redact_recordings_dir(s: &str) -> String {
+    // The path may be truncated in the display, so we need to match the pattern
+    // in the "Recordings Dir" line and replace it.
+    // Pattern: "Recordings Dir      ◀  /path/to/..." or "[Enter]  /path/to/..."
+    let home_dir = dirs::home_dir().unwrap_or_default();
+    let home_str = home_dir.to_string_lossy();
+
+    let mut result = String::with_capacity(s.len());
+    for line in s.lines() {
+        if line.contains("Recordings Dir") {
+            // Replace any path starting from home directory in this line
+            if let Some(idx) = line.find(&*home_str) {
+                result.push_str(&line[..idx]);
+                result.push_str("<RECORDINGS_DIR>");
+                // Skip to end of path (find closing ▶ or end of meaningful content)
+                let rest = &line[idx..];
+                if let Some(end_idx) = rest.find(" ▶") {
+                    result.push_str(&rest[end_idx..]);
+                } else if let Some(end_idx) = rest.find("│") {
+                    // Handle truncated paths that end at border
+                    result.push_str(&rest[end_idx..]);
+                }
+            } else {
+                result.push_str(line);
+            }
+        } else {
+            result.push_str(line);
+        }
+        result.push('\n');
+    }
+    // Remove trailing newline if original didn't have one
+    if !s.ends_with('\n') && result.ends_with('\n') {
+        result.pop();
+    }
+    result
 }
 
 /// Replace version numbers with placeholder for reproducible snapshots
