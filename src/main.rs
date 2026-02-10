@@ -12,7 +12,7 @@ use pg_glimpse::db;
 use app::AppAction;
 use clap::Parser;
 use cli::Cli;
-use color_eyre::Result;
+use color_eyre::eyre::{bail, Context, Result};
 use config::AppConfig;
 use crossterm::event::KeyCode;
 use db::models::PgSnapshot;
@@ -160,15 +160,9 @@ async fn run(cli: Cli) -> Result<()> {
         return run_replay(replay_path, config).await;
     }
 
-    let pg_config = match cli.pg_config() {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("Error: invalid connection config: {e}\n");
-            eprintln!("Try: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword");
-            eprintln!("See: pg_glimpse --help");
-            std::process::exit(1);
-        }
-    };
+    let pg_config = cli
+        .pg_config()
+        .context("invalid connection config\n\nTry: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword\nSee: pg_glimpse --help")?;
 
     // Determine connection mode: explicit flags or auto-detect
     let (client, ssl_mode) = if cli.ssl || cli.ssl_insecure {
@@ -178,20 +172,17 @@ async fn run(cli: Cli) -> Result<()> {
         } else {
             SslMode::Verified
         };
-        match try_connect(&pg_config, mode).await {
-            Ok(client) => (client, mode),
-            Err(e) => {
-                let info = cli.connection_info();
-                eprintln!("Error: could not connect to PostgreSQL ({}): {:?}\n", mode.label(), e);
-                eprintln!(
-                    "Connection: {}:{}/{}",
-                    info.host, info.port, info.dbname
-                );
-                eprintln!("\nTry: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword");
-                eprintln!("See: pg_glimpse --help");
-                std::process::exit(1);
-            }
-        }
+        let info = cli.connection_info();
+        let client = try_connect(&pg_config, mode).await.with_context(|| {
+            format!(
+                "could not connect to PostgreSQL ({})\n\nConnection: {}:{}/{}\n\nTry: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword\nSee: pg_glimpse --help",
+                mode.label(),
+                info.host,
+                info.port,
+                info.dbname
+            )
+        })?;
+        (client, mode)
     } else {
         // Auto-detect: try connection modes in order
         let modes = [SslMode::None, SslMode::Verified, SslMode::Insecure];
@@ -210,21 +201,19 @@ async fn run(cli: Cli) -> Result<()> {
             }
         }
 
-        result.unwrap_or_else(|| {
-            let info = cli.connection_info();
-            eprintln!(
-                "Error: could not connect to PostgreSQL with any SSL mode: {:?}\n",
-                last_error.unwrap()
-            );
-            eprintln!(
-                "Connection: {}:{}/{}",
-                info.host, info.port, info.dbname
-            );
-            eprintln!("\nTried: No TLS, SSL (verified), SSL (insecure)");
-            eprintln!("Try: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword");
-            eprintln!("See: pg_glimpse --help");
-            std::process::exit(1);
-        })
+        match result {
+            Some(r) => r,
+            None => {
+                let info = cli.connection_info();
+                bail!(
+                    "could not connect to PostgreSQL with any SSL mode: {:?}\n\nConnection: {}:{}/{}\n\nTried: No TLS, SSL (verified), SSL (insecure)\nTry: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword\nSee: pg_glimpse --help",
+                    last_error.unwrap(),
+                    info.host,
+                    info.port,
+                    info.dbname
+                );
+            }
+        }
     };
 
     let config = AppConfig::load();
