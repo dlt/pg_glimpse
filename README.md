@@ -87,6 +87,7 @@ Server version, uptime, database size, connection usage, cache hit ratio, dead t
 - **Clipboard** — press `y` to yank SQL to clipboard
 - **SQL highlighting** — syntax-highlighted queries everywhere
 - **Themes** — Tokyo Night, Dracula, Nord, Solarized, Catppuccin
+- **Recordings browser** — press `L` to browse and replay past sessions
 
 ## Usage
 
@@ -136,6 +137,7 @@ pg_glimpse -r 1 --history-length 240
 | `r` | Force refresh |
 | `?` | Help |
 | `,` | Configuration |
+| `L` | Recordings browser |
 | `y` | Yank to clipboard |
 | `/` | Fuzzy filter |
 
@@ -153,7 +155,7 @@ pg_glimpse -r 1 --history-length 240
 
 ## Recording & Replay
 
-Every live session is automatically recorded to `~/.local/share/pg_glimpse/recordings/`. This is useful for:
+Every live session is automatically recorded to `~/.local/share/pg_glimpse/recordings/` (configurable). This is useful for:
 
 - **Incident investigation** — review what happened during an outage
 - **Sharing with teammates** — send a recording file for async debugging
@@ -165,13 +167,19 @@ Every live session is automatically recorded to `~/.local/share/pg_glimpse/recor
 - Each snapshot (every refresh interval) is captured with all panel data
 - Old recordings are automatically cleaned up based on retention setting (default: 1 hour)
 
+### Browse recordings
+
+Press `L` during a live session to open the recordings browser. Navigate with `↑`/`↓`, press `Enter` to replay, or `d` to delete a recording.
+
 ### Replay a session
+
+From the browser, or via command line:
 
 ```bash
 pg_glimpse --replay ~/.local/share/pg_glimpse/recordings/localhost_5432_20260205_143022.jsonl
 ```
 
-All panels, sorting, filtering, and inspection work identically in replay mode. Actions that modify the database (Cancel/Kill) are disabled.
+Recordings auto-play when opened. All panels, sorting, filtering, and inspection work identically in replay mode. Actions that modify the database (Cancel/Kill) are disabled. Press `q` to exit replay and return to live monitoring.
 
 ### Replay controls
 
@@ -195,6 +203,7 @@ Press `,` to open settings. Saved to `~/.config/pg_glimpse/config.toml`.
 | Warn Duration | 0.1s+ |
 | Danger Duration | warn threshold – 300s |
 | Recording Retention | 10m – 24h |
+| Recordings Dir | Custom path (default: `~/.local/share/pg_glimpse/recordings/`) |
 
 ## Extension Support
 
