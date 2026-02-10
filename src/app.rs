@@ -442,6 +442,39 @@ pub struct App {
     pub overlay_scroll: u16,
 }
 
+/// Handle navigation keys for simple table panels (no sorting/filtering).
+/// Standalone function to avoid borrow checker issues with &mut self.
+fn simple_table_nav(
+    key: KeyEvent,
+    state: &mut TableState,
+    len: usize,
+    inspect_mode: ViewMode,
+    overlay_scroll: &mut u16,
+    view_mode: &mut ViewMode,
+) {
+    match key.code {
+        KeyCode::Up | KeyCode::Char('k') => {
+            let i = state.selected().unwrap_or(0);
+            state.select(Some(i.saturating_sub(1)));
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            let max = len.saturating_sub(1);
+            let i = state.selected().unwrap_or(0);
+            state.select(Some((i + 1).min(max)));
+        }
+        KeyCode::Enter => {
+            if len > 0 {
+                if state.selected().is_none() {
+                    state.select(Some(0));
+                }
+                *overlay_scroll = 0;
+                *view_mode = inspect_mode;
+            }
+        }
+        _ => {}
+    }
+}
+
 impl App {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -1152,79 +1185,40 @@ impl App {
         }
     }
 
-    /// Handle navigation keys for simple table panels (no sorting/filtering).
-    fn handle_simple_table_nav(
-        &mut self,
-        key: KeyEvent,
-        state: &mut TableState,
-        len: usize,
-        inspect_mode: Option<ViewMode>,
-    ) {
-        match key.code {
-            KeyCode::Up | KeyCode::Char('k') => {
-                let i = state.selected().unwrap_or(0);
-                state.select(Some(i.saturating_sub(1)));
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                let max = len.saturating_sub(1);
-                let i = state.selected().unwrap_or(0);
-                state.select(Some((i + 1).min(max)));
-            }
-            KeyCode::Enter => {
-                if let Some(mode) = inspect_mode {
-                    if len > 0 {
-                        if state.selected().is_none() {
-                            state.select(Some(0));
-                        }
-                        self.overlay_scroll = 0;
-                        self.view_mode = mode;
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
     fn handle_replication_key(&mut self, key: KeyEvent) {
         let len = self.snapshot.as_ref().map(|s| s.replication.len()).unwrap_or(0);
-        let mut state = std::mem::take(&mut self.replication_table_state);
-        self.handle_simple_table_nav(key, &mut state, len, Some(ViewMode::ReplicationInspect));
-        self.replication_table_state = state;
+        simple_table_nav(key, &mut self.replication_table_state, len, ViewMode::ReplicationInspect,
+            &mut self.overlay_scroll, &mut self.view_mode);
     }
 
     fn handle_blocking_key(&mut self, key: KeyEvent) {
         let len = self.snapshot.as_ref().map(|s| s.blocking_info.len()).unwrap_or(0);
-        let mut state = std::mem::take(&mut self.blocking_table_state);
-        self.handle_simple_table_nav(key, &mut state, len, Some(ViewMode::BlockingInspect));
-        self.blocking_table_state = state;
+        simple_table_nav(key, &mut self.blocking_table_state, len, ViewMode::BlockingInspect,
+            &mut self.overlay_scroll, &mut self.view_mode);
     }
 
     fn handle_vacuum_key(&mut self, key: KeyEvent) {
         let len = self.snapshot.as_ref().map(|s| s.vacuum_progress.len()).unwrap_or(0);
-        let mut state = std::mem::take(&mut self.vacuum_table_state);
-        self.handle_simple_table_nav(key, &mut state, len, Some(ViewMode::VacuumInspect));
-        self.vacuum_table_state = state;
+        simple_table_nav(key, &mut self.vacuum_table_state, len, ViewMode::VacuumInspect,
+            &mut self.overlay_scroll, &mut self.view_mode);
     }
 
     fn handle_wraparound_key(&mut self, key: KeyEvent) {
         let len = self.snapshot.as_ref().map(|s| s.wraparound.len()).unwrap_or(0);
-        let mut state = std::mem::take(&mut self.wraparound_table_state);
-        self.handle_simple_table_nav(key, &mut state, len, Some(ViewMode::WraparoundInspect));
-        self.wraparound_table_state = state;
+        simple_table_nav(key, &mut self.wraparound_table_state, len, ViewMode::WraparoundInspect,
+            &mut self.overlay_scroll, &mut self.view_mode);
     }
 
     fn handle_settings_key(&mut self, key: KeyEvent) {
         let len = self.sorted_settings_indices().len();
-        let mut state = std::mem::take(&mut self.settings_table_state);
-        self.handle_simple_table_nav(key, &mut state, len, Some(ViewMode::SettingsInspect));
-        self.settings_table_state = state;
+        simple_table_nav(key, &mut self.settings_table_state, len, ViewMode::SettingsInspect,
+            &mut self.overlay_scroll, &mut self.view_mode);
     }
 
     fn handle_extensions_key(&mut self, key: KeyEvent) {
         let len = self.sorted_extensions_indices().len();
-        let mut state = std::mem::take(&mut self.extensions_table_state);
-        self.handle_simple_table_nav(key, &mut state, len, Some(ViewMode::ExtensionsInspect));
-        self.extensions_table_state = state;
+        simple_table_nav(key, &mut self.extensions_table_state, len, ViewMode::ExtensionsInspect,
+            &mut self.overlay_scroll, &mut self.view_mode);
     }
 
     fn handle_panel_key(&mut self, key: KeyEvent) {
