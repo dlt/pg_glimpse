@@ -45,7 +45,7 @@ pub(crate) fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect 
 
 pub(crate) fn overlay_block(title: &str, color: Color) -> Block<'_> {
     Block::default()
-        .title(format!(" {} ", title))
+        .title(format!(" {title} "))
         .title_style(
             Style::default()
                 .fg(Theme::overlay_bg())
@@ -62,7 +62,7 @@ pub(crate) fn overlay_block(title: &str, color: Color) -> Block<'_> {
 pub(crate) fn section_header(title: &str) -> Line<'static> {
     Line::from(vec![
         Span::styled(
-            format!("  {} ", title),
+            format!("  {title} "),
             Style::default()
                 .fg(Theme::border_warn())
                 .add_modifier(Modifier::BOLD),

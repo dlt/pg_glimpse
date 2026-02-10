@@ -29,7 +29,7 @@ pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
             filtered_count, total_count, app.filter.text
         )
     } else {
-        format!("pg_stat_statements [{}]", total_count)
+        format!("pg_stat_statements [{total_count}]")
     };
 
     let block = panel_block(&title);
@@ -94,7 +94,7 @@ pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
                 )),
                 Line::from(""),
                 Line::from(Span::styled(
-                    format!("  {}", err),
+                    format!("  {err}"),
                     Style::default().fg(Theme::fg()),
                 )),
             ];

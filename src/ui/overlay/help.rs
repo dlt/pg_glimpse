@@ -22,7 +22,7 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
 
     let entry = |key: &str, desc: &str| -> Line<'static> {
         Line::from(vec![
-            Span::styled(format!("    {:<12}", key), key_style),
+            Span::styled(format!("    {key:<12}"), key_style),
             Span::styled(desc.to_string(), desc_style),
         ])
     };

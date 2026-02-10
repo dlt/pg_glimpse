@@ -18,13 +18,13 @@ fn dim(color: Color) -> Color {
 fn make_block<'a>(title: &'a str, current_label: &'a str, color: Color, border_color: Color) -> Block<'a> {
     let title_line = Line::from(vec![
         Span::styled(
-            format!(" {} ", title),
+            format!(" {title} "),
             Style::default()
                 .fg(Theme::fg())
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
-            format!("── {} ", current_label),
+            format!("── {current_label} "),
             Style::default()
                 .fg(color)
                 .add_modifier(Modifier::BOLD),

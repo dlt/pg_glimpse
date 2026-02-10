@@ -34,7 +34,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         ),
         Span::styled(" · ", Style::default().fg(Theme::border_dim())),
         Span::styled(
-            format!("up {}", uptime),
+            format!("up {uptime}"),
             Style::default().fg(Theme::fg()),
         ),
     ]));
@@ -65,12 +65,12 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         };
         lines.push(Line::from(vec![
             Span::styled(
-                format!("DB: {}", db_size),
+                format!("DB: {db_size}"),
                 Style::default().fg(Theme::fg()),
             ),
             Span::styled(" · ", Style::default().fg(Theme::border_dim())),
             Span::styled(
-                format!("{}/{} conn ({}%)", total, max, conn_pct),
+                format!("{total}/{max} conn ({conn_pct}%)"),
                 Style::default().fg(conn_color),
             ),
         ]));
@@ -102,28 +102,28 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         lines.push(Line::from(vec![
             Span::styled("Active: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
-                format!("{}", active),
+                format!("{active}"),
                 Style::default()
                     .fg(Theme::state_active())
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                format!(" {}", active_spark),
+                format!(" {active_spark}"),
                 Style::default().fg(Theme::state_active()),
             ),
             Span::styled("  Idle/Txn: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
-                format!("{}", idle_txn),
+                format!("{idle_txn}"),
                 Style::default().fg(idle_txn_color),
             ),
             Span::styled("  Wait: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
-                format!("{}", waiting),
+                format!("{waiting}"),
                 Style::default().fg(waiting_color),
             ),
             Span::styled("  AV: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
-                format!("{}", autovac),
+                format!("{autovac}"),
                 Style::default().fg(autovac_color),
             ),
         ]));
@@ -146,13 +146,13 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         lines.push(Line::from(vec![
             Span::styled("Locks: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
-                format!("{}", locks),
+                format!("{locks}"),
                 Style::default()
                     .fg(lock_color)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                format!(" {}", lock_spark),
+                format!(" {lock_spark}"),
                 Style::default().fg(lock_color),
             ),
             Span::styled(" · ", Style::default().fg(Theme::border_dim())),
@@ -218,13 +218,13 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
         let mut cache_line = vec![
             Span::styled("Cache: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
-                format!("{:.1}%", cache_pct),
+                format!("{cache_pct:.1}%"),
                 Style::default()
                     .fg(cache_color)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                format!(" {}", cache_spark),
+                format!(" {cache_spark}"),
                 Style::default().fg(cache_color),
             ),
         ];
@@ -252,7 +252,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                format!(" {}", blks_spark),
+                format!(" {blks_spark}"),
                 Style::default().fg(blks_color),
             ),
         ]));
@@ -275,7 +275,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                format!(" {}", tps_spark),
+                format!(" {tps_spark}"),
                 Style::default().fg(Theme::border_active()),
             ),
         ]));
@@ -296,7 +296,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
-                    format!(" {}", wal_spark),
+                    format!(" {wal_spark}"),
                     Style::default().fg(Theme::fg()),
                 ),
             ]));
@@ -343,7 +343,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                 lines.push(Line::from(vec![
                     Span::styled("Repl lag: ", Style::default().fg(Theme::fg_dim())),
                     Span::styled(
-                        format!("{:.2}s", lag),
+                        format!("{lag:.2}s"),
                         Style::default().fg(lag_color),
                     ),
                 ]));
@@ -374,10 +374,10 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
 
             lines.push(Line::from(vec![
                 Span::styled("Chkpt: ", Style::default().fg(Theme::fg_dim())),
-                Span::styled(format!("{}", total), Style::default().fg(Theme::fg())),
+                Span::styled(format!("{total}"), Style::default().fg(Theme::fg())),
                 Span::styled(" (", Style::default().fg(Theme::border_dim())),
                 Span::styled(
-                    format!("{:.1}% forced", forced_pct),
+                    format!("{forced_pct:.1}% forced"),
                     Style::default().fg(forced_color),
                 ),
                 Span::styled(")", Style::default().fg(Theme::border_dim())),
@@ -441,7 +441,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect) {
                 ext_spans.push(Span::styled(" ", Style::default()));
             }
             ext_spans.push(Span::styled(
-                format!("[{}]", tag),
+                format!("[{tag}]"),
                 Style::default()
                     .fg(Theme::border_ok())
                     .add_modifier(Modifier::BOLD),
@@ -478,11 +478,11 @@ fn format_uptime(start: chrono::DateTime<Utc>) -> String {
     let hours = (total_secs % 86400) / 3600;
     let mins = (total_secs % 3600) / 60;
     if days > 0 {
-        format!("{}d {}h", days, hours)
+        format!("{days}d {hours}h")
     } else if hours > 0 {
-        format!("{}h {}m", hours, mins)
+        format!("{hours}h {mins}m")
     } else {
-        format!("{}m", mins)
+        format!("{mins}m")
     }
 }
 

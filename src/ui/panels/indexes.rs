@@ -28,7 +28,7 @@ pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {
             filtered_count, total_count, app.filter.text
         )
     } else {
-        format!("Indexes [{}]", total_count)
+        format!("Indexes [{total_count}]")
     };
 
     let block = panel_block(&title);
@@ -108,7 +108,7 @@ pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {
             let bloat_cell = match idx.bloat_pct {
                 Some(pct) => {
                     let color = Theme::bloat_color(pct);
-                    Cell::from(format!("{:.1}%", pct)).style(Style::default().fg(color))
+                    Cell::from(format!("{pct:.1}%")).style(Style::default().fg(color))
                 }
                 None => Cell::from("-"),
             };

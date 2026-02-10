@@ -19,7 +19,7 @@ pub fn render_confirm_cancel(frame: &mut Frame, pid: i32, area: Rect) {
         Line::from(vec![
             Span::styled("  Cancel query on PID ", Style::default().fg(Theme::fg())),
             Span::styled(
-                format!("{}", pid),
+                format!("{pid}"),
                 Style::default().fg(Theme::border_warn()).add_modifier(Modifier::BOLD),
             ),
             Span::styled("?", Style::default().fg(Theme::fg())),
@@ -63,7 +63,7 @@ pub fn render_confirm_kill(frame: &mut Frame, pid: i32, area: Rect) {
         Line::from(vec![
             Span::styled("  Terminate backend PID ", Style::default().fg(Theme::fg())),
             Span::styled(
-                format!("{}", pid),
+                format!("{pid}"),
                 Style::default().fg(Theme::border_danger()).add_modifier(Modifier::BOLD),
             ),
             Span::styled("?", Style::default().fg(Theme::fg())),
@@ -119,7 +119,7 @@ pub fn render_cancel_choice(
                 filter_display.to_string(),
                 Style::default().fg(Theme::border_active()).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(format!("' matches {} queries", count), Style::default().fg(Theme::fg())),
+            Span::styled(format!("' matches {count} queries"), Style::default().fg(Theme::fg())),
         ]),
         Line::from(""),
         Line::from(vec![
@@ -128,7 +128,7 @@ pub fn render_cancel_choice(
                 " 1 ",
                 Style::default().fg(Theme::overlay_bg()).bg(Theme::border_active()).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(format!(" Cancel this query (PID {})", selected_pid), Style::default().fg(Theme::fg())),
+            Span::styled(format!(" Cancel this query (PID {selected_pid})"), Style::default().fg(Theme::fg())),
         ]),
         Line::from(""),
         Line::from(vec![
@@ -137,7 +137,7 @@ pub fn render_cancel_choice(
                 " a ",
                 Style::default().fg(Theme::overlay_bg()).bg(Theme::border_warn()).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(format!(" Cancel ALL {} matching queries", count), Style::default().fg(Theme::fg())),
+            Span::styled(format!(" Cancel ALL {count} matching queries"), Style::default().fg(Theme::fg())),
         ]),
         Line::from(""),
         separator_line(),
@@ -180,7 +180,7 @@ pub fn render_kill_choice(
                 filter_display.to_string(),
                 Style::default().fg(Theme::border_active()).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(format!("' matches {} queries", count), Style::default().fg(Theme::fg())),
+            Span::styled(format!("' matches {count} queries"), Style::default().fg(Theme::fg())),
         ]),
         Line::from(""),
         Line::from(vec![
@@ -189,7 +189,7 @@ pub fn render_kill_choice(
                 " 1 ",
                 Style::default().fg(Theme::overlay_bg()).bg(Theme::border_active()).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(format!(" Kill this backend (PID {})", selected_pid), Style::default().fg(Theme::fg())),
+            Span::styled(format!(" Kill this backend (PID {selected_pid})"), Style::default().fg(Theme::fg())),
         ]),
         Line::from(""),
         Line::from(vec![
@@ -198,7 +198,7 @@ pub fn render_kill_choice(
                 " a ",
                 Style::default().fg(Theme::overlay_bg()).bg(Theme::border_danger()).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(format!(" Kill ALL {} matching backends", count), Style::default().fg(Theme::fg())),
+            Span::styled(format!(" Kill ALL {count} matching backends"), Style::default().fg(Theme::fg())),
         ]),
         Line::from(""),
         Line::from(Span::styled(
@@ -243,7 +243,7 @@ pub fn render_confirm_cancel_batch(frame: &mut Frame, pids: &[i32], area: Rect) 
     let lines = vec![
         Line::from(""),
         Line::from(vec![
-            Span::styled(format!("  Cancel {} queries?", count), Style::default().fg(Theme::fg())),
+            Span::styled(format!("  Cancel {count} queries?"), Style::default().fg(Theme::fg())),
         ]),
         Line::from(""),
         Line::from(vec![
@@ -298,7 +298,7 @@ pub fn render_confirm_kill_batch(frame: &mut Frame, pids: &[i32], area: Rect) {
     let lines = vec![
         Line::from(""),
         Line::from(vec![
-            Span::styled(format!("  Terminate {} backends?", count), Style::default().fg(Theme::fg())),
+            Span::styled(format!("  Terminate {count} backends?"), Style::default().fg(Theme::fg())),
         ]),
         Line::from(""),
         Line::from(vec![

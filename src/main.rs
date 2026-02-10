@@ -101,7 +101,7 @@ where
 {
     tokio::spawn(async move {
         if let Err(e) = connection.await {
-            eprintln!("PostgreSQL connection error: {}", e);
+            eprintln!("PostgreSQL connection error: {e}");
         }
     });
 }
@@ -336,9 +336,9 @@ async fn run(cli: Cli) -> Result<()> {
                     let index_bloat = db::queries::fetch_index_bloat(&db_client).await;
                     match (table_bloat, index_bloat) {
                         (Ok(tb), Ok(ib)) => DbResult::BloatData(Ok((tb, ib))),
-                        (Err(e), Ok(_)) => DbResult::BloatData(Err(format!("Table bloat query failed: {}", e))),
-                        (Ok(_), Err(e)) => DbResult::BloatData(Err(format!("Index bloat query failed: {}", e))),
-                        (Err(e1), Err(_)) => DbResult::BloatData(Err(format!("Bloat queries failed: {}", e1))),
+                        (Err(e), Ok(_)) => DbResult::BloatData(Err(format!("Table bloat query failed: {e}"))),
+                        (Ok(_), Err(e)) => DbResult::BloatData(Err(format!("Index bloat query failed: {e}"))),
+                        (Err(e1), Err(_)) => DbResult::BloatData(Err(format!("Bloat queries failed: {e1}"))),
                     }
                 }
             };
@@ -388,30 +388,30 @@ async fn run(cli: Cli) -> Result<()> {
                             }
                         }
                         DbResult::CancelQuery(pid, Ok(true)) => {
-                            app.status_message = Some(format!("Cancelled query on PID {}", pid));
+                            app.status_message = Some(format!("Cancelled query on PID {pid}"));
                             let _ = cmd_tx.try_send(DbCommand::FetchSnapshot);
                         }
                         DbResult::CancelQuery(pid, Ok(false)) => {
-                            app.status_message = Some(format!("PID {} not found or already finished", pid));
+                            app.status_message = Some(format!("PID {pid} not found or already finished"));
                         }
                         DbResult::CancelQuery(_, Err(e)) => {
-                            app.status_message = Some(format!("Cancel failed: {}", e));
+                            app.status_message = Some(format!("Cancel failed: {e}"));
                         }
                         DbResult::TerminateBackend(pid, Ok(true)) => {
-                            app.status_message = Some(format!("Terminated backend PID {}", pid));
+                            app.status_message = Some(format!("Terminated backend PID {pid}"));
                             let _ = cmd_tx.try_send(DbCommand::FetchSnapshot);
                         }
                         DbResult::TerminateBackend(pid, Ok(false)) => {
-                            app.status_message = Some(format!("PID {} not found or already finished", pid));
+                            app.status_message = Some(format!("PID {pid} not found or already finished"));
                         }
                         DbResult::TerminateBackend(_, Err(e)) => {
-                            app.status_message = Some(format!("Terminate failed: {}", e));
+                            app.status_message = Some(format!("Terminate failed: {e}"));
                         }
                         DbResult::CancelQueries(results) => {
                             let total = results.len();
                             let succeeded = results.iter().filter(|(_, ok)| *ok).count();
                             if succeeded == total {
-                                app.status_message = Some(format!("Cancelled {}/{} queries", succeeded, total));
+                                app.status_message = Some(format!("Cancelled {succeeded}/{total} queries"));
                             } else {
                                 app.status_message = Some(format!("Cancelled {}/{} queries ({} already finished)", succeeded, total, total - succeeded));
                             }
@@ -421,7 +421,7 @@ async fn run(cli: Cli) -> Result<()> {
                             let total = results.len();
                             let succeeded = results.iter().filter(|(_, ok)| *ok).count();
                             if succeeded == total {
-                                app.status_message = Some(format!("Terminated {}/{} backends", succeeded, total));
+                                app.status_message = Some(format!("Terminated {succeeded}/{total} backends"));
                             } else {
                                 app.status_message = Some(format!("Terminated {}/{} backends ({} already finished)", succeeded, total, total - succeeded));
                             }
@@ -433,13 +433,12 @@ async fn run(cli: Cli) -> Result<()> {
                             let table_count = table_bloat.len();
                             let index_count = index_bloat.len();
                             app.status_message = Some(format!(
-                                "Bloat estimates refreshed ({} tables, {} indexes)",
-                                table_count, index_count
+                                "Bloat estimates refreshed ({table_count} tables, {index_count} indexes)"
                             ));
                         }
                         DbResult::BloatData(Err(e)) => {
                             app.bloat_loading = false;
-                            app.status_message = Some(format!("Bloat estimation failed: {}", e));
+                            app.status_message = Some(format!("Bloat estimation failed: {e}"));
                         }
                     }
                 }

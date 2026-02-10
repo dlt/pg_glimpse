@@ -25,7 +25,7 @@ pub fn styled_table<'a>(
 
 /// Create a styled empty state message for panels with no data
 pub fn empty_state<'a>(text: &'a str, block: Block<'a>) -> Paragraph<'a> {
-    Paragraph::new(format!("\n  {}", text))
+    Paragraph::new(format!("\n  {text}"))
         .style(
             Style::default()
                 .fg(Theme::border_ok())
@@ -45,13 +45,13 @@ pub fn format_bytes(bytes: i64) -> String {
     } else if bytes >= KB {
         format!("{:.0} KB", bytes as f64 / KB as f64)
     } else {
-        format!("{} B", bytes)
+        format!("{bytes} B")
     }
 }
 
 pub fn format_lag(secs: Option<f64>) -> String {
     match secs {
-        Some(s) => format!("{:.3}s", s),
+        Some(s) => format!("{s:.3}s"),
         None => "-".into(),
     }
 }
@@ -79,7 +79,7 @@ pub fn truncate(s: &str, max: usize) -> String {
         "…".to_string()
     } else {
         let truncated: String = s.chars().take(max - 1).collect();
-        format!("{}…", truncated)
+        format!("{truncated}…")
     }
 }
 
@@ -90,7 +90,7 @@ pub fn format_duration(secs: f64) -> String {
     } else if secs < 1.0 {
         format!("{:.0}ms", secs * 1000.0)
     } else if secs < 60.0 {
-        format!("{:.1}s", secs)
+        format!("{secs:.1}s")
     } else if secs < 3600.0 {
         format!("{:.0}m{:.0}s", secs / 60.0, secs % 60.0)
     } else {
@@ -101,9 +101,9 @@ pub fn format_duration(secs: f64) -> String {
 /// Format duration in milliseconds for statement stats (spaced format)
 pub fn format_time_ms(ms: f64) -> String {
     if ms < 1.0 {
-        format!("{:.3} ms", ms)
+        format!("{ms:.3} ms")
     } else if ms < 1_000.0 {
-        format!("{:.1} ms", ms)
+        format!("{ms:.1} ms")
     } else if ms < 60_000.0 {
         format!("{:.2} s", ms / 1_000.0)
     } else if ms < 3_600_000.0 {
@@ -120,9 +120,9 @@ pub fn format_rate(rate: f64) -> String {
     } else if rate >= 1_000.0 {
         format!("{:.1}K/s", rate / 1_000.0)
     } else if rate >= 1.0 {
-        format!("{:.0}/s", rate)
+        format!("{rate:.0}/s")
     } else if rate > 0.0 {
-        format!("{:.1}/s", rate)
+        format!("{rate:.1}/s")
     } else {
         "0/s".into()
     }
@@ -140,7 +140,7 @@ pub fn format_byte_rate(bytes_per_sec: f64) -> String {
     } else if bytes_per_sec >= KB {
         format!("{:.0} KB/s", bytes_per_sec / KB)
     } else if bytes_per_sec > 0.0 {
-        format!("{:.0} B/s", bytes_per_sec)
+        format!("{bytes_per_sec:.0} B/s")
     } else {
         "0 B/s".into()
     }

@@ -25,7 +25,7 @@ pub fn render_settings(frame: &mut Frame, app: &mut App, area: Rect) {
             filtered_count, total_count, app.filter.text
         )
     } else {
-        format!("PostgreSQL Settings [{}]", total_count)
+        format!("PostgreSQL Settings [{total_count}]")
     };
 
     let block = panel_block(&title);

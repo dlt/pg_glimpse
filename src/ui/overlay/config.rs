@@ -75,7 +75,7 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
         lines.push(Line::from(vec![
             Span::styled(format!("  {}{:<20}", indicator, item.label()), label_style),
             Span::styled("◀ ", arrow_style),
-            Span::styled(format!(" {} ", value_str), value_style),
+            Span::styled(format!(" {value_str} "), value_style),
             Span::styled(" ▶", arrow_style),
         ]));
     }

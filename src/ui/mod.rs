@@ -48,7 +48,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         frame,
         areas.graph_bl,
         "Cache Hit Ratio",
-        &format!("{:.1}%", cache_pct),
+        &format!("{cache_pct:.1}%"),
         &cache_data,
         cache_color,
         Theme::graph_cache(),

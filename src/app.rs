@@ -851,10 +851,10 @@ impl App {
             Ok(()) => {
                 let preview: String = text.chars().take(40).collect();
                 let suffix = if text.len() > 40 { "..." } else { "" };
-                self.status_message = Some(format!("Copied: {}{}", preview, suffix));
+                self.status_message = Some(format!("Copied: {preview}{suffix}"));
             }
             Err(e) => {
-                self.status_message = Some(format!("Clipboard error: {}", e));
+                self.status_message = Some(format!("Clipboard error: {e}"));
             }
         }
     }

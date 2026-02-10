@@ -229,7 +229,7 @@ fn render_archiver_column(frame: &mut Frame, archiver: Option<&ArchiverStats>, a
             let lag = chrono::Utc::now() - last_time;
             let lag_secs = lag.num_seconds();
             let lag_str = if lag_secs < 60 {
-                format!("{}s ago", lag_secs)
+                format!("{lag_secs}s ago")
             } else if lag_secs < 3600 {
                 format!("{}m {}s ago", lag_secs / 60, lag_secs % 60)
             } else {

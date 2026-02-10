@@ -1006,19 +1006,19 @@ pub async fn fetch_stat_statements(
             let msg = if let Some(db_err) = e.as_db_error() {
                 let mut parts = vec![db_err.message().to_string()];
                 if let Some(detail) = db_err.detail() {
-                    parts.push(format!("Detail: {}", detail));
+                    parts.push(format!("Detail: {detail}"));
                 }
                 if let Some(hint) = db_err.hint() {
-                    parts.push(format!("Hint: {}", hint));
+                    parts.push(format!("Hint: {hint}"));
                 }
                 parts.join(" - ")
             } else {
                 e.to_string()
             };
             let hint = if msg.contains("permission denied") {
-                format!("{} (Try: GRANT pg_read_all_stats TO your_user;)", msg)
+                format!("{msg} (Try: GRANT pg_read_all_stats TO your_user;)")
             } else if msg.contains("does not exist") {
-                format!("{} (Extension may be in a different schema)", msg)
+                format!("{msg} (Extension may be in a different schema)")
             } else {
                 msg
             };
@@ -1093,10 +1093,10 @@ pub async fn fetch_stat_statements(
                 let detailed = if let Some(db_err) = e.as_db_error() {
                     let mut parts = vec![db_err.message().to_string()];
                     if let Some(detail) = db_err.detail() {
-                        parts.push(format!("Detail: {}", detail));
+                        parts.push(format!("Detail: {detail}"));
                     }
                     if let Some(hint) = db_err.hint() {
-                        parts.push(format!("Hint: {}", hint));
+                        parts.push(format!("Hint: {hint}"));
                     }
                     parts.join(" - ")
                 } else {
@@ -1104,9 +1104,9 @@ pub async fn fetch_stat_statements(
                 };
                 let version_info = ext_version.unwrap_or("unknown");
                 let hint = if detailed.contains("permission denied") {
-                    format!("{} (Try: GRANT pg_read_all_stats TO your_user;)", detailed)
+                    format!("{detailed} (Try: GRANT pg_read_all_stats TO your_user;)")
                 } else {
-                    format!("{} (PG{}, ext {})", detailed, pg_major_version, version_info)
+                    format!("{detailed} (PG{pg_major_version}, ext {version_info})")
                 };
                 return (vec![], Some(hint));
             }
@@ -1115,7 +1115,7 @@ pub async fn fetch_stat_statements(
 
     // All queries failed with column errors
     let version_info = ext_version.unwrap_or("unknown");
-    (vec![], Some(format!("{} (PG{}, ext {}, tried all query variants)", last_error, pg_major_version, version_info)))
+    (vec![], Some(format!("{last_error} (PG{pg_major_version}, ext {version_info}, tried all query variants)")))
 }
 
 use std::collections::HashMap;
@@ -1141,7 +1141,7 @@ pub async fn fetch_table_bloat(client: &Client) -> Result<HashMap<String, TableB
     for row in rows {
         let schema: String = row.get("schemaname");
         let table: String = row.get("relname");
-        let key = format!("{}.{}", schema, table);
+        let key = format!("{schema}.{table}");
         results.insert(
             key,
             TableBloat {
@@ -1160,7 +1160,7 @@ pub async fn fetch_index_bloat(client: &Client) -> Result<HashMap<String, IndexB
     for row in rows {
         let schema: String = row.get("schemaname");
         let index: String = row.get("index_name");
-        let key = format!("{}.{}", schema, index);
+        let key = format!("{schema}.{index}");
         results.insert(
             key,
             IndexBloat {

@@ -25,7 +25,7 @@ pub fn render_extensions(frame: &mut Frame, app: &mut App, area: Rect) {
             filtered_count, total_count, app.filter.text
         )
     } else {
-        format!("Extensions [{}]", total_count)
+        format!("Extensions [{total_count}]")
     };
 
     let block = panel_block(&title);

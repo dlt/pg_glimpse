@@ -86,7 +86,7 @@ fn render_live(frame: &mut Frame, app: &App, area: Rect) {
 
     // Line 1: Panel name + contextual actions
     let mut line1: Vec<Span> = vec![
-        Span::styled(format!(" {} ", panel_name), section_style),
+        Span::styled(format!(" {panel_name} "), section_style),
         Span::styled(" ", sep_style),
     ];
     render_panel_keys(&mut line1, app, &sep, &dot, &key, &desc);

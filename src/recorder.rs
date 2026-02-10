@@ -40,7 +40,7 @@ impl Recorder {
         fs::create_dir_all(&dir)?;
 
         let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-        let filename = format!("{}_{}_{}.jsonl", host, port, timestamp);
+        let filename = format!("{host}_{port}_{timestamp}.jsonl");
         // Sanitize filename: replace any path-unfriendly chars
         let filename = filename.replace(['/', '\\'], "_");
         let path = dir.join(filename);

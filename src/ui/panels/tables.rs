@@ -17,7 +17,7 @@ pub fn render_table_stats(frame: &mut Frame, app: &mut App, area: Rect) {
         .as_ref()
         .map_or(0, |s| s.table_stats.len());
 
-    let title = format!("Table Stats [{}]", total_count);
+    let title = format!("Table Stats [{total_count}]");
     let block = panel_block(&title);
 
     let Some(snap) = &app.snapshot else {
@@ -89,7 +89,7 @@ pub fn render_table_stats(frame: &mut Frame, app: &mut App, area: Rect) {
             let bloat_cell = match t.bloat_pct {
                 Some(pct) => {
                     let color = Theme::bloat_color(pct);
-                    Cell::from(format!("{:.1}%", pct)).style(Style::default().fg(color))
+                    Cell::from(format!("{pct:.1}%")).style(Style::default().fg(color))
                 }
                 None => Cell::from("-"),
             };

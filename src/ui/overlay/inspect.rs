@@ -1186,7 +1186,7 @@ pub fn render_extensions_inspect(frame: &mut Frame, app: &App, area: Rect) {
                 current_line.clone(),
                 Style::default().fg(Theme::fg()),
             )));
-            current_line = format!("  {}", word);
+            current_line = format!("  {word}");
         } else {
             if current_line.len() > 2 {
                 current_line.push(' ');

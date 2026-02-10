@@ -62,7 +62,7 @@ fn render_live(frame: &mut Frame, app: &App, area: Rect) {
     spans.extend([
         Span::styled("  ", dim_style),
         Span::styled(
-            format!("{}/{}", conns, max_conns),
+            format!("{conns}/{max_conns}"),
             normal_style,
         ),
         Span::styled(" conns", label_style),
@@ -94,7 +94,7 @@ fn render_live(frame: &mut Frame, app: &App, area: Rect) {
             '●'
         };
         spans.push(Span::styled(
-            format!("{} {}", indicator, msg),
+            format!("{indicator} {msg}"),
             Style::default().fg(Theme::border_active()),
         ));
     }
@@ -185,7 +185,7 @@ fn render_replay(frame: &mut Frame, app: &App, replay: &crate::app::ReplayState,
     if let Some(ref msg) = app.status_message {
         spans.push(Span::styled("  ", dim_style));
         spans.push(Span::styled(
-            format!("● {}", msg),
+            format!("● {msg}"),
             Style::default().fg(Theme::border_active()),
         ));
     }
@@ -209,7 +209,7 @@ fn format_speed(speed: f64) -> String {
     if speed == (speed as u32) as f64 {
         format!("{}x", speed as u32)
     } else {
-        format!("{:.2}x", speed)
+        format!("{speed:.2}x")
     }
 }
 

@@ -28,7 +28,7 @@ use super::theme::Theme;
 
 pub(crate) fn panel_block(title: &str) -> Block<'_> {
     Block::default()
-        .title(format!(" {} ", title))
+        .title(format!(" {title} "))
         .title_style(Theme::title_style())
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)

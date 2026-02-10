@@ -267,7 +267,7 @@ fn render_subscriptions(
                 let elapsed = chrono::Utc::now() - t;
                 let secs = elapsed.num_seconds();
                 if secs < 60 {
-                    format!("{}s ago", secs)
+                    format!("{secs}s ago")
                 } else if secs < 3600 {
                     format!("{}m ago", secs / 60)
                 } else {
