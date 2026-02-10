@@ -1239,89 +1239,43 @@ impl App {
 
     // --- Modal overlay handlers ---
 
-    fn handle_confirm_cancel_key(&mut self, key: KeyEvent, pid: i32) {
+    /// Handle simple yes/no confirmation dialogs.
+    /// On 'y'/'Y', executes the action. Any other key aborts with the given message.
+    fn handle_yes_no_confirm(&mut self, key: KeyEvent, action: AppAction, abort_msg: &str) {
         match key.code {
             KeyCode::Char('y') | KeyCode::Char('Y') => {
-                self.pending_action = Some(AppAction::CancelQuery(pid));
+                self.pending_action = Some(action);
                 self.view_mode = ViewMode::Normal;
             }
             _ => {
                 self.view_mode = ViewMode::Normal;
-                self.status_message = Some("Cancel aborted".into());
+                self.status_message = Some(abort_msg.into());
             }
         }
     }
 
-    fn handle_confirm_kill_key(&mut self, key: KeyEvent, pid: i32) {
-        match key.code {
-            KeyCode::Char('y') | KeyCode::Char('Y') => {
-                self.pending_action = Some(AppAction::TerminateBackend(pid));
-                self.view_mode = ViewMode::Normal;
-            }
-            _ => {
-                self.view_mode = ViewMode::Normal;
-                self.status_message = Some("Kill aborted".into());
-            }
-        }
-    }
-
-    fn handle_confirm_cancel_choice_key(&mut self, key: KeyEvent, selected_pid: i32, all_pids: Vec<i32>) {
+    /// Handle choice confirmation dialogs (single vs batch).
+    /// '1'/'o' selects single, 'a' goes to batch confirm, Esc aborts.
+    fn handle_choice_confirm(
+        &mut self,
+        key: KeyEvent,
+        single_action: AppAction,
+        batch_mode: ViewMode,
+        abort_msg: &str,
+    ) {
         match key.code {
             KeyCode::Char('1') | KeyCode::Char('o') => {
-                self.pending_action = Some(AppAction::CancelQuery(selected_pid));
+                self.pending_action = Some(single_action);
                 self.view_mode = ViewMode::Normal;
             }
             KeyCode::Char('a') => {
-                self.view_mode = ViewMode::ConfirmCancelBatch(all_pids);
+                self.view_mode = batch_mode;
             }
             KeyCode::Esc => {
                 self.view_mode = ViewMode::Normal;
-                self.status_message = Some("Cancel aborted".into());
+                self.status_message = Some(abort_msg.into());
             }
             _ => {}
-        }
-    }
-
-    fn handle_confirm_kill_choice_key(&mut self, key: KeyEvent, selected_pid: i32, all_pids: Vec<i32>) {
-        match key.code {
-            KeyCode::Char('1') | KeyCode::Char('o') => {
-                self.pending_action = Some(AppAction::TerminateBackend(selected_pid));
-                self.view_mode = ViewMode::Normal;
-            }
-            KeyCode::Char('a') => {
-                self.view_mode = ViewMode::ConfirmKillBatch(all_pids);
-            }
-            KeyCode::Esc => {
-                self.view_mode = ViewMode::Normal;
-                self.status_message = Some("Kill aborted".into());
-            }
-            _ => {}
-        }
-    }
-
-    fn handle_confirm_cancel_batch_key(&mut self, key: KeyEvent, pids: Vec<i32>) {
-        match key.code {
-            KeyCode::Char('y') | KeyCode::Char('Y') => {
-                self.pending_action = Some(AppAction::CancelQueries(pids));
-                self.view_mode = ViewMode::Normal;
-            }
-            _ => {
-                self.view_mode = ViewMode::Normal;
-                self.status_message = Some("Batch cancel aborted".into());
-            }
-        }
-    }
-
-    fn handle_confirm_kill_batch_key(&mut self, key: KeyEvent, pids: Vec<i32>) {
-        match key.code {
-            KeyCode::Char('y') | KeyCode::Char('Y') => {
-                self.pending_action = Some(AppAction::TerminateBackends(pids));
-                self.view_mode = ViewMode::Normal;
-            }
-            _ => {
-                self.view_mode = ViewMode::Normal;
-                self.status_message = Some("Batch kill aborted".into());
-            }
         }
     }
 
@@ -1617,35 +1571,35 @@ impl App {
         // Layer 1: Modal overlays consume all input
         match &self.view_mode {
             ViewMode::ConfirmCancel(pid) => {
-                let pid = *pid;
-                self.handle_confirm_cancel_key(key, pid);
+                let action = AppAction::CancelQuery(*pid);
+                self.handle_yes_no_confirm(key, action, "Cancel aborted");
                 return;
             }
             ViewMode::ConfirmKill(pid) => {
-                let pid = *pid;
-                self.handle_confirm_kill_key(key, pid);
+                let action = AppAction::TerminateBackend(*pid);
+                self.handle_yes_no_confirm(key, action, "Kill aborted");
                 return;
             }
             ViewMode::ConfirmCancelChoice { selected_pid, all_pids } => {
-                let selected_pid = *selected_pid;
-                let all_pids = all_pids.clone();
-                self.handle_confirm_cancel_choice_key(key, selected_pid, all_pids);
+                let action = AppAction::CancelQuery(*selected_pid);
+                let batch = ViewMode::ConfirmCancelBatch(all_pids.clone());
+                self.handle_choice_confirm(key, action, batch, "Cancel aborted");
                 return;
             }
             ViewMode::ConfirmKillChoice { selected_pid, all_pids } => {
-                let selected_pid = *selected_pid;
-                let all_pids = all_pids.clone();
-                self.handle_confirm_kill_choice_key(key, selected_pid, all_pids);
+                let action = AppAction::TerminateBackend(*selected_pid);
+                let batch = ViewMode::ConfirmKillBatch(all_pids.clone());
+                self.handle_choice_confirm(key, action, batch, "Kill aborted");
                 return;
             }
             ViewMode::ConfirmCancelBatch(pids) => {
-                let pids = pids.clone();
-                self.handle_confirm_cancel_batch_key(key, pids);
+                let action = AppAction::CancelQueries(pids.clone());
+                self.handle_yes_no_confirm(key, action, "Batch cancel aborted");
                 return;
             }
             ViewMode::ConfirmKillBatch(pids) => {
-                let pids = pids.clone();
-                self.handle_confirm_kill_batch_key(key, pids);
+                let action = AppAction::TerminateBackends(pids.clone());
+                self.handle_yes_no_confirm(key, action, "Batch kill aborted");
                 return;
             }
             ViewMode::Inspect => {
