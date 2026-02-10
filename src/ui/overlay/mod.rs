@@ -24,7 +24,7 @@ use ratatui::widgets::{Block, BorderType, Borders};
 
 use super::theme::Theme;
 
-pub(crate) fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
+pub fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
     let v = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -43,7 +43,7 @@ pub(crate) fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect 
         .split(v[1])[1]
 }
 
-pub(crate) fn overlay_block(title: &str, color: Color) -> Block<'_> {
+pub fn overlay_block(title: &str, color: Color) -> Block<'_> {
     Block::default()
         .title(format!(" {title} "))
         .title_style(
@@ -59,7 +59,7 @@ pub(crate) fn overlay_block(title: &str, color: Color) -> Block<'_> {
 }
 
 /// Create a section header line with visual styling
-pub(crate) fn section_header(title: &str) -> Line<'static> {
+pub fn section_header(title: &str) -> Line<'static> {
     Line::from(vec![
         Span::styled(
             format!("  {title} "),
@@ -75,7 +75,7 @@ pub(crate) fn section_header(title: &str) -> Line<'static> {
 }
 
 /// Create a separator line
-pub(crate) fn separator_line() -> Line<'static> {
+pub fn separator_line() -> Line<'static> {
     Line::from(Span::styled(
         format!("  {}", "─".repeat(50)),
         Style::default().fg(Theme::border_dim()),

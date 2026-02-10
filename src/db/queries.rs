@@ -13,17 +13,17 @@ use super::models::{
 /// Query result limits - these values are embedded in the SQL constants below.
 /// Change both the constant and the corresponding SQL if adjusting limits.
 pub mod limits {
-    /// Maximum active queries to fetch from pg_stat_activity
+    /// Maximum active queries to fetch from `pg_stat_activity`
     pub const MAX_ACTIVE_QUERIES: u32 = 100;
     /// Maximum blocking chains to fetch
     pub const MAX_BLOCKING_CHAINS: u32 = 50;
     /// Maximum table stats entries to fetch
     pub const MAX_TABLE_STATS: u32 = 30;
-    /// Maximum pg_stat_statements entries to fetch
+    /// Maximum `pg_stat_statements` entries to fetch
     pub const MAX_STAT_STATEMENTS: u32 = 100;
 }
 
-/// See limits::MAX_ACTIVE_QUERIES
+/// See `limits::MAX_ACTIVE_QUERIES`
 const ACTIVE_QUERIES_SQL: &str = "
 SELECT
     pid,
@@ -64,7 +64,7 @@ GROUP BY wait_event_type, wait_event
 ORDER BY count DESC
 ";
 
-/// See limits::MAX_BLOCKING_CHAINS
+/// See `limits::MAX_BLOCKING_CHAINS`
 const BLOCKING_SQL: &str = "
 SELECT
     blocked.pid AS blocked_pid,
@@ -96,7 +96,7 @@ FROM pg_stat_database
 WHERE datname = current_database()
 ";
 
-/// See limits::MAX_TABLE_STATS
+/// See `limits::MAX_TABLE_STATS`
 const TABLE_STATS_SQL: &str = "
 SELECT schemaname, relname,
     COALESCE(pg_total_relation_size(relid), 0) AS total_size_bytes,
@@ -122,7 +122,7 @@ SELECT schemaname, relname,
 FROM pg_stat_user_tables ORDER BY n_dead_tup DESC LIMIT 30
 ";
 
-/// Replication query for PG12+: includes reply_time
+/// Replication query for PG12+: includes `reply_time`
 const REPLICATION_SQL_V12: &str = "
 SELECT pid,
     usesysid::bigint AS usesysid,
@@ -147,7 +147,7 @@ SELECT pid,
 FROM pg_stat_replication ORDER BY replay_lag DESC NULLS LAST
 ";
 
-/// Replication query for PG10-11: no reply_time column
+/// Replication query for PG10-11: no `reply_time` column
 const REPLICATION_SQL_V10: &str = "
 SELECT pid,
     usesysid::bigint AS usesysid,
@@ -186,7 +186,7 @@ FROM pg_replication_slots
 ORDER BY slot_name
 ";
 
-/// Replication slots query for PG 14+ (includes stats from pg_stat_replication_slots)
+/// Replication slots query for PG 14+ (includes stats from `pg_stat_replication_slots`)
 const REPLICATION_SLOTS_SQL_V14: &str = "
 SELECT
     s.slot_name,
@@ -223,7 +223,7 @@ WHERE stat.relid IS NULL
 ORDER BY sub.subname
 ";
 
-/// Vacuum progress query - uses 0 for num_dead_tuples for compatibility
+/// Vacuum progress query - uses 0 for `num_dead_tuples` for compatibility
 /// (column name varies across PG versions and cloud providers)
 const VACUUM_PROGRESS_SQL: &str = "
 SELECT p.pid, a.datname,
@@ -262,8 +262,8 @@ FROM pg_stat_user_indexes s
 ORDER BY pg_relation_size(s.indexrelid) DESC NULLS LAST
 ";
 
-/// pg_stat_statements query for PG11-12: uses total_time, blk_read_time.
-/// See limits::MAX_STAT_STATEMENTS
+/// `pg_stat_statements` query for PG11-12: uses `total_time`, `blk_read_time`.
+/// See `limits::MAX_STAT_STATEMENTS`
 const STAT_STATEMENTS_SQL_V11: &str = "
 SELECT
     COALESCE(queryid, 0) AS queryid,
@@ -296,8 +296,8 @@ ORDER BY total_time DESC
 LIMIT 100
 ";
 
-/// pg_stat_statements query for PG13-14: uses total_exec_time, blk_read_time.
-/// See limits::MAX_STAT_STATEMENTS
+/// `pg_stat_statements` query for PG13-14: uses `total_exec_time`, `blk_read_time`.
+/// See `limits::MAX_STAT_STATEMENTS`
 const STAT_STATEMENTS_SQL_V13: &str = "
 SELECT
     COALESCE(queryid, 0) AS queryid,
@@ -330,9 +330,9 @@ ORDER BY total_exec_time DESC
 LIMIT 100
 ";
 
-/// pg_stat_statements query for PG17+: uses total_exec_time, shared_blk_read_time.
-/// Note: The blk_read_time → shared_blk_read_time rename happened in PG17, not the extension.
-/// See limits::MAX_STAT_STATEMENTS
+/// `pg_stat_statements` query for PG17+: uses `total_exec_time`, `shared_blk_read_time`.
+/// Note: The `blk_read_time` → `shared_blk_read_time` rename happened in PG17, not the extension.
+/// See `limits::MAX_STAT_STATEMENTS`
 const STAT_STATEMENTS_SQL_V17: &str = "
 SELECT
     COALESCE(queryid, 0) AS queryid,
@@ -468,7 +468,7 @@ const DB_SIZE_SQL: &str = "
 SELECT pg_database_size(current_database()) AS db_size
 ";
 
-/// Checkpoint stats query for PG11-16: uses pg_stat_bgwriter
+/// Checkpoint stats query for PG11-16: uses `pg_stat_bgwriter`
 const CHECKPOINT_STATS_SQL_V11: &str = "
 SELECT
     COALESCE(checkpoints_timed, 0) AS checkpoints_timed,
@@ -480,7 +480,7 @@ SELECT
 FROM pg_stat_bgwriter
 ";
 
-/// Checkpoint stats query for PG17+: uses pg_stat_checkpointer (columns moved from pg_stat_bgwriter)
+/// Checkpoint stats query for PG17+: uses `pg_stat_checkpointer` (columns moved from `pg_stat_bgwriter`)
 const CHECKPOINT_STATS_SQL_V17: &str = "
 SELECT
     COALESCE(num_timed, 0) AS checkpoints_timed,
@@ -492,7 +492,7 @@ SELECT
 FROM pg_stat_checkpointer
 ";
 
-fn checkpoint_stats_sql(version: u32) -> &'static str {
+const fn checkpoint_stats_sql(version: u32) -> &'static str {
     if version < 17 {
         CHECKPOINT_STATS_SQL_V11
     } else {
@@ -500,7 +500,7 @@ fn checkpoint_stats_sql(version: u32) -> &'static str {
     }
 }
 
-/// WAL stats query for PG14-17 (pg_stat_wal with full columns)
+/// WAL stats query for PG14-17 (`pg_stat_wal` with full columns)
 const WAL_STATS_SQL_V14: &str = "
 SELECT
     COALESCE(wal_records, 0) AS wal_records,
@@ -514,7 +514,7 @@ SELECT
 FROM pg_stat_wal
 ";
 
-/// WAL stats query for PG18+ (wal_write, wal_sync, wal_write_time, wal_sync_time removed)
+/// WAL stats query for PG18+ (`wal_write`, `wal_sync`, `wal_write_time`, `wal_sync_time` removed)
 const WAL_STATS_SQL_V18: &str = "
 SELECT
     COALESCE(wal_records, 0) AS wal_records,
@@ -981,7 +981,7 @@ pub async fn fetch_indexes(client: &Client) -> Result<Vec<IndexInfo>> {
     Ok(results)
 }
 
-/// Returns (statements, error_message)
+/// Returns (statements, `error_message`)
 pub async fn fetch_stat_statements(
     client: &Client,
     extensions: &DetectedExtensions,
@@ -1150,7 +1150,7 @@ pub async fn fetch_table_bloat(client: &Client) -> Result<HashMap<String, TableB
     Ok(results)
 }
 
-/// Fetch index bloat estimates. Returns map of "schema.index_name" -> bloat info.
+/// Fetch index bloat estimates. Returns map of "`schema.index_name`" -> bloat info.
 pub async fn fetch_index_bloat(client: &Client) -> Result<HashMap<String, IndexBloat>> {
     let rows = client.query(INDEX_BLOAT_SQL, &[]).await?;
     let mut results = HashMap::with_capacity(rows.len());

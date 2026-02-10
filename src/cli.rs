@@ -1,7 +1,7 @@
 use clap::Parser;
 use std::path::PathBuf;
 
-/// pg_glimpse - A terminal-based PostgreSQL monitoring tool
+/// `pg_glimpse` - A terminal-based `PostgreSQL` monitoring tool
 #[derive(Parser, Debug)]
 #[command(name = "pg_glimpse", version, about)]
 pub struct Cli {
@@ -9,29 +9,29 @@ pub struct Cli {
     #[arg(long)]
     pub replay: Option<PathBuf>,
 
-    /// PostgreSQL connection string (overrides individual params)
+    /// `PostgreSQL` connection string (overrides individual params)
     /// Example: "host=localhost port=5432 dbname=mydb user=postgres password=secret"
     /// Or URI: "postgresql://user:pass@host:port/dbname"
     #[arg(short = 'c', long = "connection", env = "PG_GLIMPSE_CONNECTION")]
     pub connection_string: Option<String>,
 
-    /// PostgreSQL host
+    /// `PostgreSQL` host
     #[arg(short = 'H', long, env = "PGHOST", default_value = "localhost")]
     pub host: String,
 
-    /// PostgreSQL port
+    /// `PostgreSQL` port
     #[arg(short = 'p', long, env = "PGPORT", default_value_t = 5432)]
     pub port: u16,
 
-    /// PostgreSQL database name
+    /// `PostgreSQL` database name
     #[arg(short = 'd', long, env = "PGDATABASE", default_value = "postgres")]
     pub dbname: String,
 
-    /// PostgreSQL user
+    /// `PostgreSQL` user
     #[arg(short = 'U', long, env = "PGUSER", default_value = "postgres")]
     pub user: String,
 
-    /// PostgreSQL password
+    /// `PostgreSQL` password
     #[arg(short = 'W', long, env = "PGPASSWORD")]
     pub password: Option<String>,
 

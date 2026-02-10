@@ -778,7 +778,7 @@ pub fn render_wraparound_inspect(frame: &mut Frame, app: &App, area: Rect) {
         Line::from(vec![
             Span::styled("  XID Age:       ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
-                format_compact(wrap.xid_age as i64),
+                format_compact(i64::from(wrap.xid_age)),
                 Style::default().fg(pct_color).add_modifier(Modifier::BOLD),
             ),
             Span::styled(" transactions", Style::default().fg(Theme::fg_dim())),

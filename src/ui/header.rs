@@ -204,7 +204,7 @@ fn render_replay(frame: &mut Frame, app: &App, replay: &crate::app::ReplayState,
 }
 
 fn format_speed(speed: f64) -> String {
-    if speed == (speed as u32) as f64 {
+    if speed == f64::from(speed as u32) {
         format!("{}x", speed as u32)
     } else {
         format!("{speed:.2}x")

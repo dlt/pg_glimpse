@@ -8,7 +8,7 @@ use ratatui::Frame;
 
 use super::theme::Theme;
 
-fn dim(color: Color) -> Color {
+const fn dim(color: Color) -> Color {
     match color {
         Color::Rgb(r, g, b) => Color::Rgb(r / 3, g / 3, b / 3),
         other => other,

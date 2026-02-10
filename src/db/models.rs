@@ -44,7 +44,8 @@ pub struct ServerInfo {
 }
 
 impl ServerInfo {
-    /// Extract the major PostgreSQL version number (e.g., 14 from "PostgreSQL 14.5 on ...")
+    /// Extract the major `PostgreSQL` version number (e.g., 14 from "`PostgreSQL` 14.5 on ...")
+    #[must_use] 
     pub fn major_version(&self) -> u32 {
         self.version
             .split_whitespace()

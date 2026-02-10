@@ -27,7 +27,7 @@ pub fn render_wait_events(frame: &mut Frame, app: &App, area: Rect) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let bar_width = inner.width.saturating_sub(22) as i64;
+    let bar_width = i64::from(inner.width.saturating_sub(22));
 
     let lines: Vec<Line> = snap
         .wait_events

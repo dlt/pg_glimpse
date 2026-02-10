@@ -78,12 +78,12 @@ pub enum BottomPanel {
 }
 
 impl BottomPanel {
-    pub fn supports_filter(self) -> bool {
+    pub const fn supports_filter(self) -> bool {
         matches!(self, Self::Queries | Self::Indexes | Self::Statements | Self::TableStats | Self::Settings | Self::Extensions)
     }
 
     #[allow(dead_code)]
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Queries => "Queries",
             Self::Blocking => "Blocking",
@@ -137,7 +137,7 @@ pub enum AppAction {
     RefreshIntervalChanged,
 }
 
-/// Trait for sort column enums to enable generic TableViewState
+/// Trait for sort column enums to enable generic `TableViewState`
 pub trait SortColumnTrait: Copy + PartialEq {
     fn next(self) -> Self;
     #[allow(dead_code)]
@@ -145,7 +145,7 @@ pub trait SortColumnTrait: Copy + PartialEq {
 }
 
 /// Macro to define sort column enums with cycling and labels.
-/// Generates: enum definition, next() cycling through variants in order, label() for display.
+/// Generates: enum definition, `next()` cycling through variants in order, `label()` for display.
 macro_rules! define_sort_column {
     ($name:ident { $($variant:ident => $label:literal),+ $(,)? }) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -162,7 +162,7 @@ macro_rules! define_sort_column {
             }
 
             #[allow(dead_code)]
-            pub fn label(self) -> &'static str {
+            pub const fn label(self) -> &'static str {
                 match self {
                     $(Self::$variant => $label),+
                 }
@@ -249,7 +249,7 @@ impl<S: SortColumnTrait> TableViewState<S> {
         self.state.select(Some(0));
     }
 
-    pub fn selected(&self) -> Option<usize> {
+    pub const fn selected(&self) -> Option<usize> {
         self.state.selected()
     }
 }
@@ -264,7 +264,7 @@ pub struct ReplayState {
 }
 
 impl ReplayState {
-    pub fn new(filename: String, total: usize) -> Self {
+    pub const fn new(filename: String, total: usize) -> Self {
         Self {
             filename,
             position: 0,
@@ -285,7 +285,7 @@ pub struct ConnectionInfo {
 }
 
 impl ConnectionInfo {
-    pub fn new(host: String, port: u16, dbname: String, user: String) -> Self {
+    pub const fn new(host: String, port: u16, dbname: String, user: String) -> Self {
         Self {
             host,
             port,
@@ -322,7 +322,7 @@ impl FilterState {
     }
 }
 
-/// Lightweight struct for rate delta calculations (avoids cloning full PgSnapshot)
+/// Lightweight struct for rate delta calculations (avoids cloning full `PgSnapshot`)
 struct PrevMetrics {
     timestamp: DateTime<Utc>,
     xact_commit: i64,
@@ -532,7 +532,7 @@ fn sort_by_key<T, K: Ord>(indices: &mut [usize], items: &[T], asc: bool, key: im
     });
 }
 
-/// Sort indices by a key extracted from items, using partial_cmp for floats.
+/// Sort indices by a key extracted from items, using `partial_cmp` for floats.
 fn sort_by_key_partial<T, K: PartialOrd>(indices: &mut [usize], items: &[T], asc: bool, key: impl Fn(&T) -> K) {
     indices.sort_by(|&a, &b| {
         let cmp = key(&items[a]).partial_cmp(&key(&items[b])).unwrap_or(std::cmp::Ordering::Equal);
@@ -607,7 +607,7 @@ impl App {
     }
 
     /// Returns true if in replay mode
-    pub fn is_replay_mode(&self) -> bool {
+    pub const fn is_replay_mode(&self) -> bool {
         self.replay.is_some()
     }
 
@@ -665,7 +665,7 @@ impl App {
         self.last_error = Some(err);
     }
 
-    /// Apply bloat estimates to current snapshot's table_stats and indexes
+    /// Apply bloat estimates to current snapshot's `table_stats` and indexes
     pub fn apply_bloat_data(
         &mut self,
         table_bloat: &HashMap<String, TableBloat>,
@@ -1137,15 +1137,12 @@ impl App {
     /// Handle simple yes/no confirmation dialogs.
     /// On 'y'/'Y', executes the action. Any other key aborts with the given message.
     fn handle_yes_no_confirm(&mut self, key: KeyEvent, action: AppAction, abort_msg: &str) {
-        match key.code {
-            KeyCode::Char('y' | 'Y') => {
-                self.pending_action = Some(action);
-                self.view_mode = ViewMode::Normal;
-            }
-            _ => {
-                self.view_mode = ViewMode::Normal;
-                self.status_message = Some(abort_msg.into());
-            }
+        if let KeyCode::Char('y' | 'Y') = key.code {
+            self.pending_action = Some(action);
+            self.view_mode = ViewMode::Normal;
+        } else {
+            self.view_mode = ViewMode::Normal;
+            self.status_message = Some(abort_msg.into());
         }
     }
 
@@ -1370,10 +1367,10 @@ impl App {
                 true
             }
             KeyCode::Esc => {
-                if self.bottom_panel != BottomPanel::Queries {
-                    self.switch_panel(BottomPanel::Queries);
-                } else {
+                if self.bottom_panel == BottomPanel::Queries {
                     self.running = false;
+                } else {
+                    self.switch_panel(BottomPanel::Queries);
                 }
                 true
             }
@@ -1561,13 +1558,13 @@ impl App {
                 theme::set_theme(self.config.color_theme.colors());
             }
             ConfigItem::RefreshInterval => {
-                let val = self.config.refresh_interval_secs as i64 + direction as i64;
+                let val = self.config.refresh_interval_secs as i64 + i64::from(direction);
                 self.config.refresh_interval_secs = val.clamp(1, 60) as u64;
                 self.refresh_interval_secs = self.config.refresh_interval_secs;
                 self.pending_action = Some(AppAction::RefreshIntervalChanged);
             }
             ConfigItem::WarnDuration => {
-                let val = (direction as f64).mul_add(0.5, self.config.warn_duration_secs);
+                let val = f64::from(direction).mul_add(0.5, self.config.warn_duration_secs);
                 self.config.warn_duration_secs = val.clamp(0.1, self.config.danger_duration_secs);
                 theme::set_duration_thresholds(
                     self.config.warn_duration_secs,
@@ -1575,7 +1572,7 @@ impl App {
                 );
             }
             ConfigItem::DangerDuration => {
-                let val = (direction as f64).mul_add(1.0, self.config.danger_duration_secs);
+                let val = f64::from(direction).mul_add(1.0, self.config.danger_duration_secs);
                 self.config.danger_duration_secs = val.clamp(self.config.warn_duration_secs, 300.0);
                 theme::set_duration_thresholds(
                     self.config.warn_duration_secs,
@@ -1588,7 +1585,7 @@ impl App {
                 } else {
                     600
                 };
-                let val = self.config.recording_retention_secs as i64 + direction as i64 * step;
+                let val = self.config.recording_retention_secs as i64 + i64::from(direction) * step;
                 self.config.recording_retention_secs = val.clamp(600, 86400) as u64;
             }
         }

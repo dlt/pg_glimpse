@@ -84,11 +84,11 @@ enum SslMode {
 }
 
 impl SslMode {
-    fn label(&self) -> &'static str {
+    const fn label(&self) -> &'static str {
         match self {
-            SslMode::None => "No TLS",
-            SslMode::Verified => "SSL",
-            SslMode::Insecure => "SSL (unverified)",
+            Self::None => "No TLS",
+            Self::Verified => "SSL",
+            Self::Insecure => "SSL (unverified)",
         }
     }
 }
@@ -210,23 +210,20 @@ async fn run(cli: Cli) -> Result<()> {
             }
         }
 
-        match result {
-            Some(r) => r,
-            None => {
-                let info = cli.connection_info();
-                eprintln!(
-                    "Error: could not connect to PostgreSQL with any SSL mode: {:?}\n",
-                    last_error.unwrap()
-                );
-                eprintln!(
-                    "Connection: {}:{}/{}",
-                    info.host, info.port, info.dbname
-                );
-                eprintln!("\nTried: No TLS, SSL (verified), SSL (insecure)");
-                eprintln!("Try: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword");
-                eprintln!("See: pg_glimpse --help");
-                std::process::exit(1);
-            }
+        if let Some(r) = result { r } else {
+            let info = cli.connection_info();
+            eprintln!(
+                "Error: could not connect to PostgreSQL with any SSL mode: {:?}\n",
+                last_error.unwrap()
+            );
+            eprintln!(
+                "Connection: {}:{}/{}",
+                info.host, info.port, info.dbname
+            );
+            eprintln!("\nTried: No TLS, SSL (verified), SSL (insecure)");
+            eprintln!("Try: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword");
+            eprintln!("See: pg_glimpse --help");
+            std::process::exit(1);
         }
     };
 
@@ -571,11 +568,11 @@ async fn run_replay(path: &Path, config: AppConfig) -> Result<()> {
                     }
                 }
             }
-            _ = tokio::time::sleep(Duration::from_millis(10)) => {}
+            () = tokio::time::sleep(Duration::from_millis(10)) => {}
         }
 
         // Process pending actions (only SaveConfig matters in replay)
-        if let Some(AppAction::SaveConfig) = app.pending_action.take() {
+        if matches!(app.pending_action.take(), Some(AppAction::SaveConfig)) {
             app.config.save();
         }
     }

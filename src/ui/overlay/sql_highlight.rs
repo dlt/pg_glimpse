@@ -29,7 +29,7 @@ pub const SQL_KEYWORDS: &[&str] = &[
 ];
 
 /// Highlight SQL syntax for inline display (single line, for table cells)
-/// Collapses whitespace and truncates to max_len
+/// Collapses whitespace and truncates to `max_len`
 pub fn highlight_sql_inline(text: &str, max_len: usize) -> Vec<Span<'static>> {
     let keyword_style = Style::default().fg(Theme::sql_keyword());
     let string_style = Style::default().fg(Theme::sql_string());
@@ -41,7 +41,7 @@ pub fn highlight_sql_inline(text: &str, max_len: usize) -> Vec<Span<'static>> {
     let display: String = if collapsed.chars().count() > max_len {
         collapsed.chars().take(max_len).collect()
     } else {
-        collapsed.clone()
+        collapsed
     };
 
     let mut spans: Vec<Span<'static>> = Vec::new();
@@ -153,7 +153,7 @@ pub(super) fn highlight_sql(text: &str, indent: &str) -> Vec<Line<'static>> {
         let parts: Vec<&str> = s.split('\n').collect();
         for (idx, part) in parts.iter().enumerate() {
             if !part.is_empty() {
-                spans.push(Span::styled(part.to_string(), style));
+                spans.push(Span::styled((*part).to_string(), style));
             }
             if idx < parts.len() - 1 {
                 // There's a newline after this part

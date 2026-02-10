@@ -13,7 +13,7 @@ pub enum GraphMarkerStyle {
 }
 
 impl GraphMarkerStyle {
-    pub fn next(self) -> Self {
+    pub const fn next(self) -> Self {
         match self {
             Self::Braille => Self::HalfBlock,
             Self::HalfBlock => Self::Block,
@@ -21,7 +21,7 @@ impl GraphMarkerStyle {
         }
     }
 
-    pub fn prev(self) -> Self {
+    pub const fn prev(self) -> Self {
         match self {
             Self::Braille => Self::Block,
             Self::HalfBlock => Self::Braille,
@@ -29,7 +29,7 @@ impl GraphMarkerStyle {
         }
     }
 
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Braille => "Braille",
             Self::HalfBlock => "Half Block",
@@ -37,7 +37,7 @@ impl GraphMarkerStyle {
         }
     }
 
-    pub fn to_marker(self) -> Marker {
+    pub const fn to_marker(self) -> Marker {
         match self {
             Self::Braille => Marker::Braille,
             Self::HalfBlock => Marker::HalfBlock,
@@ -58,7 +58,7 @@ pub enum ColorTheme {
 }
 
 impl ColorTheme {
-    pub fn next(self) -> Self {
+    pub const fn next(self) -> Self {
         match self {
             Self::TokyoNight => Self::Dracula,
             Self::Dracula => Self::Nord,
@@ -69,7 +69,7 @@ impl ColorTheme {
         }
     }
 
-    pub fn prev(self) -> Self {
+    pub const fn prev(self) -> Self {
         match self {
             Self::TokyoNight => Self::CatppuccinLatte,
             Self::Dracula => Self::TokyoNight,
@@ -80,7 +80,7 @@ impl ColorTheme {
         }
     }
 
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::TokyoNight => "Tokyo Night",
             Self::Dracula => "Dracula",
@@ -156,7 +156,7 @@ impl ThemeColors {
         sql_comment: Color::Rgb(92, 99, 112),       // gray
     };
 
-    pub fn dracula() -> Self {
+    pub const fn dracula() -> Self {
         Self {
             header_bg: Color::Rgb(40, 42, 54),
             fg: Color::Rgb(248, 248, 242),
@@ -183,7 +183,7 @@ impl ThemeColors {
         }
     }
 
-    pub fn nord() -> Self {
+    pub const fn nord() -> Self {
         Self {
             header_bg: Color::Rgb(46, 52, 64),
             fg: Color::Rgb(216, 222, 233),
@@ -210,7 +210,7 @@ impl ThemeColors {
         }
     }
 
-    pub fn solarized_dark() -> Self {
+    pub const fn solarized_dark() -> Self {
         Self {
             header_bg: Color::Rgb(0, 43, 54),
             fg: Color::Rgb(131, 148, 150),
@@ -237,7 +237,7 @@ impl ThemeColors {
         }
     }
 
-    pub fn solarized_light() -> Self {
+    pub const fn solarized_light() -> Self {
         Self {
             header_bg: Color::Rgb(238, 232, 213),    // base2
             fg: Color::Rgb(101, 123, 131),           // base00
@@ -264,7 +264,7 @@ impl ThemeColors {
         }
     }
 
-    pub fn catppuccin_latte() -> Self {
+    pub const fn catppuccin_latte() -> Self {
         Self {
             header_bg: Color::Rgb(230, 233, 239),    // mantle
             fg: Color::Rgb(76, 79, 105),             // text
@@ -355,16 +355,16 @@ pub enum ConfigItem {
 }
 
 impl ConfigItem {
-    pub const ALL: [ConfigItem; 6] = [
-        ConfigItem::GraphMarker,
-        ConfigItem::ColorTheme,
-        ConfigItem::RefreshInterval,
-        ConfigItem::WarnDuration,
-        ConfigItem::DangerDuration,
-        ConfigItem::RecordingRetention,
+    pub const ALL: [Self; 6] = [
+        Self::GraphMarker,
+        Self::ColorTheme,
+        Self::RefreshInterval,
+        Self::WarnDuration,
+        Self::DangerDuration,
+        Self::RecordingRetention,
     ];
 
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::GraphMarker => "Graph Marker",
             Self::ColorTheme => "Color Theme",
