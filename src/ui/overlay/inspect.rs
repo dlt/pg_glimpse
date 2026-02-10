@@ -173,8 +173,8 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
         ]),
         Line::from(vec![
             Span::styled("  Tup Read:    ", Style::default().fg(Theme::fg_dim())),
-            Span::styled(idx.idx_tup_read.to_string(), Style::default().fg(Theme::fg())),
-            Span::styled("     Tup Fetch: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(format!("{:<10}", idx.idx_tup_read), Style::default().fg(Theme::fg())),
+            Span::styled("Tup Fetch: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(idx.idx_tup_fetch.to_string(), Style::default().fg(Theme::fg())),
         ]),
         Line::from(""),
@@ -246,8 +246,11 @@ pub fn render_replication_inspect(frame: &mut Frame, app: &App, area: Rect) {
         ]),
         Line::from(vec![
             label("  User:            "),
-            val_opt(&r.usename),
-            label("      User SysID:    "),
+            Span::styled(
+                format!("{:<10}", r.usename.as_deref().unwrap_or("-")),
+                Style::default().fg(Theme::fg()),
+            ),
+            label("User SysID:    "),
             val(r.usesysid.map_or_else(|| "-".into(), |id| id.to_string())),
         ]),
         Line::from(vec![
@@ -256,8 +259,11 @@ pub fn render_replication_inspect(frame: &mut Frame, app: &App, area: Rect) {
         ]),
         Line::from(vec![
             label("  Client Addr:     "),
-            val_opt(&r.client_addr),
-            label("      Port:          "),
+            Span::styled(
+                format!("{:<10}", r.client_addr.as_deref().unwrap_or("-")),
+                Style::default().fg(Theme::fg()),
+            ),
+            label("Port:          "),
             val(r.client_port.map_or_else(|| "-".into(), |p| p.to_string())),
         ]),
         Line::from(vec![
@@ -279,8 +285,11 @@ pub fn render_replication_inspect(frame: &mut Frame, app: &App, area: Rect) {
         ]),
         Line::from(vec![
             label("  Sync State:      "),
-            val_opt(&r.sync_state),
-            label("      Sync Priority: "),
+            Span::styled(
+                format!("{:<10}", r.sync_state.as_deref().unwrap_or("-")),
+                Style::default().fg(Theme::fg()),
+            ),
+            label("Sync Priority: "),
             val(r.sync_priority.map_or_else(|| "-".into(), |p| p.to_string())),
         ]),
         Line::from(vec![
@@ -416,8 +425,8 @@ pub fn render_table_inspect(frame: &mut Frame, app: &App, area: Rect) {
         ]),
         Line::from(vec![
             Span::styled("  Table:         ", Style::default().fg(Theme::fg_dim())),
-            Span::styled(format_bytes(tbl.table_size_bytes), Style::default().fg(Theme::fg())),
-            Span::styled("     Indexes: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(format!("{:<10}", format_bytes(tbl.table_size_bytes)), Style::default().fg(Theme::fg())),
+            Span::styled("Indexes: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(format_bytes(tbl.indexes_size_bytes), Style::default().fg(Theme::fg())),
         ]),
         Line::from(""),
@@ -425,10 +434,10 @@ pub fn render_table_inspect(frame: &mut Frame, app: &App, area: Rect) {
         Line::from(vec![
             Span::styled("  Live:          ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
-                format_compact(tbl.n_live_tup),
+                format!("{:<10}", format_compact(tbl.n_live_tup)),
                 Style::default().fg(Theme::fg()).add_modifier(Modifier::BOLD),
             ),
-            Span::styled("     Dead: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled("Dead: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
                 format!("{} ({:.1}%)", format_compact(tbl.n_dead_tup), tbl.dead_ratio),
                 Style::default().fg(dead_color),
@@ -439,26 +448,26 @@ pub fn render_table_inspect(frame: &mut Frame, app: &App, area: Rect) {
         Line::from(vec![
             Span::styled("  Seq Scans:     ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
-                format_compact(tbl.seq_scan),
+                format!("{:<10}", format_compact(tbl.seq_scan)),
                 Style::default().fg(seq_scan_color),
             ),
-            Span::styled("     Rows Read: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled("Rows Read: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(format_compact(tbl.seq_tup_read), Style::default().fg(Theme::fg())),
         ]),
         Line::from(vec![
             Span::styled("  Idx Scans:     ", Style::default().fg(Theme::fg_dim())),
-            Span::styled(format_compact(tbl.idx_scan), Style::default().fg(Theme::fg())),
-            Span::styled("     Rows Fetch: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(format!("{:<10}", format_compact(tbl.idx_scan)), Style::default().fg(Theme::fg())),
+            Span::styled("Rows Fetch: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(format_compact(tbl.idx_tup_fetch), Style::default().fg(Theme::fg())),
         ]),
         Line::from(""),
         section_header("DML Activity"),
         Line::from(vec![
             Span::styled("  Inserts:       ", Style::default().fg(Theme::fg_dim())),
-            Span::styled(format_compact(tbl.n_tup_ins), Style::default().fg(Theme::fg())),
-            Span::styled("     Updates: ", Style::default().fg(Theme::fg_dim())),
-            Span::styled(format_compact(tbl.n_tup_upd), Style::default().fg(Theme::fg())),
-            Span::styled("     Deletes: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(format!("{:<10}", format_compact(tbl.n_tup_ins)), Style::default().fg(Theme::fg())),
+            Span::styled("Updates: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(format!("{:<10}", format_compact(tbl.n_tup_upd)), Style::default().fg(Theme::fg())),
+            Span::styled("Deletes: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(format_compact(tbl.n_tup_del), Style::default().fg(Theme::fg())),
         ]),
         Line::from(vec![
@@ -488,8 +497,8 @@ pub fn render_table_inspect(frame: &mut Frame, app: &App, area: Rect) {
         ]),
         Line::from(vec![
             Span::styled("  Vacuum Count:  ", Style::default().fg(Theme::fg_dim())),
-            Span::styled(tbl.vacuum_count.to_string(), Style::default().fg(Theme::fg())),
-            Span::styled("     AutoVac: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(format!("{:<10}", tbl.vacuum_count), Style::default().fg(Theme::fg())),
+            Span::styled("AutoVac: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(tbl.autovacuum_count.to_string(), Style::default().fg(Theme::fg())),
         ]),
     ];
@@ -670,10 +679,10 @@ pub fn render_vacuum_inspect(frame: &mut Frame, app: &App, area: Rect) {
         Line::from(vec![
             Span::styled("  Database:      ", Style::default().fg(Theme::fg_dim())),
             Span::styled(
-                vac.datname.clone().unwrap_or_else(|| "-".into()),
+                format!("{:<10}", vac.datname.as_deref().unwrap_or("-")),
                 Style::default().fg(Theme::fg()),
             ),
-            Span::styled("     PID: ", Style::default().fg(Theme::fg_dim())),
+            Span::styled("PID: ", Style::default().fg(Theme::fg_dim())),
             Span::styled(vac.pid.to_string(), Style::default().fg(Theme::fg())),
         ]),
         Line::from(""),
@@ -907,10 +916,10 @@ pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
         section("  Execution"),
         Line::from(vec![
             label("  Calls:           "),
-            val_bold(stmt.calls.to_string()),
-            label("      Rows:          "),
-            val(stmt.rows.to_string()),
-            label("      Rows/Call:     "),
+            val_bold(format!("{:<10}", stmt.calls)),
+            label("Rows:          "),
+            val(format!("{:<10}", stmt.rows)),
+            label("Rows/Call:     "),
             val(rows_per_call),
         ]),
         Line::from(vec![
@@ -919,28 +928,28 @@ pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
         ]),
         Line::from(vec![
             label("  Mean Time:       "),
-            val(format_time_ms(stmt.mean_exec_time)),
-            label("      Min Time:      "),
+            val(format!("{:<10}", format_time_ms(stmt.mean_exec_time))),
+            label("Min Time:      "),
             val(format_time_ms(stmt.min_exec_time)),
         ]),
         Line::from(vec![
             label("  Max Time:        "),
-            val(format_time_ms(stmt.max_exec_time)),
-            label("      Stddev:        "),
+            val(format!("{:<10}", format_time_ms(stmt.max_exec_time))),
+            label("Stddev:        "),
             val(format_time_ms(stmt.stddev_exec_time)),
         ]),
         Line::from(""),
         section("  Shared Buffers"),
         Line::from(vec![
             label("  Hit:             "),
-            val(stmt.shared_blks_hit.to_string()),
-            label("      Read:          "),
+            val(format!("{:<10}", stmt.shared_blks_hit)),
+            label("Read:          "),
             val(stmt.shared_blks_read.to_string()),
         ]),
         Line::from(vec![
             label("  Dirtied:         "),
-            val(stmt.shared_blks_dirtied.to_string()),
-            label("      Written:       "),
+            val(format!("{:<10}", stmt.shared_blks_dirtied)),
+            label("Written:       "),
             val(stmt.shared_blks_written.to_string()),
         ]),
         Line::from(vec![
@@ -956,14 +965,14 @@ pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
         section("  Local Buffers"),
         Line::from(vec![
             label("  Hit:             "),
-            val(stmt.local_blks_hit.to_string()),
-            label("      Read:          "),
+            val(format!("{:<10}", stmt.local_blks_hit)),
+            label("Read:          "),
             val(stmt.local_blks_read.to_string()),
         ]),
         Line::from(vec![
             label("  Dirtied:         "),
-            val(stmt.local_blks_dirtied.to_string()),
-            label("      Written:       "),
+            val(format!("{:<10}", stmt.local_blks_dirtied)),
+            label("Written:       "),
             val(stmt.local_blks_written.to_string()),
         ]),
         Line::from(""),
@@ -971,10 +980,10 @@ pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
         Line::from(vec![
             label("  Temp Read:       "),
             Span::styled(
-                stmt.temp_blks_read.to_string(),
+                format!("{:<10}", stmt.temp_blks_read),
                 Style::default().fg(temp_color),
             ),
-            label("      Temp Written:  "),
+            label("Temp Written:  "),
             Span::styled(
                 stmt.temp_blks_written.to_string(),
                 Style::default().fg(temp_color),
@@ -983,10 +992,10 @@ pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
         Line::from(vec![
             label("  Blk Read Time:   "),
             Span::styled(
-                format_time_ms(stmt.blk_read_time),
+                format!("{:<10}", format_time_ms(stmt.blk_read_time)),
                 Style::default().fg(io_time_color),
             ),
-            label("      Blk Write Time:"),
+            label("Blk Write Time:"),
             Span::styled(
                 format!(" {}", format_time_ms(stmt.blk_write_time)),
                 Style::default().fg(io_time_color),

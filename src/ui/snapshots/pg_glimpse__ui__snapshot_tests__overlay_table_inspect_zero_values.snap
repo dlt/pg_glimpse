@@ -16,17 +16,17 @@ expression: buffer_to_string(&terminal)
              │                                                                                 │              
              │  Size ────────────────────────────────────────                                  │              
              │  Total:         0 B                                                             │              
-             │  Table:         0 B     Indexes: 0 B                                            │              
+             │  Table:         0 B       Indexes: 0 B                                          │              
              │                                                                                 │              
              │  Row Stats ────────────────────────────────────────                             │              
-             │  Live:          0     Dead: 0 (0.0%)                                            │              
+             │  Live:          0         Dead: 0 (0.0%)                                        │              
              │                                                                                 │              
              │  Scan Activity ────────────────────────────────────────                         │              
-             │  Seq Scans:     0     Rows Read: 0                                              │              
-             │  Idx Scans:     0     Rows Fetch: 0                                             │              
+             │  Seq Scans:     0         Rows Read: 0                                          │              
+             │  Idx Scans:     0         Rows Fetch: 0                                         │              
              │                                                                                 │              
              │  DML Activity ────────────────────────────────────────                          │              
-             │  Inserts:       0     Updates: 0     Deletes: 0                                 │              
+             │  Inserts:       0         Updates: 0         Deletes: 0                         │              
              │  HOT Updates:   0 (0%)                                                          │              
              │                                                                                 │              
              │  Maintenance ────────────────────────────────────────                           │              
@@ -34,7 +34,7 @@ expression: buffer_to_string(&terminal)
              │  Last AutoVac:  -                                                               │              
              │  Last Analyze:  -                                                               │              
              │  Last AutoAnly: -                                                               │              
-             │  Vacuum Count:  0     AutoVac: 0                                                │              
+             │  Vacuum Count:  0         AutoVac: 0                                            │              
              │                                                                                 │              
              │                                                                                 │              
              │                                                                                 │              

@@ -13,7 +13,7 @@ expression: buffer_to_string(&terminal)
                │                                                                    │               
                │  Vacuum Target ────────────────────────────────────────            │               
                │  Table:         public.large_table                                 │               
-               │  Database:      production     PID: 34567                          │               
+               │  Database:      productionPID: 34567                               │               
                │                                                                    │               
                │  Progress ────────────────────────────────────────                 │               
                │  Phase:         scanning heap                                      │               

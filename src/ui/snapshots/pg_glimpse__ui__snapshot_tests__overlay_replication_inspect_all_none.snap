@@ -13,15 +13,15 @@ expression: buffer_to_string(&terminal)
                │                                                                    │               
                │  Connection                                                        │               
                │  PID:             1                                                │               
-               │  User:            -      User SysID:    -                          │               
+               │  User:            -         User SysID:    -                       │               
                │  Application:     -                                                │               
-               │  Client Addr:     -      Port:          -                          │               
+               │  Client Addr:     -         Port:          -                       │               
                │  Client Hostname: -                                                │               
                │  Backend Start:   -                                                │               
                │                                                                    │               
                │  Replication State                                                 │               
                │  State:           -                                                │               
-               │  Sync State:      -      Sync Priority: -                          │               
+               │  Sync State:      -         Sync Priority: -                       │               
                │  Backend Xmin:    -                                                │               
                │                                                                    │               
                │  WAL Positions                                                     │               

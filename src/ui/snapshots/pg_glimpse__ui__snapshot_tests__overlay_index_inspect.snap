@@ -18,7 +18,7 @@ expression: buffer_to_string(&terminal)
             │                                                                         │             
             │  Usage Stats ────────────────────────────────────────                   │             
             │  Scans:        0   ← unused index                                       │             
-            │  Tup Read:    0     Tup Fetch: 0                                        │             
+            │  Tup Read:    0         Tup Fetch: 0                                    │             
             │                                                                         │             
             │  Definition ────────────────────────────────────────                    │             
             │  CREATE INDEX orders_user_id_idx ON public.orders USING btree (user_id) │             

@@ -13,15 +13,15 @@ expression: buffer_to_string(&terminal)
                │                                                                    │               
                │  Connection                                                        │               
                │  PID:             23456                                            │               
-               │  User:            replicator      User SysID:    16384             │               
+               │  User:            replicatorUser SysID:    16384                   │               
                │  Application:     replica1                                         │               
-               │  Client Addr:     10.0.1.50      Port:          54321              │               
+               │  Client Addr:     10.0.1.50 Port:          54321                   │               
                │  Client Hostname: -                                                │               
                │  Backend Start:   2024-01-14 XX:XX:XX UTC                          │               
                │                                                                    │               
                │  Replication State                                                 │               
                │  State:           streaming                                        │               
-               │  Sync State:      async      Sync Priority: 1                      │               
+               │  Sync State:      async     Sync Priority: 1                       │               
                │  Backend Xmin:    -                                                │               
                │                                                                    │               
                │  WAL Positions                                                     │               
