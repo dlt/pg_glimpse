@@ -556,12 +556,7 @@ async fn run_replay(path: &Path, config: AppConfig) -> Result<()> {
             let interval = compute_replay_interval(&session, speed);
             if last_advance.elapsed() >= interval {
                 if session.step_forward() {
-                    if let Some(snap) = session.current() {
-                        app.update(snap.clone());
-                        if let Some(ref mut replay) = app.replay {
-                            replay.position = session.position + 1;
-                        }
-                    }
+                    sync_replay_position(&mut app, &session);
                 }
                 last_advance = Instant::now();
                 if session.at_end() {
@@ -603,6 +598,16 @@ async fn run_replay(path: &Path, config: AppConfig) -> Result<()> {
     Ok(())
 }
 
+/// Sync app state with current replay session position.
+fn sync_replay_position(app: &mut app::App, session: &replay::ReplaySession) {
+    if let Some(snap) = session.current() {
+        app.update(snap.clone());
+        if let Some(ref mut replay) = app.replay {
+            replay.position = session.position + 1;
+        }
+    }
+}
+
 fn handle_replay_key(
     app: &mut app::App,
     session: &mut replay::ReplaySession,
@@ -623,12 +628,7 @@ fn handle_replay_key(
             if app.view_mode == app::ViewMode::Normal =>
         {
             if session.step_forward() {
-                if let Some(snap) = session.current() {
-                    app.update(snap.clone());
-                    if let Some(ref mut replay) = app.replay {
-                        replay.position = session.position + 1;
-                    }
-                }
+                sync_replay_position(app, session);
             }
             true
         }
@@ -636,12 +636,7 @@ fn handle_replay_key(
             if app.view_mode == app::ViewMode::Normal =>
         {
             if session.step_back() {
-                if let Some(snap) = session.current() {
-                    app.update(snap.clone());
-                    if let Some(ref mut replay) = app.replay {
-                        replay.position = session.position + 1;
-                    }
-                }
+                sync_replay_position(app, session);
             }
             true
         }
@@ -655,22 +650,14 @@ fn handle_replay_key(
         }
         KeyCode::Char('g') if app.view_mode == app::ViewMode::Normal => {
             session.jump_start();
-            if let Some(snap) = session.current() {
-                app.update(snap.clone());
-                if let Some(ref mut replay) = app.replay {
-                    replay.position = session.position + 1;
-                }
-            }
+            sync_replay_position(app, session);
             true
         }
         KeyCode::Char('G') if app.view_mode == app::ViewMode::Normal => {
             session.jump_end();
-            if let Some(snap) = session.current() {
-                app.update(snap.clone());
-                if let Some(ref mut replay) = app.replay {
-                    replay.position = session.position + 1;
-                    replay.playing = false;
-                }
+            sync_replay_position(app, session);
+            if let Some(ref mut replay) = app.replay {
+                replay.playing = false;
             }
             true
         }
