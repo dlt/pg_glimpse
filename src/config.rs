@@ -746,7 +746,7 @@ mod tests {
         ";
         let config: AppConfig = toml::from_str(large).unwrap();
         assert_eq!(config.refresh_interval_secs, i64::MAX as u64);
-        assert!(config.warn_duration_secs > 999999999.0);
+        assert!(config.warn_duration_secs > 999_999_999.0);
     }
 
     #[test]
@@ -904,10 +904,10 @@ mod tests {
             /// Valid TOML with random field values should parse or fail gracefully
             #[test]
             fn toml_with_random_values(
-                refresh in 0u64..1000000,
+                refresh in 0u64..1_000_000,
                 warn in 0.0f64..10000.0,
                 danger in 0.0f64..10000.0,
-                retention in 0u64..1000000
+                retention in 0u64..1_000_000
             ) {
                 let toml_str = format!(
                     r"
@@ -964,7 +964,7 @@ mod tests {
 
             /// Negative numbers where unsigned expected should fail gracefully
             #[test]
-            fn toml_negative_unsigned(n in -1000000i64..-1) {
+            fn toml_negative_unsigned(n in -1_000_000i64..-1) {
                 let toml_str = format!("refresh_interval_secs = {}", n);
                 let result = toml::from_str::<AppConfig>(&toml_str);
                 prop_assert!(result.is_err());
@@ -990,7 +990,7 @@ mod tests {
                 refresh in 1u64..10000,
                 warn in 0.1f64..100.0,
                 danger in 0.1f64..100.0,
-                retention in 60u64..100000
+                retention in 60u64..100_000
             ) {
                 let config = AppConfig {
                     graph_marker: GraphMarkerStyle::Braille,

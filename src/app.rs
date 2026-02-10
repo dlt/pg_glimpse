@@ -1653,7 +1653,7 @@ mod tests {
             stat_statements: vec![],
             stat_statements_error: None,
             extensions: DetectedExtensions::default(),
-            db_size: 1000000,
+            db_size: 1_000_000,
             checkpoint_stats: None,
             wal_stats: None,
             archiver_stats: None,
@@ -2633,7 +2633,7 @@ mod tests {
         // First snapshot with high counter values
         let mut snap1 = make_snapshot();
         snap1.db_stats = Some(DatabaseStats {
-            xact_commit: 1000000,
+            xact_commit: 1_000_000,
             xact_rollback: 100,
             blks_read: 50000,
         });
@@ -2668,9 +2668,9 @@ mod tests {
         snap1.table_stats = vec![TableStat {
             schemaname: "public".into(),
             relname: "users".into(),
-            total_size_bytes: 1000000,
-            table_size_bytes: 800000,
-            indexes_size_bytes: 200000,
+            total_size_bytes: 1_000_000,
+            table_size_bytes: 800_000,
+            indexes_size_bytes: 200_000,
             seq_scan: 100,
             seq_tup_read: 5000,
             idx_scan: 500,
@@ -2688,7 +2688,7 @@ mod tests {
             last_autoanalyze: None,
             vacuum_count: 0,
             autovacuum_count: 0,
-            bloat_bytes: Some(100000),
+            bloat_bytes: Some(100_000),
             bloat_pct: Some(12.5),
         }];
         app.update(snap1);
@@ -2698,9 +2698,9 @@ mod tests {
         snap2.table_stats = vec![TableStat {
             schemaname: "public".into(),
             relname: "users".into(),
-            total_size_bytes: 1000100, // Slightly different
-            table_size_bytes: 800100,
-            indexes_size_bytes: 200000,
+            total_size_bytes: 1_000_100, // Slightly different
+            table_size_bytes: 800_100,
+            indexes_size_bytes: 200_000,
             seq_scan: 110,
             seq_tup_read: 5500,
             idx_scan: 510,
@@ -2725,7 +2725,7 @@ mod tests {
 
         // Bloat data should be preserved from previous snapshot
         let snap = app.snapshot.as_ref().unwrap();
-        assert_eq!(snap.table_stats[0].bloat_bytes, Some(100000));
+        assert_eq!(snap.table_stats[0].bloat_bytes, Some(100_000));
         assert_eq!(snap.table_stats[0].bloat_pct, Some(12.5));
     }
 

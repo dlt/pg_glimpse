@@ -182,7 +182,7 @@ mod tests {
             stat_statements: vec![],
             stat_statements_error: None,
             extensions: DetectedExtensions::default(),
-            db_size: 1000000,
+            db_size: 1_000_000,
             checkpoint_stats: None,
             wal_stats: None,
             archiver_stats: None,

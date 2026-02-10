@@ -592,7 +592,7 @@ mod tests {
             active: true,
             restart_lsn: Some("0/1234567".to_string()),
             confirmed_flush_lsn: Some("0/1234000".to_string()),
-            wal_retained_bytes: Some(1048576),
+            wal_retained_bytes: Some(1_048_576),
             temporary: false,
             spill_txns: Some(0),
             spill_count: Some(0),
@@ -604,6 +604,6 @@ mod tests {
 
         assert_eq!(parsed.slot_name, "my_slot");
         assert!(parsed.active);
-        assert_eq!(parsed.wal_retained_bytes, Some(1048576));
+        assert_eq!(parsed.wal_retained_bytes, Some(1_048_576));
     }
 }
