@@ -129,7 +129,7 @@ impl Theme {
     pub fn state_color(state: Option<&str>) -> Color {
         match state {
             Some("active") => Self::state_active(),
-            Some("idle in transaction") | Some("idle in transaction (aborted)") => {
+            Some("idle in transaction" | "idle in transaction (aborted)") => {
                 Self::state_idle_txn()
             }
             _ => Self::fg(),

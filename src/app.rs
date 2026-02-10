@@ -379,7 +379,7 @@ impl MetricsHistory {
         let active: Vec<&_> = snap
             .active_queries
             .iter()
-            .filter(|q| matches!(q.state.as_deref(), Some("active") | Some("idle in transaction")))
+            .filter(|q| matches!(q.state.as_deref(), Some("active" | "idle in transaction")))
             .collect();
         let avg_ms = if active.is_empty() {
             0u64
@@ -1138,7 +1138,7 @@ impl App {
     /// On 'y'/'Y', executes the action. Any other key aborts with the given message.
     fn handle_yes_no_confirm(&mut self, key: KeyEvent, action: AppAction, abort_msg: &str) {
         match key.code {
-            KeyCode::Char('y') | KeyCode::Char('Y') => {
+            KeyCode::Char('y' | 'Y') => {
                 self.pending_action = Some(action);
                 self.view_mode = ViewMode::Normal;
             }
@@ -1159,7 +1159,7 @@ impl App {
         abort_msg: &str,
     ) {
         match key.code {
-            KeyCode::Char('1') | KeyCode::Char('o') => {
+            KeyCode::Char('1' | 'o') => {
                 self.pending_action = Some(single_action);
                 self.view_mode = ViewMode::Normal;
             }
