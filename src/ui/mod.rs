@@ -93,46 +93,46 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         ViewMode::Inspect => overlay::render_inspect(frame, app, frame.area()),
         ViewMode::IndexInspect => overlay::render_index_inspect(frame, app, frame.area()),
         ViewMode::StatementInspect => {
-            overlay::render_statement_inspect(frame, app, frame.area())
+            overlay::render_statement_inspect(frame, app, frame.area());
         }
         ViewMode::ReplicationInspect => {
-            overlay::render_replication_inspect(frame, app, frame.area())
+            overlay::render_replication_inspect(frame, app, frame.area());
         }
         ViewMode::TableInspect => {
-            overlay::render_table_inspect(frame, app, frame.area())
+            overlay::render_table_inspect(frame, app, frame.area());
         }
         ViewMode::BlockingInspect => {
-            overlay::render_blocking_inspect(frame, app, frame.area())
+            overlay::render_blocking_inspect(frame, app, frame.area());
         }
         ViewMode::VacuumInspect => {
-            overlay::render_vacuum_inspect(frame, app, frame.area())
+            overlay::render_vacuum_inspect(frame, app, frame.area());
         }
         ViewMode::WraparoundInspect => {
-            overlay::render_wraparound_inspect(frame, app, frame.area())
+            overlay::render_wraparound_inspect(frame, app, frame.area());
         }
         ViewMode::SettingsInspect => {
-            overlay::render_settings_inspect(frame, app, frame.area())
+            overlay::render_settings_inspect(frame, app, frame.area());
         }
         ViewMode::ExtensionsInspect => {
-            overlay::render_extensions_inspect(frame, app, frame.area())
+            overlay::render_extensions_inspect(frame, app, frame.area());
         }
         ViewMode::ConfirmCancel(pid) => {
-            overlay::render_confirm_cancel(frame, *pid, frame.area())
+            overlay::render_confirm_cancel(frame, *pid, frame.area());
         }
         ViewMode::ConfirmKill(pid) => {
-            overlay::render_confirm_kill(frame, *pid, frame.area())
+            overlay::render_confirm_kill(frame, *pid, frame.area());
         }
         ViewMode::ConfirmCancelChoice { selected_pid, all_pids } => {
-            overlay::render_cancel_choice(frame, *selected_pid, all_pids, &app.filter.text, frame.area())
+            overlay::render_cancel_choice(frame, *selected_pid, all_pids, &app.filter.text, frame.area());
         }
         ViewMode::ConfirmKillChoice { selected_pid, all_pids } => {
-            overlay::render_kill_choice(frame, *selected_pid, all_pids, &app.filter.text, frame.area())
+            overlay::render_kill_choice(frame, *selected_pid, all_pids, &app.filter.text, frame.area());
         }
         ViewMode::ConfirmCancelBatch(pids) => {
-            overlay::render_confirm_cancel_batch(frame, pids, frame.area())
+            overlay::render_confirm_cancel_batch(frame, pids, frame.area());
         }
         ViewMode::ConfirmKillBatch(pids) => {
-            overlay::render_confirm_kill_batch(frame, pids, frame.area())
+            overlay::render_confirm_kill_batch(frame, pids, frame.area());
         }
         ViewMode::Config => overlay::render_config(frame, app, frame.area()),
         ViewMode::Help => overlay::render_help(frame, app, frame.area()),
