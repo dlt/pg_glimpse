@@ -91,7 +91,7 @@ impl ColorTheme {
         }
     }
 
-    pub fn colors(self) -> ThemeColors {
+    pub const fn colors(self) -> ThemeColors {
         match self {
             Self::TokyoNight => ThemeColors::TOKYO_NIGHT,
             Self::Dracula => ThemeColors::dracula(),
