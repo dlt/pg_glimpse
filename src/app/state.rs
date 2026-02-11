@@ -49,6 +49,7 @@ impl<S: SortColumnTrait> TableViewState<S> {
         self.state.select(Some(0));
     }
 
+    #[must_use]
     pub const fn selected(&self) -> Option<usize> {
         self.state.selected()
     }
@@ -160,6 +161,7 @@ impl RecordingsBrowser {
         }
     }
 
+    #[must_use]
     pub fn current(&self) -> Option<&RecordingInfo> {
         self.list.get(self.selected)
     }
@@ -209,6 +211,7 @@ impl UiFeedback {
     }
 
     /// Take pending action, leaving None in its place
+    #[must_use]
     pub fn take_action(&mut self) -> Option<AppAction> {
         self.pending_action.take()
     }
