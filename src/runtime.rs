@@ -1,7 +1,7 @@
 //! Main application runtime - live mode event loop.
 
 use crate::app::AppAction;
-use crate::cli::Cli;
+use crate::cli::{Cli, ConnectionInfo};
 use crate::config::AppConfig;
 use crate::connection::{try_connect, SslMode};
 use crate::db::models::PgSnapshot;
@@ -13,10 +13,86 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
+/// Establish a PostgreSQL connection with SSL mode handling.
+///
+/// If `--ssl` or `--ssl-insecure` is specified, uses that mode directly.
+/// Otherwise, auto-detects by trying: No TLS, SSL (verified), SSL (insecure).
+async fn establish_connection(
+    cli: &Cli,
+    pg_config: &tokio_postgres::Config,
+    conn_info: &ConnectionInfo,
+) -> Result<(tokio_postgres::Client, SslMode)> {
+    if cli.ssl || cli.ssl_insecure {
+        // User explicitly specified SSL mode - use it directly
+        let mode = if cli.ssl_insecure {
+            SslMode::Insecure
+        } else {
+            SslMode::Verified
+        };
+        let client = try_connect(pg_config, mode).await.with_context(|| {
+            format!(
+                "could not connect to PostgreSQL ({})\n\nConnection: {}:{}/{}\n\nTry: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword\nSee: pg_glimpse --help",
+                mode.label(),
+                conn_info.host,
+                conn_info.port,
+                conn_info.dbname
+            )
+        })?;
+        Ok((client, mode))
+    } else {
+        // Auto-detect: try connection modes in order
+        let modes = [SslMode::None, SslMode::Verified, SslMode::Insecure];
+        let mut last_error = None;
+
+        for mode in modes {
+            match try_connect(pg_config, mode).await {
+                Ok(client) => {
+                    return Ok((client, mode));
+                }
+                Err(e) => {
+                    last_error = Some(e);
+                }
+            }
+        }
+
+        bail!(
+            "could not connect to PostgreSQL with any SSL mode: {:?}\n\nConnection: {}:{}/{}\n\nTried: No TLS, SSL (verified), SSL (insecure)\nTry: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword\nSee: pg_glimpse --help",
+            last_error.unwrap(),
+            conn_info.host,
+            conn_info.port,
+            conn_info.dbname
+        )
+    }
+}
+
+// Channel for DB commands and results
+enum DbCommand {
+    FetchSnapshot,
+    CancelQuery(i32),
+    TerminateBackend(i32),
+    CancelQueries(Vec<i32>),
+    TerminateBackends(Vec<i32>),
+    RefreshBloat,
+}
+type BloatResult = (
+    std::collections::HashMap<String, db::queries::TableBloat>,
+    std::collections::HashMap<String, db::queries::IndexBloat>,
+);
+
+enum DbResult {
+    Snapshot(Box<Result<PgSnapshot, String>>),
+    CancelQuery(i32, Result<bool, String>),
+    TerminateBackend(i32, Result<bool, String>),
+    CancelQueries(Vec<(i32, bool)>),
+    TerminateBackends(Vec<(i32, bool)>),
+    BloatData(Result<BloatResult, String>),
+}
+
+
 /// Run the main application in live mode.
 pub async fn run(cli: Cli) -> Result<()> {
+    let config = AppConfig::load();
     if let Some(ref replay_path) = cli.replay {
-        let config = AppConfig::load();
         theme::set_theme(config.color_theme.colors());
         theme::set_duration_thresholds(config.warn_duration_secs, config.danger_duration_secs);
         return run_replay(replay_path, config).await;
@@ -25,80 +101,19 @@ pub async fn run(cli: Cli) -> Result<()> {
     let pg_config = cli
         .pg_config()
         .context("invalid connection config\n\nTry: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword\nSee: pg_glimpse --help")?;
-
-    // Determine connection mode: explicit flags or auto-detect
-    let (client, ssl_mode) = if cli.ssl || cli.ssl_insecure {
-        // User explicitly specified SSL mode - use it directly
-        let mode = if cli.ssl_insecure {
-            SslMode::Insecure
-        } else {
-            SslMode::Verified
-        };
-        let info = cli.connection_info();
-        let client = try_connect(&pg_config, mode).await.with_context(|| {
-            format!(
-                "could not connect to PostgreSQL ({})\n\nConnection: {}:{}/{}\n\nTry: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword\nSee: pg_glimpse --help",
-                mode.label(),
-                info.host,
-                info.port,
-                info.dbname
-            )
-        })?;
-        (client, mode)
-    } else {
-        // Auto-detect: try connection modes in order
-        let modes = [SslMode::None, SslMode::Verified, SslMode::Insecure];
-        let mut last_error = None;
-        let mut result = None;
-
-        for mode in modes {
-            match try_connect(&pg_config, mode).await {
-                Ok(client) => {
-                    result = Some((client, mode));
-                    break;
-                }
-                Err(e) => {
-                    last_error = Some(e);
-                }
-            }
-        }
-
-        match result {
-            Some(r) => r,
-            None => {
-                let info = cli.connection_info();
-                bail!(
-                    "could not connect to PostgreSQL with any SSL mode: {:?}\n\nConnection: {}:{}/{}\n\nTried: No TLS, SSL (verified), SSL (insecure)\nTry: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword\nSee: pg_glimpse --help",
-                    last_error.unwrap(),
-                    info.host,
-                    info.port,
-                    info.dbname
-                );
-            }
-        }
-    };
-
-    let config = AppConfig::load();
-
-    // Apply theme and thresholds from config
     theme::set_theme(config.color_theme.colors());
     theme::set_duration_thresholds(config.warn_duration_secs, config.danger_duration_secs);
 
-    let refresh = cli.refresh.unwrap_or(config.refresh_interval_secs);
+    let conn_info = cli.connection_info();
+    let (client, ssl_mode) = establish_connection(&cli, &pg_config, &conn_info).await?;
+    let server_info = db::queries::fetch_server_info(&client).await?;
 
     // Clean up old recordings on startup
     recorder::Recorder::cleanup_old(config.recording_retention_secs, config.recordings_dir.as_deref());
-
-    // Fetch server info and extensions at startup
-    let server_info = db::queries::fetch_server_info(&client).await?;
-
-    // Get connection info for display
-    let conn_info = cli.connection_info();
-
-    // Start recorder
     let mut recorder =
         recorder::Recorder::new(&conn_info.host, conn_info.port, &conn_info.dbname, &conn_info.user, &server_info, config.recordings_dir.as_deref()).ok();
 
+    let refresh = cli.refresh.unwrap_or(config.refresh_interval_secs);
     let mut app = app::App::new(
         conn_info.host,
         conn_info.port,
@@ -113,29 +128,6 @@ pub async fn run(cli: Cli) -> Result<()> {
 
     let extensions = app.server_info.extensions.clone();
     let pg_major_version = app.server_info.major_version();
-
-    // Channel for DB commands and results
-    enum DbCommand {
-        FetchSnapshot,
-        CancelQuery(i32),
-        TerminateBackend(i32),
-        CancelQueries(Vec<i32>),
-        TerminateBackends(Vec<i32>),
-        RefreshBloat,
-    }
-    type BloatResult = (
-        std::collections::HashMap<String, db::queries::TableBloat>,
-        std::collections::HashMap<String, db::queries::IndexBloat>,
-    );
-
-    enum DbResult {
-        Snapshot(Box<Result<PgSnapshot, String>>),
-        CancelQuery(i32, Result<bool, String>),
-        TerminateBackend(i32, Result<bool, String>),
-        CancelQueries(Vec<(i32, bool)>),
-        TerminateBackends(Vec<(i32, bool)>),
-        BloatData(Result<BloatResult, String>),
-    }
 
     let (cmd_tx, mut cmd_rx) = mpsc::channel::<DbCommand>(16);
     let (result_tx, mut result_rx) = mpsc::unbounded_channel::<DbResult>();
