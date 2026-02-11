@@ -169,14 +169,14 @@ fn pause_disabled_in_replay_mode() {
 fn force_refresh() {
     let mut app = make_app();
     app.handle_key(key(KeyCode::Char('r')));
-    assert!(matches!(app.pending_action, Some(AppAction::ForceRefresh)));
+    assert!(matches!(app.feedback.pending_action, Some(AppAction::ForceRefresh)));
 }
 
 #[test]
 fn force_refresh_disabled_in_replay_mode() {
     let mut app = make_replay_app();
     app.handle_key(key(KeyCode::Char('r')));
-    assert!(app.pending_action.is_none());
+    assert!(app.feedback.pending_action.is_none());
 }
 
 #[test]
@@ -184,8 +184,8 @@ fn bloat_refresh_disabled_in_replay_mode_tables() {
     let mut app = make_replay_app();
     app.bottom_panel = BottomPanel::TableStats;
     app.handle_key(key(KeyCode::Char('b')));
-    assert!(app.pending_action.is_none());
-    assert!(!app.bloat_loading);
+    assert!(app.feedback.pending_action.is_none());
+    assert!(!app.feedback.bloat_loading);
 }
 
 #[test]
@@ -193,8 +193,8 @@ fn bloat_refresh_disabled_in_replay_mode_indexes() {
     let mut app = make_replay_app();
     app.bottom_panel = BottomPanel::Indexes;
     app.handle_key(key(KeyCode::Char('b')));
-    assert!(app.pending_action.is_none());
-    assert!(!app.bloat_loading);
+    assert!(app.feedback.pending_action.is_none());
+    assert!(!app.feedback.bloat_loading);
 }
 
 #[test]
@@ -364,19 +364,19 @@ fn filter_esc_clears_and_exits() {
 fn config_navigation() {
     let mut app = make_app();
     app.view_mode = ViewMode::Config;
-    app.config_selected = 0;
+    app.config_overlay.selected = 0;
 
     app.handle_key(key(KeyCode::Down));
-    assert_eq!(app.config_selected, 1);
+    assert_eq!(app.config_overlay.selected, 1);
 
     app.handle_key(key(KeyCode::Char('j')));
-    assert_eq!(app.config_selected, 2);
+    assert_eq!(app.config_overlay.selected, 2);
 
     app.handle_key(key(KeyCode::Up));
-    assert_eq!(app.config_selected, 1);
+    assert_eq!(app.config_overlay.selected, 1);
 
     app.handle_key(key(KeyCode::Char('k')));
-    assert_eq!(app.config_selected, 0);
+    assert_eq!(app.config_overlay.selected, 0);
 }
 
 #[test]
@@ -385,14 +385,14 @@ fn config_esc_saves() {
     app.view_mode = ViewMode::Config;
     app.handle_key(key(KeyCode::Esc));
     assert_eq!(app.view_mode, ViewMode::Normal);
-    assert!(matches!(app.pending_action, Some(AppAction::SaveConfig)));
+    assert!(matches!(app.feedback.pending_action, Some(AppAction::SaveConfig)));
 }
 
 #[test]
 fn config_adjust_refresh_interval() {
     let mut app = make_app();
     app.view_mode = ViewMode::Config;
-    app.config_selected = ConfigItem::ALL
+    app.config_overlay.selected = ConfigItem::ALL
         .iter()
         .position(|&i| i == ConfigItem::RefreshInterval)
         .unwrap();
@@ -476,7 +476,7 @@ fn confirm_cancel_yes() {
     app.view_mode = ViewMode::ConfirmCancel(12345);
     app.handle_key(key(KeyCode::Char('y')));
     assert_eq!(app.view_mode, ViewMode::Normal);
-    assert!(matches!(app.pending_action, Some(AppAction::CancelQuery(12345))));
+    assert!(matches!(app.feedback.pending_action, Some(AppAction::CancelQuery(12345))));
 }
 
 #[test]
@@ -485,8 +485,8 @@ fn confirm_cancel_any_other_key_aborts() {
     app.view_mode = ViewMode::ConfirmCancel(12345);
     app.handle_key(key(KeyCode::Char('n')));
     assert_eq!(app.view_mode, ViewMode::Normal);
-    assert!(app.pending_action.is_none());
-    assert!(app.status_message.as_ref().unwrap().contains("aborted"));
+    assert!(app.feedback.pending_action.is_none());
+    assert!(app.feedback.status_message.as_ref().unwrap().contains("aborted"));
 }
 
 #[test]
@@ -495,7 +495,7 @@ fn confirm_kill_yes() {
     app.view_mode = ViewMode::ConfirmKill(12345);
     app.handle_key(key(KeyCode::Char('Y')));
     assert_eq!(app.view_mode, ViewMode::Normal);
-    assert!(matches!(app.pending_action, Some(AppAction::TerminateBackend(12345))));
+    assert!(matches!(app.feedback.pending_action, Some(AppAction::TerminateBackend(12345))));
 }
 
 #[test]
@@ -507,7 +507,7 @@ fn confirm_cancel_choice_one() {
     };
     app.handle_key(key(KeyCode::Char('1')));
     assert_eq!(app.view_mode, ViewMode::Normal);
-    assert!(matches!(app.pending_action, Some(AppAction::CancelQuery(100))));
+    assert!(matches!(app.feedback.pending_action, Some(AppAction::CancelQuery(100))));
 }
 
 #[test]
@@ -527,7 +527,7 @@ fn confirm_cancel_batch_yes() {
     app.view_mode = ViewMode::ConfirmCancelBatch(vec![100, 200, 300]);
     app.handle_key(key(KeyCode::Char('y')));
     assert_eq!(app.view_mode, ViewMode::Normal);
-    match &app.pending_action {
+    match &app.feedback.pending_action {
         Some(AppAction::CancelQueries(pids)) => assert_eq!(pids, &vec![100, 200, 300]),
         _ => panic!("Expected CancelQueries action"),
     }
@@ -542,7 +542,7 @@ fn confirm_kill_choice_esc() {
     };
     app.handle_key(key(KeyCode::Esc));
     assert_eq!(app.view_mode, ViewMode::Normal);
-    assert!(app.pending_action.is_none());
+    assert!(app.feedback.pending_action.is_none());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -585,24 +585,24 @@ fn inspect_scroll_and_exit() {
 #[test]
 fn queries_panel_navigation() {
     let mut app = make_app();
-    app.queries.state.select(Some(5));
+    app.panels.queries.state.select(Some(5));
     app.handle_key(key(KeyCode::Up));
-    assert_eq!(app.queries.selected(), Some(4));
+    assert_eq!(app.panels.queries.selected(), Some(4));
 
     app.handle_key(key(KeyCode::Char('k')));
-    assert_eq!(app.queries.selected(), Some(3));
+    assert_eq!(app.panels.queries.selected(), Some(3));
 }
 
 #[test]
 fn queries_panel_sort_cycle() {
     let mut app = make_app();
-    assert_eq!(app.queries.sort_column, SortColumn::Duration);
+    assert_eq!(app.panels.queries.sort_column, SortColumn::Duration);
 
     app.handle_key(key(KeyCode::Char('s')));
-    assert_eq!(app.queries.sort_column, SortColumn::Pid);
+    assert_eq!(app.panels.queries.sort_column, SortColumn::Pid);
 
     app.handle_key(key(KeyCode::Char('s')));
-    assert_eq!(app.queries.sort_column, SortColumn::User);
+    assert_eq!(app.panels.queries.sort_column, SortColumn::User);
 }
 
 #[test]
@@ -610,8 +610,8 @@ fn indexes_panel_bloat_refresh() {
     let mut app = make_app();
     app.bottom_panel = BottomPanel::Indexes;
     app.handle_key(key(KeyCode::Char('b')));
-    assert!(matches!(app.pending_action, Some(AppAction::RefreshBloat)));
-    assert!(app.bloat_loading);
+    assert!(matches!(app.feedback.pending_action, Some(AppAction::RefreshBloat)));
+    assert!(app.feedback.bloat_loading);
 }
 
 #[test]
@@ -619,8 +619,8 @@ fn indexes_panel_bloat_disabled_in_replay() {
     let mut app = make_replay_app();
     app.bottom_panel = BottomPanel::Indexes;
     app.handle_key(key(KeyCode::Char('b')));
-    assert!(app.pending_action.is_none());
-    assert!(!app.bloat_loading);
+    assert!(app.feedback.pending_action.is_none());
+    assert!(!app.feedback.bloat_loading);
 }
 
 #[test]
@@ -628,7 +628,7 @@ fn table_stats_panel_bloat_refresh() {
     let mut app = make_app();
     app.bottom_panel = BottomPanel::TableStats;
     app.handle_key(key(KeyCode::Char('b')));
-    assert!(matches!(app.pending_action, Some(AppAction::RefreshBloat)));
+    assert!(matches!(app.feedback.pending_action, Some(AppAction::RefreshBloat)));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -640,7 +640,7 @@ fn cancel_disabled_in_replay_mode() {
     let mut app = make_replay_app();
     // Set up a query so there's something to cancel
     app.snapshot = Some(make_snapshot());
-    app.queries.state.select(Some(0));
+    app.panels.queries.state.select(Some(0));
     app.handle_key(key(KeyCode::Char('C')));
     // Should not enter any confirm mode
     assert_eq!(app.view_mode, ViewMode::Normal);
@@ -650,7 +650,7 @@ fn cancel_disabled_in_replay_mode() {
 fn kill_disabled_in_replay_mode() {
     let mut app = make_replay_app();
     app.snapshot = Some(make_snapshot());
-    app.queries.state.select(Some(0));
+    app.panels.queries.state.select(Some(0));
     app.handle_key(key(KeyCode::Char('K')));
     assert_eq!(app.view_mode, ViewMode::Normal);
 }
@@ -758,11 +758,11 @@ fn update_with_empty_snapshot() {
 #[test]
 fn update_clears_last_error() {
     let mut app = make_app();
-    app.last_error = Some("Previous error".to_string());
+    app.feedback.last_error = Some("Previous error".to_string());
 
     app.update(make_snapshot());
 
-    assert!(app.last_error.is_none());
+    assert!(app.feedback.last_error.is_none());
 }
 
 #[test]
@@ -898,7 +898,7 @@ fn selected_query_pid_no_snapshot() {
 fn selected_query_pid_no_selection() {
     let mut app = make_app();
     app.update(make_snapshot());
-    app.queries.state.select(None);
+    app.panels.queries.state.select(None);
 
     assert!(app.selected_query_pid().is_none());
 }
@@ -962,7 +962,7 @@ fn filter_inactive_ignores_filter_text() {
 fn config_adjust_refresh_interval_lower_bound() {
     let mut app = make_app();
     app.view_mode = ViewMode::Config;
-    app.config_selected = ConfigItem::ALL
+    app.config_overlay.selected = ConfigItem::ALL
         .iter()
         .position(|&i| i == ConfigItem::RefreshInterval)
         .unwrap();
@@ -977,7 +977,7 @@ fn config_adjust_refresh_interval_lower_bound() {
 fn config_adjust_refresh_interval_upper_bound() {
     let mut app = make_app();
     app.view_mode = ViewMode::Config;
-    app.config_selected = ConfigItem::ALL
+    app.config_overlay.selected = ConfigItem::ALL
         .iter()
         .position(|&i| i == ConfigItem::RefreshInterval)
         .unwrap();
@@ -992,7 +992,7 @@ fn config_adjust_refresh_interval_upper_bound() {
 fn config_adjust_warn_duration_lower_bound() {
     let mut app = make_app();
     app.view_mode = ViewMode::Config;
-    app.config_selected = ConfigItem::ALL
+    app.config_overlay.selected = ConfigItem::ALL
         .iter()
         .position(|&i| i == ConfigItem::WarnDuration)
         .unwrap();
@@ -1007,7 +1007,7 @@ fn config_adjust_warn_duration_lower_bound() {
 fn config_adjust_warn_duration_clamped_to_danger() {
     let mut app = make_app();
     app.view_mode = ViewMode::Config;
-    app.config_selected = ConfigItem::ALL
+    app.config_overlay.selected = ConfigItem::ALL
         .iter()
         .position(|&i| i == ConfigItem::WarnDuration)
         .unwrap();
@@ -1023,7 +1023,7 @@ fn config_adjust_warn_duration_clamped_to_danger() {
 fn config_adjust_danger_duration_clamped_to_warn() {
     let mut app = make_app();
     app.view_mode = ViewMode::Config;
-    app.config_selected = ConfigItem::ALL
+    app.config_overlay.selected = ConfigItem::ALL
         .iter()
         .position(|&i| i == ConfigItem::DangerDuration)
         .unwrap();
@@ -1039,7 +1039,7 @@ fn config_adjust_danger_duration_clamped_to_warn() {
 fn config_adjust_danger_duration_upper_bound() {
     let mut app = make_app();
     app.view_mode = ViewMode::Config;
-    app.config_selected = ConfigItem::ALL
+    app.config_overlay.selected = ConfigItem::ALL
         .iter()
         .position(|&i| i == ConfigItem::DangerDuration)
         .unwrap();
@@ -1054,7 +1054,7 @@ fn config_adjust_danger_duration_upper_bound() {
 fn config_adjust_recording_retention_lower_bound() {
     let mut app = make_app();
     app.view_mode = ViewMode::Config;
-    app.config_selected = ConfigItem::ALL
+    app.config_overlay.selected = ConfigItem::ALL
         .iter()
         .position(|&i| i == ConfigItem::RecordingRetention)
         .unwrap();
@@ -1069,7 +1069,7 @@ fn config_adjust_recording_retention_lower_bound() {
 fn config_adjust_recording_retention_upper_bound() {
     let mut app = make_app();
     app.view_mode = ViewMode::Config;
-    app.config_selected = ConfigItem::ALL
+    app.config_overlay.selected = ConfigItem::ALL
         .iter()
         .position(|&i| i == ConfigItem::RecordingRetention)
         .unwrap();
@@ -1237,7 +1237,7 @@ fn replay_mode_state() {
 fn replay_mode_disables_cancel_kill() {
     let mut app = make_replay_app();
     app.update(make_snapshot());
-    app.queries.state.select(Some(0));
+    app.panels.queries.state.select(Some(0));
 
     // C and K should be ignored in replay mode
     app.handle_key(key(KeyCode::Char('C')));
@@ -1587,12 +1587,12 @@ fn rate_calculation_counter_reset_blks() {
 fn update_error_sets_last_error() {
     let mut app = make_app();
 
-    assert!(app.last_error.is_none());
+    assert!(app.feedback.last_error.is_none());
 
     app.update_error("Connection refused".to_string());
 
-    assert!(app.last_error.is_some());
-    assert_eq!(app.last_error.as_ref().unwrap(), "Connection refused");
+    assert!(app.feedback.last_error.is_some());
+    assert_eq!(app.feedback.last_error.as_ref().unwrap(), "Connection refused");
 }
 
 #[test]
@@ -1600,10 +1600,10 @@ fn update_error_overwrites_previous() {
     let mut app = make_app();
 
     app.update_error("First error".to_string());
-    assert_eq!(app.last_error.as_ref().unwrap(), "First error");
+    assert_eq!(app.feedback.last_error.as_ref().unwrap(), "First error");
 
     app.update_error("Second error".to_string());
-    assert_eq!(app.last_error.as_ref().unwrap(), "Second error");
+    assert_eq!(app.feedback.last_error.as_ref().unwrap(), "Second error");
 }
 
 #[test]
@@ -1611,11 +1611,11 @@ fn update_clears_error() {
     let mut app = make_app();
 
     app.update_error("Some error".to_string());
-    assert!(app.last_error.is_some());
+    assert!(app.feedback.last_error.is_some());
 
     // Successful update should clear error
     app.update(make_snapshot());
-    assert!(app.last_error.is_none());
+    assert!(app.feedback.last_error.is_none());
 }
 
 #[test]
@@ -1650,7 +1650,7 @@ fn empty_active_queries_no_panic() {
     app.handle_key(key_k);
 
     // Selection should stay at None or 0
-    let selected = app.queries.selected();
+    let selected = app.panels.queries.selected();
     assert!(selected.is_none() || selected == Some(0));
 }
 
@@ -1819,7 +1819,7 @@ fn inspect_with_no_selection_no_panic() {
     app.update(make_snapshot());
 
     // Clear selection
-    app.queries.state.select(None);
+    app.panels.queries.state.select(None);
 
     // Trying to enter inspect mode should be safe
     app.view_mode = ViewMode::Inspect;
@@ -2008,53 +2008,53 @@ fn extensions_filter_inactive_shows_all() {
 fn extensions_navigation_down() {
     let mut app = make_app_with_extensions();
     app.bottom_panel = BottomPanel::Extensions;
-    app.extensions_table_state.select(Some(0));
+    app.panels.extensions.select(Some(0));
 
     app.handle_key(key(KeyCode::Down));
-    assert_eq!(app.extensions_table_state.selected(), Some(1));
+    assert_eq!(app.panels.extensions.selected(), Some(1));
 
     app.handle_key(key(KeyCode::Char('j')));
-    assert_eq!(app.extensions_table_state.selected(), Some(2));
+    assert_eq!(app.panels.extensions.selected(), Some(2));
 }
 
 #[test]
 fn extensions_navigation_up() {
     let mut app = make_app_with_extensions();
     app.bottom_panel = BottomPanel::Extensions;
-    app.extensions_table_state.select(Some(2));
+    app.panels.extensions.select(Some(2));
 
     app.handle_key(key(KeyCode::Up));
-    assert_eq!(app.extensions_table_state.selected(), Some(1));
+    assert_eq!(app.panels.extensions.selected(), Some(1));
 
     app.handle_key(key(KeyCode::Char('k')));
-    assert_eq!(app.extensions_table_state.selected(), Some(0));
+    assert_eq!(app.panels.extensions.selected(), Some(0));
 }
 
 #[test]
 fn extensions_navigation_up_at_top() {
     let mut app = make_app_with_extensions();
     app.bottom_panel = BottomPanel::Extensions;
-    app.extensions_table_state.select(Some(0));
+    app.panels.extensions.select(Some(0));
 
     app.handle_key(key(KeyCode::Up));
-    assert_eq!(app.extensions_table_state.selected(), Some(0));
+    assert_eq!(app.panels.extensions.selected(), Some(0));
 }
 
 #[test]
 fn extensions_navigation_down_at_bottom() {
     let mut app = make_app_with_extensions();
     app.bottom_panel = BottomPanel::Extensions;
-    app.extensions_table_state.select(Some(2));
+    app.panels.extensions.select(Some(2));
 
     app.handle_key(key(KeyCode::Down));
-    assert_eq!(app.extensions_table_state.selected(), Some(2));
+    assert_eq!(app.panels.extensions.selected(), Some(2));
 }
 
 #[test]
 fn extensions_inspect_opens() {
     let mut app = make_app_with_extensions();
     app.bottom_panel = BottomPanel::Extensions;
-    app.extensions_table_state.select(Some(0));
+    app.panels.extensions.select(Some(0));
 
     app.handle_key(key(KeyCode::Enter));
     assert_eq!(app.view_mode, ViewMode::ExtensionsInspect);
@@ -2120,12 +2120,12 @@ fn extensions_inspect_scroll_up() {
 fn extensions_reset_selection_on_filter_confirm() {
     let mut app = make_app_with_extensions();
     app.bottom_panel = BottomPanel::Extensions;
-    app.extensions_table_state.select(Some(2));
+    app.panels.extensions.select(Some(2));
     app.view_mode = ViewMode::Filter;
     app.filter.text = "test".into();
 
     app.handle_key(key(KeyCode::Enter));
-    assert_eq!(app.extensions_table_state.selected(), Some(0));
+    assert_eq!(app.panels.extensions.selected(), Some(0));
 }
 
 #[test]
@@ -2228,7 +2228,7 @@ fn recordings_navigation_down() {
 
     let mut app = make_app();
     app.view_mode = ViewMode::Recordings;
-    app.recordings_list = vec![
+    app.recordings.list = vec![
         RecordingInfo {
             path: PathBuf::from("/tmp/test1.jsonl"),
             host: "host1".into(),
@@ -2249,12 +2249,12 @@ fn recordings_navigation_down() {
         },
     ];
 
-    assert_eq!(app.recordings_selected, 0);
+    assert_eq!(app.recordings.selected, 0);
     app.handle_key(key(KeyCode::Down));
-    assert_eq!(app.recordings_selected, 1);
+    assert_eq!(app.recordings.selected, 1);
     // At bottom, should not go further
     app.handle_key(key(KeyCode::Down));
-    assert_eq!(app.recordings_selected, 1);
+    assert_eq!(app.recordings.selected, 1);
 }
 
 #[test]
@@ -2264,7 +2264,7 @@ fn recordings_navigation_up() {
 
     let mut app = make_app();
     app.view_mode = ViewMode::Recordings;
-    app.recordings_list = vec![
+    app.recordings.list = vec![
         RecordingInfo {
             path: PathBuf::from("/tmp/test1.jsonl"),
             host: "host1".into(),
@@ -2284,13 +2284,13 @@ fn recordings_navigation_up() {
             file_size: 2000,
         },
     ];
-    app.recordings_selected = 1;
+    app.recordings.selected = 1;
 
     app.handle_key(key(KeyCode::Up));
-    assert_eq!(app.recordings_selected, 0);
+    assert_eq!(app.recordings.selected, 0);
     // At top, should not go further
     app.handle_key(key(KeyCode::Up));
-    assert_eq!(app.recordings_selected, 0);
+    assert_eq!(app.recordings.selected, 0);
 }
 
 #[test]
@@ -2301,7 +2301,7 @@ fn recordings_enter_sets_pending_replay_path() {
     let mut app = make_app();
     app.view_mode = ViewMode::Recordings;
     let expected_path = PathBuf::from("/tmp/test.jsonl");
-    app.recordings_list = vec![RecordingInfo {
+    app.recordings.list = vec![RecordingInfo {
         path: expected_path.clone(),
         host: "host".into(),
         port: 5432,
@@ -2312,7 +2312,7 @@ fn recordings_enter_sets_pending_replay_path() {
     }];
 
     app.handle_key(key(KeyCode::Enter));
-    assert_eq!(app.pending_replay_path, Some(expected_path));
+    assert_eq!(app.recordings.pending_path, Some(expected_path));
     assert!(!app.running);
 }
 
@@ -2324,7 +2324,7 @@ fn recordings_d_key_opens_delete_confirm() {
     let mut app = make_app();
     app.view_mode = ViewMode::Recordings;
     let test_path = PathBuf::from("/tmp/test.jsonl");
-    app.recordings_list = vec![RecordingInfo {
+    app.recordings.list = vec![RecordingInfo {
         path: test_path.clone(),
         host: "host".into(),
         port: 5432,

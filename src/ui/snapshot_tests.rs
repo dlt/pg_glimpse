@@ -690,7 +690,7 @@ fn header_live_with_error() {
     let backend = TestBackend::new(120, 1);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
-    app.last_error = Some("connection refused".to_string());
+    app.feedback.last_error = Some("connection refused".to_string());
 
     terminal.draw(|frame| {
         super::header::render(frame, &app, frame.area());
@@ -1222,7 +1222,7 @@ fn overlay_query_inspect() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
     app.view_mode = ViewMode::Inspect;
-    app.queries.state.select(Some(0));
+    app.panels.queries.state.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_inspect(frame, &app, frame.area());
@@ -1252,7 +1252,7 @@ fn overlay_index_inspect() {
     let mut app = make_app(Some(make_snapshot()));
     app.bottom_panel = BottomPanel::Indexes;
     app.view_mode = ViewMode::Inspect;
-    app.indexes.state.select(Some(0));
+    app.panels.indexes.state.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_index_inspect(frame, &app, frame.area());
@@ -1269,7 +1269,7 @@ fn overlay_index_inspect_unused() {
     app.bottom_panel = BottomPanel::Indexes;
     app.view_mode = ViewMode::Inspect;
     // Select the second index which has 0 scans (unused)
-    app.indexes.state.select(Some(1));
+    app.panels.indexes.state.select(Some(1));
 
     terminal.draw(|frame| {
         super::overlay::render_index_inspect(frame, &app, frame.area());
@@ -1285,7 +1285,7 @@ fn overlay_statement_inspect() {
     let mut app = make_app(Some(make_snapshot()));
     app.bottom_panel = BottomPanel::Statements;
     app.view_mode = ViewMode::Inspect;
-    app.statements.state.select(Some(0));
+    app.panels.statements.state.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_statement_inspect(frame, &app, frame.area());
@@ -1301,7 +1301,7 @@ fn overlay_table_inspect() {
     let mut app = make_app(Some(make_snapshot()));
     app.bottom_panel = BottomPanel::TableStats;
     app.view_mode = ViewMode::Inspect;
-    app.table_stats.state.select(Some(0));
+    app.panels.table_stats.state.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_table_inspect(frame, &app, frame.area());
@@ -1317,7 +1317,7 @@ fn overlay_replication_inspect() {
     let mut app = make_app(Some(make_snapshot()));
     app.bottom_panel = BottomPanel::Replication;
     app.view_mode = ViewMode::Inspect;
-    app.replication_table_state.select(Some(0));
+    app.panels.replication.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_replication_inspect(frame, &app, frame.area());
@@ -1333,7 +1333,7 @@ fn overlay_blocking_inspect() {
     let mut app = make_app(Some(make_snapshot()));
     app.bottom_panel = BottomPanel::Blocking;
     app.view_mode = ViewMode::Inspect;
-    app.blocking_table_state.select(Some(0));
+    app.panels.blocking.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_blocking_inspect(frame, &app, frame.area());
@@ -1349,7 +1349,7 @@ fn overlay_vacuum_inspect() {
     let mut app = make_app(Some(make_snapshot()));
     app.bottom_panel = BottomPanel::VacuumProgress;
     app.view_mode = ViewMode::Inspect;
-    app.vacuum_table_state.select(Some(0));
+    app.panels.vacuum.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_vacuum_inspect(frame, &app, frame.area());
@@ -1365,7 +1365,7 @@ fn overlay_wraparound_inspect() {
     let mut app = make_app(Some(make_snapshot()));
     app.bottom_panel = BottomPanel::Wraparound;
     app.view_mode = ViewMode::Inspect;
-    app.wraparound_table_state.select(Some(0));
+    app.panels.wraparound.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_wraparound_inspect(frame, &app, frame.area());
@@ -1391,7 +1391,7 @@ fn overlay_wraparound_inspect_warning() {
     let mut app = make_app(Some(snapshot));
     app.bottom_panel = BottomPanel::Wraparound;
     app.view_mode = ViewMode::Inspect;
-    app.wraparound_table_state.select(Some(0));
+    app.panels.wraparound.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_wraparound_inspect(frame, &app, frame.area());
@@ -1529,8 +1529,8 @@ fn panel_active_queries_sorted_by_duration() {
     let backend = TestBackend::new(140, 12);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
-    app.queries.sort_column = SortColumn::Duration;
-    app.queries.sort_ascending = false;
+    app.panels.queries.sort_column = SortColumn::Duration;
+    app.panels.queries.sort_ascending = false;
 
     terminal.draw(|frame| {
         super::active_queries::render(frame, &mut app, frame.area());
@@ -1544,8 +1544,8 @@ fn panel_active_queries_sorted_ascending() {
     let backend = TestBackend::new(140, 12);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
-    app.queries.sort_column = SortColumn::Duration;
-    app.queries.sort_ascending = true;
+    app.panels.queries.sort_column = SortColumn::Duration;
+    app.panels.queries.sort_ascending = true;
 
     terminal.draw(|frame| {
         super::active_queries::render(frame, &mut app, frame.area());
@@ -2022,7 +2022,7 @@ fn overlay_query_inspect_extreme_values() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_extreme_snapshot()));
     app.view_mode = ViewMode::Inspect;
-    app.queries.state.select(Some(0));
+    app.panels.queries.state.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_inspect(frame, &app, frame.area());
@@ -2038,7 +2038,7 @@ fn overlay_query_inspect_all_none_fields() {
     let mut app = make_app(Some(make_extreme_snapshot()));
     app.view_mode = ViewMode::Inspect;
     // Select the query with all None fields
-    app.queries.state.select(Some(1));
+    app.panels.queries.state.select(Some(1));
 
     terminal.draw(|frame| {
         super::overlay::render_inspect(frame, &app, frame.area());
@@ -2054,7 +2054,7 @@ fn overlay_query_inspect_unicode() {
     let mut app = make_app(Some(make_extreme_snapshot()));
     app.view_mode = ViewMode::Inspect;
     // Select the Unicode query
-    app.queries.state.select(Some(2));
+    app.panels.queries.state.select(Some(2));
 
     terminal.draw(|frame| {
         super::overlay::render_inspect(frame, &app, frame.area());
@@ -2070,7 +2070,7 @@ fn overlay_replication_inspect_all_none() {
     let mut app = make_app(Some(make_extreme_snapshot()));
     app.bottom_panel = BottomPanel::Replication;
     app.view_mode = ViewMode::Inspect;
-    app.replication_table_state.select(Some(0));
+    app.panels.replication.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_replication_inspect(frame, &app, frame.area());
@@ -2086,7 +2086,7 @@ fn overlay_blocking_inspect_all_none() {
     let mut app = make_app(Some(make_extreme_snapshot()));
     app.bottom_panel = BottomPanel::Blocking;
     app.view_mode = ViewMode::Inspect;
-    app.blocking_table_state.select(Some(0));
+    app.panels.blocking.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_blocking_inspect(frame, &app, frame.area());
@@ -2102,7 +2102,7 @@ fn overlay_wraparound_inspect_critical() {
     let mut app = make_app(Some(make_extreme_snapshot()));
     app.bottom_panel = BottomPanel::Wraparound;
     app.view_mode = ViewMode::Inspect;
-    app.wraparound_table_state.select(Some(0));
+    app.panels.wraparound.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_wraparound_inspect(frame, &app, frame.area());
@@ -2145,7 +2145,7 @@ fn overlay_settings_inspect() {
 
     app.bottom_panel = BottomPanel::Settings;
     app.view_mode = ViewMode::SettingsInspect;
-    app.settings_table_state.select(Some(0));
+    app.panels.settings.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_settings_inspect(frame, &app, frame.area());
@@ -2178,7 +2178,7 @@ fn overlay_settings_inspect_pending_restart() {
 
     app.bottom_panel = BottomPanel::Settings;
     app.view_mode = ViewMode::SettingsInspect;
-    app.settings_table_state.select(Some(0));
+    app.panels.settings.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_settings_inspect(frame, &app, frame.area());
@@ -2211,7 +2211,7 @@ fn overlay_settings_inspect_sighup() {
 
     app.bottom_panel = BottomPanel::Settings;
     app.view_mode = ViewMode::SettingsInspect;
-    app.settings_table_state.select(Some(0));
+    app.panels.settings.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_settings_inspect(frame, &app, frame.area());
@@ -2244,7 +2244,7 @@ fn overlay_settings_inspect_user() {
 
     app.bottom_panel = BottomPanel::Settings;
     app.view_mode = ViewMode::SettingsInspect;
-    app.settings_table_state.select(Some(0));
+    app.panels.settings.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_settings_inspect(frame, &app, frame.area());
@@ -2348,7 +2348,7 @@ fn overlay_query_inspect_sql_injection() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_special_chars_snapshot()));
     app.view_mode = ViewMode::Inspect;
-    app.queries.state.select(Some(0));
+    app.panels.queries.state.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_inspect(frame, &app, frame.area());
@@ -2363,7 +2363,7 @@ fn overlay_query_inspect_newlines_tabs() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_special_chars_snapshot()));
     app.view_mode = ViewMode::Inspect;
-    app.queries.state.select(Some(1));
+    app.panels.queries.state.select(Some(1));
 
     terminal.draw(|frame| {
         super::overlay::render_inspect(frame, &app, frame.area());
@@ -2378,7 +2378,7 @@ fn overlay_query_inspect_ansi_escapes() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_special_chars_snapshot()));
     app.view_mode = ViewMode::Inspect;
-    app.queries.state.select(Some(2));
+    app.panels.queries.state.select(Some(2));
 
     terminal.draw(|frame| {
         super::overlay::render_inspect(frame, &app, frame.area());
@@ -2393,7 +2393,7 @@ fn overlay_query_inspect_empty_strings() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_special_chars_snapshot()));
     app.view_mode = ViewMode::Inspect;
-    app.queries.state.select(Some(3));
+    app.panels.queries.state.select(Some(3));
 
     terminal.draw(|frame| {
         super::overlay::render_inspect(frame, &app, frame.area());
@@ -2557,7 +2557,7 @@ fn overlay_table_inspect_zero_values() {
     let mut app = make_app(Some(make_zero_values_snapshot()));
     app.bottom_panel = BottomPanel::TableStats;
     app.view_mode = ViewMode::Inspect;
-    app.table_stats.state.select(Some(0));
+    app.panels.table_stats.state.select(Some(0));
 
     terminal.draw(|frame| {
         super::overlay::render_table_inspect(frame, &app, frame.area());
@@ -2810,7 +2810,7 @@ fn overlay_recordings_with_data() {
     let mut app = make_app(Some(make_snapshot()));
 
     app.view_mode = ViewMode::Recordings;
-    app.recordings_list = vec![
+    app.recordings.list = vec![
         RecordingInfo {
             path: PathBuf::from("/tmp/recording1.jsonl"),
             host: "localhost".to_string(),
@@ -2839,7 +2839,7 @@ fn overlay_recordings_with_data() {
             file_size: 50_000,
         },
     ];
-    app.recordings_selected = 1; // Select the second item
+    app.recordings.selected = 1; // Select the second item
 
     terminal.draw(|frame| {
         super::overlay::render_recordings(frame, &app, frame.area());
@@ -2855,7 +2855,7 @@ fn overlay_recordings_empty() {
     let mut app = make_app(Some(make_snapshot()));
 
     app.view_mode = ViewMode::Recordings;
-    app.recordings_list = vec![];
+    app.recordings.list = vec![];
 
     terminal.draw(|frame| {
         super::overlay::render_recordings(frame, &app, frame.area());

@@ -85,11 +85,11 @@ fn render_live(frame: &mut Frame, app: &App, area: Rect) {
         ));
     }
 
-    if let Some(ref msg) = app.status_message {
+    if let Some(ref msg) = app.feedback.status_message {
         spans.push(Span::styled("  ", dim_style));
-        let indicator = if app.bloat_loading {
+        let indicator = if app.feedback.bloat_loading {
             const SPINNER: &[char] = &['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-            SPINNER[app.spinner_frame as usize % SPINNER.len()]
+            SPINNER[app.feedback.spinner_frame as usize % SPINNER.len()]
         } else {
             '●'
         };
@@ -99,7 +99,7 @@ fn render_live(frame: &mut Frame, app: &App, area: Rect) {
         ));
     }
 
-    if let Some(ref err) = app.last_error {
+    if let Some(ref err) = app.feedback.last_error {
         spans.push(Span::styled("  ", dim_style));
         spans.push(Span::styled(
             format!("⚠ {}", truncate(err, 40)),
@@ -180,7 +180,7 @@ fn render_replay(frame: &mut Frame, app: &App, replay: &crate::app::ReplayState,
         ));
     }
 
-    if let Some(ref msg) = app.status_message {
+    if let Some(ref msg) = app.feedback.status_message {
         spans.push(Span::styled("  ", dim_style));
         spans.push(Span::styled(
             format!("● {msg}"),

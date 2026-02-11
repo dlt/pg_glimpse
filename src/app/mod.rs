@@ -10,76 +10,31 @@ pub use panels::{BottomPanel, ViewMode};
 pub use sorting::{
     IndexSortColumn, SortColumn, SortColumnTrait, StatementSortColumn, TableStatSortColumn,
 };
-pub use state::{ConnectionInfo, FilterState, MetricsHistory, ReplayState, TableViewState};
+pub use state::{ConfigOverlay, ConnectionInfo, FilterState, MetricsHistory, PanelStates, RecordingsBrowser, ReplayState, TableViewState, UiFeedback};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config as MatcherConfig, Matcher};
-use ratatui::widgets::TableState;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::config::{AppConfig, ConfigItem};
 use crate::db::models::{PgSnapshot, ServerInfo};
 use crate::db::queries::{IndexBloat, TableBloat};
-use crate::recorder::RecordingInfo;
 use crate::ui::theme;
 
 use sorting::{sort_by_key, sort_by_key_partial, Filterable};
 
-/// Handle navigation keys for simple table panels (no sorting/filtering).
-/// Standalone function to avoid borrow checker issues with &mut self.
-fn simple_table_nav(
-    key: KeyEvent,
-    state: &mut TableState,
-    len: usize,
-    inspect_mode: ViewMode,
-    overlay_scroll: &mut u16,
-    view_mode: &mut ViewMode,
-) {
-    match key.code {
-        KeyCode::Up | KeyCode::Char('k') => {
-            let i = state.selected().unwrap_or(0);
-            state.select(Some(i.saturating_sub(1)));
-        }
-        KeyCode::Down | KeyCode::Char('j') => {
-            let max = len.saturating_sub(1);
-            let i = state.selected().unwrap_or(0);
-            state.select(Some((i + 1).min(max)));
-        }
-        KeyCode::Enter => {
-            if len > 0 {
-                if state.selected().is_none() {
-                    state.select(Some(0));
-                }
-                *overlay_scroll = 0;
-                *view_mode = inspect_mode;
-            }
-        }
-        _ => {}
-    }
-}
-
 pub struct App {
+    // Core runtime
     pub running: bool,
     pub paused: bool,
     pub snapshot: Option<PgSnapshot>,
     pub view_mode: ViewMode,
     pub bottom_panel: BottomPanel,
 
-    // Sortable panel views
-    pub queries: TableViewState<SortColumn>,
-    pub indexes: TableViewState<IndexSortColumn>,
-    pub statements: TableViewState<StatementSortColumn>,
-    pub table_stats: TableViewState<TableStatSortColumn>,
-
-    // Non-sortable panel views (simple TableState)
-    pub replication_table_state: TableState,
-    pub blocking_table_state: TableState,
-    pub vacuum_table_state: TableState,
-    pub wraparound_table_state: TableState,
-    pub settings_table_state: TableState,
-    pub extensions_table_state: TableState,
+    // Panel states (consolidated)
+    pub panels: PanelStates,
 
     pub metrics: MetricsHistory,
 
@@ -87,24 +42,18 @@ pub struct App {
     pub connection: ConnectionInfo,
     pub refresh_interval_secs: u64,
 
-    pub last_error: Option<String>,
-    pub status_message: Option<String>,
-    pub pending_action: Option<AppAction>,
-    pub bloat_loading: bool,
-    pub spinner_frame: u8,
+    // UI feedback (errors, status, loading)
+    pub feedback: UiFeedback,
 
     pub config: AppConfig,
-    pub config_selected: usize,
-    pub config_input_buffer: String,
+    pub config_overlay: ConfigOverlay,
 
     pub filter: FilterState,
     pub replay: Option<ReplayState>,
     pub overlay_scroll: u16,
 
     // Recordings browser state
-    pub recordings_list: Vec<RecordingInfo>,
-    pub recordings_selected: usize,
-    pub pending_replay_path: Option<PathBuf>,
+    pub recordings: RecordingsBrowser,
 }
 
 impl App {
@@ -125,34 +74,18 @@ impl App {
             snapshot: None,
             view_mode: ViewMode::Normal,
             bottom_panel: BottomPanel::Queries,
-            queries: TableViewState::new(SortColumn::Duration, false),
-            indexes: TableViewState::new(IndexSortColumn::Scans, true),
-            statements: TableViewState::new(StatementSortColumn::TotalTime, false),
-            table_stats: TableViewState::new(TableStatSortColumn::DeadTuples, false),
-            replication_table_state: TableState::default(),
-            blocking_table_state: TableState::default(),
-            vacuum_table_state: TableState::default(),
-            wraparound_table_state: TableState::default(),
-            settings_table_state: TableState::default(),
-            extensions_table_state: TableState::default(),
+            panels: PanelStates::new(),
             metrics: MetricsHistory::new(history_len),
             server_info,
             connection: ConnectionInfo::new(host, port, dbname, user),
             refresh_interval_secs: refresh,
-            last_error: None,
-            status_message: None,
-            pending_action: None,
-            bloat_loading: false,
-            spinner_frame: 0,
+            feedback: UiFeedback::new(),
             config,
-            config_selected: 0,
-            config_input_buffer: String::new(),
+            config_overlay: ConfigOverlay::new(),
             filter: FilterState::default(),
             replay: None,
             overlay_scroll: 0,
-            recordings_list: vec![],
-            recordings_selected: 0,
-            pending_replay_path: None,
+            recordings: RecordingsBrowser::new(),
         }
     }
 
@@ -229,11 +162,11 @@ impl App {
         }
 
         self.snapshot = Some(snapshot);
-        self.last_error = None;
+        self.feedback.last_error = None;
     }
 
     pub fn update_error(&mut self, err: String) {
-        self.last_error = Some(err);
+        self.feedback.last_error = Some(err);
     }
 
     /// Apply bloat estimates to current snapshot's `table_stats` and indexes
@@ -298,9 +231,9 @@ impl App {
             self.apply_fuzzy_filter(&mut indices, &snap.active_queries);
         }
 
-        let asc = self.queries.sort_ascending;
+        let asc = self.panels.queries.sort_ascending;
         let q = &snap.active_queries;
-        match self.queries.sort_column {
+        match self.panels.queries.sort_column {
             SortColumn::Pid => sort_by_key(&mut indices, q, asc, |x| x.pid),
             SortColumn::Duration => sort_by_key_partial(&mut indices, q, asc, |x| x.duration_secs),
             SortColumn::State => sort_by_key(&mut indices, q, asc, |x| x.state.clone()),
@@ -311,7 +244,7 @@ impl App {
 
     pub fn selected_query_pid(&self) -> Option<i32> {
         let snap = self.snapshot.as_ref()?;
-        let idx = self.queries.selected()?;
+        let idx = self.panels.queries.selected()?;
         let indices = self.sorted_query_indices();
         let &real_idx = indices.get(idx)?;
         Some(snap.active_queries[real_idx].pid)
@@ -339,9 +272,9 @@ impl App {
             self.apply_fuzzy_filter(&mut indices, &snap.indexes);
         }
 
-        let asc = self.indexes.sort_ascending;
+        let asc = self.panels.indexes.sort_ascending;
         let idx = &snap.indexes;
-        match self.indexes.sort_column {
+        match self.panels.indexes.sort_column {
             IndexSortColumn::Scans => sort_by_key(&mut indices, idx, asc, |x| x.idx_scan),
             IndexSortColumn::Size => sort_by_key(&mut indices, idx, asc, |x| x.index_size_bytes),
             IndexSortColumn::Name => sort_by_key(&mut indices, idx, asc, |x| x.index_name.clone()),
@@ -361,9 +294,9 @@ impl App {
             self.apply_fuzzy_filter(&mut indices, &snap.stat_statements);
         }
 
-        let asc = self.statements.sort_ascending;
+        let asc = self.panels.statements.sort_ascending;
         let s = &snap.stat_statements;
-        match self.statements.sort_column {
+        match self.panels.statements.sort_column {
             StatementSortColumn::TotalTime => {
                 sort_by_key_partial(&mut indices, s, asc, |x| x.total_exec_time)
             }
@@ -404,9 +337,9 @@ impl App {
             self.apply_fuzzy_filter(&mut indices, &snap.table_stats);
         }
 
-        let asc = self.table_stats.sort_ascending;
+        let asc = self.panels.table_stats.sort_ascending;
         let t = &snap.table_stats;
-        match self.table_stats.sort_column {
+        match self.panels.table_stats.sort_column {
             TableStatSortColumn::DeadTuples => sort_by_key(&mut indices, t, asc, |x| x.n_dead_tup),
             TableStatSortColumn::Size => sort_by_key(&mut indices, t, asc, |x| x.total_size_bytes),
             TableStatSortColumn::Name => sort_by_key(&mut indices, t, asc, |x| x.relname.clone()),
@@ -446,10 +379,10 @@ impl App {
             Ok(()) => {
                 let preview: String = text.chars().take(40).collect();
                 let suffix = if text.len() > 40 { "..." } else { "" };
-                self.status_message = Some(format!("Copied: {preview}{suffix}"));
+                self.feedback.status_message = Some(format!("Copied: {preview}{suffix}"));
             }
             Err(e) => {
-                self.status_message = Some(format!("Clipboard error: {e}"));
+                self.feedback.status_message = Some(format!("Clipboard error: {e}"));
             }
         }
     }
@@ -460,7 +393,7 @@ impl App {
         };
         match self.bottom_panel {
             BottomPanel::Queries => {
-                let idx = self.queries.selected().unwrap_or(0);
+                let idx = self.panels.queries.selected().unwrap_or(0);
                 let indices = self.sorted_query_indices();
                 if let Some(&real_idx) = indices.get(idx) {
                     if let Some(ref q) = snap.active_queries[real_idx].query {
@@ -470,7 +403,7 @@ impl App {
                 }
             }
             BottomPanel::Indexes => {
-                let idx = self.indexes.selected().unwrap_or(0);
+                let idx = self.panels.indexes.selected().unwrap_or(0);
                 let indices = self.sorted_index_indices();
                 if let Some(&real_idx) = indices.get(idx) {
                     let text = snap.indexes[real_idx].index_definition.clone();
@@ -478,7 +411,7 @@ impl App {
                 }
             }
             BottomPanel::Statements => {
-                let idx = self.statements.selected().unwrap_or(0);
+                let idx = self.panels.statements.selected().unwrap_or(0);
                 let indices = self.sorted_stmt_indices();
                 if let Some(&real_idx) = indices.get(idx) {
                     let text = snap.stat_statements[real_idx].query.clone();
@@ -502,28 +435,19 @@ impl App {
     }
 
     fn reset_panel_selection(&mut self) {
-        match self.bottom_panel {
-            BottomPanel::Queries => self.queries.select_first(),
-            BottomPanel::Indexes => self.indexes.select_first(),
-            BottomPanel::Statements => self.statements.select_first(),
-            BottomPanel::TableStats => self.table_stats.select_first(),
-            BottomPanel::Replication => self.replication_table_state.select(Some(0)),
-            BottomPanel::Settings => self.settings_table_state.select(Some(0)),
-            BottomPanel::Extensions => self.extensions_table_state.select(Some(0)),
-            _ => {}
-        }
+        self.panels.reset_selection(self.bottom_panel);
     }
 
     fn handle_queries_key(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Up | KeyCode::Char('k') => {
-                self.queries.select_prev();
-                self.status_message = None;
+                self.panels.queries.select_prev();
+                self.feedback.status_message = None;
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 let max = self.sorted_query_indices().len();
-                self.queries.select_next(max);
-                self.status_message = None;
+                self.panels.queries.select_next(max);
+                self.feedback.status_message = None;
             }
             KeyCode::Enter | KeyCode::Char('i') => {
                 if self.selected_query_pid().is_some() {
@@ -562,11 +486,11 @@ impl App {
                 }
             }
             KeyCode::Char('s') => {
-                self.queries.cycle_sort();
-                self.status_message = Some(format!(
+                self.panels.queries.cycle_sort();
+                self.feedback.status_message = Some(format!(
                     "Sort: {} {}",
-                    self.queries.sort_column.label(),
-                    if self.queries.sort_ascending {
+                    self.panels.queries.sort_column.label(),
+                    if self.panels.queries.sort_ascending {
                         "\u{2191}"
                     } else {
                         "\u{2193}"
@@ -580,11 +504,11 @@ impl App {
     fn handle_indexes_key(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Up | KeyCode::Char('k') => {
-                self.indexes.select_prev();
+                self.panels.indexes.select_prev();
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 let max = self.sorted_index_indices().len();
-                self.indexes.select_next(max);
+                self.panels.indexes.select_next(max);
             }
             KeyCode::Enter => {
                 if self
@@ -592,25 +516,25 @@ impl App {
                     .as_ref()
                     .is_some_and(|s| !s.indexes.is_empty())
                 {
-                    if self.indexes.selected().is_none() {
-                        self.indexes.select_first();
+                    if self.panels.indexes.selected().is_none() {
+                        self.panels.indexes.select_first();
                     }
                     self.overlay_scroll = 0;
                     self.view_mode = ViewMode::IndexInspect;
                 }
             }
             KeyCode::Char('s') => {
-                self.indexes.cycle_sort();
+                self.panels.indexes.cycle_sort();
                 // Default ascending for Name/Scans, descending for others
-                self.indexes.sort_ascending = matches!(
-                    self.indexes.sort_column,
+                self.panels.indexes.sort_ascending = matches!(
+                    self.panels.indexes.sort_column,
                     IndexSortColumn::Scans | IndexSortColumn::Name
                 );
             }
             KeyCode::Char('b') if self.replay.is_none() => {
-                self.pending_action = Some(AppAction::RefreshBloat);
-                self.status_message = Some("Refreshing bloat estimates...".to_string());
-                self.bloat_loading = true;
+                self.feedback.pending_action = Some(AppAction::RefreshBloat);
+                self.feedback.status_message = Some("Refreshing bloat estimates...".to_string());
+                self.feedback.bloat_loading = true;
             }
             _ => {}
         }
@@ -619,11 +543,11 @@ impl App {
     fn handle_statements_key(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Up | KeyCode::Char('k') => {
-                self.statements.select_prev();
+                self.panels.statements.select_prev();
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 let max = self.sorted_stmt_indices().len();
-                self.statements.select_next(max);
+                self.panels.statements.select_next(max);
             }
             KeyCode::Enter => {
                 if self
@@ -631,19 +555,19 @@ impl App {
                     .as_ref()
                     .is_some_and(|s| !s.stat_statements.is_empty())
                 {
-                    if self.statements.selected().is_none() {
-                        self.statements.select_first();
+                    if self.panels.statements.selected().is_none() {
+                        self.panels.statements.select_first();
                     }
                     self.overlay_scroll = 0;
                     self.view_mode = ViewMode::StatementInspect;
                 }
             }
             KeyCode::Char('s') => {
-                self.statements.cycle_sort();
-                self.status_message = Some(format!(
+                self.panels.statements.cycle_sort();
+                self.feedback.status_message = Some(format!(
                     "Sort: {} {}",
-                    self.statements.sort_column.label(),
-                    if self.statements.sort_ascending {
+                    self.panels.statements.sort_column.label(),
+                    if self.panels.statements.sort_ascending {
                         "\u{2191}"
                     } else {
                         "\u{2193}"
@@ -657,11 +581,11 @@ impl App {
     fn handle_table_stats_key(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Up | KeyCode::Char('k') => {
-                self.table_stats.select_prev();
+                self.panels.table_stats.select_prev();
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 let max = self.sorted_table_stat_indices().len();
-                self.table_stats.select_next(max);
+                self.panels.table_stats.select_next(max);
             }
             KeyCode::Enter => {
                 if self
@@ -669,19 +593,19 @@ impl App {
                     .as_ref()
                     .is_some_and(|s| !s.table_stats.is_empty())
                 {
-                    if self.table_stats.selected().is_none() {
-                        self.table_stats.select_first();
+                    if self.panels.table_stats.selected().is_none() {
+                        self.panels.table_stats.select_first();
                     }
                     self.overlay_scroll = 0;
                     self.view_mode = ViewMode::TableInspect;
                 }
             }
             KeyCode::Char('s') => {
-                self.table_stats.cycle_sort();
-                self.status_message = Some(format!(
+                self.panels.table_stats.cycle_sort();
+                self.feedback.status_message = Some(format!(
                     "Sort: {} {}",
-                    self.table_stats.sort_column.label(),
-                    if self.table_stats.sort_ascending {
+                    self.panels.table_stats.sort_column.label(),
+                    if self.panels.table_stats.sort_ascending {
                         "\u{2191}"
                     } else {
                         "\u{2193}"
@@ -689,9 +613,9 @@ impl App {
                 ));
             }
             KeyCode::Char('b') if self.replay.is_none() => {
-                self.pending_action = Some(AppAction::RefreshBloat);
-                self.status_message = Some("Refreshing bloat estimates...".to_string());
-                self.bloat_loading = true;
+                self.feedback.pending_action = Some(AppAction::RefreshBloat);
+                self.feedback.status_message = Some("Refreshing bloat estimates...".to_string());
+                self.feedback.bloat_loading = true;
             }
             _ => {}
         }
@@ -699,26 +623,18 @@ impl App {
 
     fn handle_replication_key(&mut self, key: KeyEvent) {
         let len = self.snapshot.as_ref().map_or(0, |s| s.replication.len());
-        simple_table_nav(
-            key,
-            &mut self.replication_table_state,
-            len,
-            ViewMode::ReplicationInspect,
-            &mut self.overlay_scroll,
-            &mut self.view_mode,
-        );
+        if PanelStates::simple_nav(&mut self.panels.replication, key.code, len) {
+            self.overlay_scroll = 0;
+            self.view_mode = ViewMode::ReplicationInspect;
+        }
     }
 
     fn handle_blocking_key(&mut self, key: KeyEvent) {
         let len = self.snapshot.as_ref().map_or(0, |s| s.blocking_info.len());
-        simple_table_nav(
-            key,
-            &mut self.blocking_table_state,
-            len,
-            ViewMode::BlockingInspect,
-            &mut self.overlay_scroll,
-            &mut self.view_mode,
-        );
+        if PanelStates::simple_nav(&mut self.panels.blocking, key.code, len) {
+            self.overlay_scroll = 0;
+            self.view_mode = ViewMode::BlockingInspect;
+        }
     }
 
     fn handle_vacuum_key(&mut self, key: KeyEvent) {
@@ -726,50 +642,34 @@ impl App {
             .snapshot
             .as_ref()
             .map_or(0, |s| s.vacuum_progress.len());
-        simple_table_nav(
-            key,
-            &mut self.vacuum_table_state,
-            len,
-            ViewMode::VacuumInspect,
-            &mut self.overlay_scroll,
-            &mut self.view_mode,
-        );
+        if PanelStates::simple_nav(&mut self.panels.vacuum, key.code, len) {
+            self.overlay_scroll = 0;
+            self.view_mode = ViewMode::VacuumInspect;
+        }
     }
 
     fn handle_wraparound_key(&mut self, key: KeyEvent) {
         let len = self.snapshot.as_ref().map_or(0, |s| s.wraparound.len());
-        simple_table_nav(
-            key,
-            &mut self.wraparound_table_state,
-            len,
-            ViewMode::WraparoundInspect,
-            &mut self.overlay_scroll,
-            &mut self.view_mode,
-        );
+        if PanelStates::simple_nav(&mut self.panels.wraparound, key.code, len) {
+            self.overlay_scroll = 0;
+            self.view_mode = ViewMode::WraparoundInspect;
+        }
     }
 
     fn handle_settings_key(&mut self, key: KeyEvent) {
         let len = self.sorted_settings_indices().len();
-        simple_table_nav(
-            key,
-            &mut self.settings_table_state,
-            len,
-            ViewMode::SettingsInspect,
-            &mut self.overlay_scroll,
-            &mut self.view_mode,
-        );
+        if PanelStates::simple_nav(&mut self.panels.settings, key.code, len) {
+            self.overlay_scroll = 0;
+            self.view_mode = ViewMode::SettingsInspect;
+        }
     }
 
     fn handle_extensions_key(&mut self, key: KeyEvent) {
         let len = self.sorted_extensions_indices().len();
-        simple_table_nav(
-            key,
-            &mut self.extensions_table_state,
-            len,
-            ViewMode::ExtensionsInspect,
-            &mut self.overlay_scroll,
-            &mut self.view_mode,
-        );
+        if PanelStates::simple_nav(&mut self.panels.extensions, key.code, len) {
+            self.overlay_scroll = 0;
+            self.view_mode = ViewMode::ExtensionsInspect;
+        }
     }
 
     fn handle_panel_key(&mut self, key: KeyEvent) {
@@ -794,11 +694,11 @@ impl App {
     /// On 'y'/'Y', executes the action. Any other key aborts with the given message.
     fn handle_yes_no_confirm(&mut self, key: KeyEvent, action: AppAction, abort_msg: &str) {
         if let KeyCode::Char('y' | 'Y') = key.code {
-            self.pending_action = Some(action);
+            self.feedback.pending_action = Some(action);
             self.view_mode = ViewMode::Normal;
         } else {
             self.view_mode = ViewMode::Normal;
-            self.status_message = Some(abort_msg.into());
+            self.feedback.status_message = Some(abort_msg.into());
         }
     }
 
@@ -813,7 +713,7 @@ impl App {
     ) {
         match key.code {
             KeyCode::Char('1' | 'o') => {
-                self.pending_action = Some(single_action);
+                self.feedback.pending_action = Some(single_action);
                 self.view_mode = ViewMode::Normal;
             }
             KeyCode::Char('a') => {
@@ -821,7 +721,7 @@ impl App {
             }
             KeyCode::Esc => {
                 self.view_mode = ViewMode::Normal;
-                self.status_message = Some(abort_msg.into());
+                self.feedback.status_message = Some(abort_msg.into());
             }
             _ => {}
         }
@@ -872,34 +772,34 @@ impl App {
         match self.view_mode {
             ViewMode::Inspect => {
                 let snap = self.snapshot.as_ref()?;
-                let idx = self.queries.selected().unwrap_or(0);
+                let idx = self.panels.queries.selected().unwrap_or(0);
                 let indices = self.sorted_query_indices();
                 let &real_idx = indices.get(idx)?;
                 snap.active_queries[real_idx].query.clone()
             }
             ViewMode::IndexInspect => {
                 let snap = self.snapshot.as_ref()?;
-                let idx = self.indexes.selected().unwrap_or(0);
+                let idx = self.panels.indexes.selected().unwrap_or(0);
                 let indices = self.sorted_index_indices();
                 let &real_idx = indices.get(idx)?;
                 Some(snap.indexes[real_idx].index_definition.clone())
             }
             ViewMode::StatementInspect => {
                 let snap = self.snapshot.as_ref()?;
-                let idx = self.statements.selected().unwrap_or(0);
+                let idx = self.panels.statements.selected().unwrap_or(0);
                 let indices = self.sorted_stmt_indices();
                 let &real_idx = indices.get(idx)?;
                 Some(snap.stat_statements[real_idx].query.clone())
             }
             ViewMode::ReplicationInspect => {
                 let snap = self.snapshot.as_ref()?;
-                let sel = self.replication_table_state.selected().unwrap_or(0);
+                let sel = self.panels.replication.selected().unwrap_or(0);
                 let r = snap.replication.get(sel)?;
                 Some(r.application_name.clone().unwrap_or_default())
             }
             ViewMode::TableInspect => {
                 let snap = self.snapshot.as_ref()?;
-                let sel = self.table_stats.selected().unwrap_or(0);
+                let sel = self.panels.table_stats.selected().unwrap_or(0);
                 let indices = self.sorted_table_stat_indices();
                 let &real_idx = indices.get(sel)?;
                 let t = &snap.table_stats[real_idx];
@@ -907,31 +807,31 @@ impl App {
             }
             ViewMode::BlockingInspect => {
                 let snap = self.snapshot.as_ref()?;
-                let sel = self.blocking_table_state.selected().unwrap_or(0);
+                let sel = self.panels.blocking.selected().unwrap_or(0);
                 let info = snap.blocking_info.get(sel)?;
                 Some(info.blocked_query.clone().unwrap_or_default())
             }
             ViewMode::VacuumInspect => {
                 let snap = self.snapshot.as_ref()?;
-                let sel = self.vacuum_table_state.selected().unwrap_or(0);
+                let sel = self.panels.vacuum.selected().unwrap_or(0);
                 let vac = snap.vacuum_progress.get(sel)?;
                 Some(vac.table_name.clone())
             }
             ViewMode::WraparoundInspect => {
                 let snap = self.snapshot.as_ref()?;
-                let sel = self.wraparound_table_state.selected().unwrap_or(0);
+                let sel = self.panels.wraparound.selected().unwrap_or(0);
                 let wrap = snap.wraparound.get(sel)?;
                 Some(wrap.datname.clone())
             }
             ViewMode::SettingsInspect => {
                 let indices = self.sorted_settings_indices();
-                let &idx = indices.get(self.settings_table_state.selected().unwrap_or(0))?;
+                let &idx = indices.get(self.panels.settings.selected().unwrap_or(0))?;
                 let s = &self.server_info.settings[idx];
                 Some(format!("{} = {}", s.name, s.setting))
             }
             ViewMode::ExtensionsInspect => {
                 let indices = self.sorted_extensions_indices();
-                let &idx = indices.get(self.extensions_table_state.selected().unwrap_or(0))?;
+                let &idx = indices.get(self.panels.extensions.selected().unwrap_or(0))?;
                 Some(self.server_info.extensions_list[idx].name.clone())
             }
             _ => None,
@@ -966,17 +866,17 @@ impl App {
     fn handle_config_key(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Esc | KeyCode::Char('q') => {
-                self.pending_action = Some(AppAction::SaveConfig);
+                self.feedback.pending_action = Some(AppAction::SaveConfig);
                 self.view_mode = ViewMode::Normal;
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                if self.config_selected > 0 {
-                    self.config_selected -= 1;
+                if self.config_overlay.selected > 0 {
+                    self.config_overlay.selected -= 1;
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                if self.config_selected < ConfigItem::ALL.len() - 1 {
-                    self.config_selected += 1;
+                if self.config_overlay.selected < ConfigItem::ALL.len() - 1 {
+                    self.config_overlay.selected += 1;
                 }
             }
             KeyCode::Left | KeyCode::Char('h') => {
@@ -987,8 +887,8 @@ impl App {
             }
             KeyCode::Enter => {
                 // Enter edit mode for RecordingsDir
-                if ConfigItem::ALL[self.config_selected] == ConfigItem::RecordingsDir {
-                    self.config_input_buffer =
+                if ConfigItem::ALL[self.config_overlay.selected] == ConfigItem::RecordingsDir {
+                    self.config_overlay.input_buffer =
                         self.config.recordings_dir.clone().unwrap_or_default();
                     self.view_mode = ViewMode::ConfigEditRecordingsDir;
                 }
@@ -1001,25 +901,25 @@ impl App {
         match key.code {
             KeyCode::Esc => {
                 // Cancel editing
-                self.config_input_buffer.clear();
+                self.config_overlay.input_buffer.clear();
                 self.view_mode = ViewMode::Config;
             }
             KeyCode::Enter => {
                 // Save the input
-                let input = self.config_input_buffer.trim();
+                let input = self.config_overlay.input_buffer.trim();
                 if input.is_empty() {
                     self.config.recordings_dir = None;
                 } else {
                     self.config.recordings_dir = Some(input.to_string());
                 }
-                self.config_input_buffer.clear();
+                self.config_overlay.input_buffer.clear();
                 self.view_mode = ViewMode::Config;
             }
             KeyCode::Backspace => {
-                self.config_input_buffer.pop();
+                self.config_overlay.input_buffer.pop();
             }
             KeyCode::Char(c) => {
-                self.config_input_buffer.push(c);
+                self.config_overlay.input_buffer.push(c);
             }
             _ => {}
         }
@@ -1043,25 +943,25 @@ impl App {
                 self.view_mode = ViewMode::Normal;
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                if self.recordings_selected > 0 {
-                    self.recordings_selected -= 1;
+                if self.recordings.selected > 0 {
+                    self.recordings.selected -= 1;
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                if !self.recordings_list.is_empty()
-                    && self.recordings_selected < self.recordings_list.len() - 1
+                if !self.recordings.list.is_empty()
+                    && self.recordings.selected < self.recordings.list.len() - 1
                 {
-                    self.recordings_selected += 1;
+                    self.recordings.selected += 1;
                 }
             }
             KeyCode::Enter => {
-                if let Some(recording) = self.recordings_list.get(self.recordings_selected) {
-                    self.pending_replay_path = Some(recording.path.clone());
+                if let Some(recording) = self.recordings.current() {
+                    self.recordings.pending_path = Some(recording.path.clone());
                     self.running = false;
                 }
             }
             KeyCode::Char('d') => {
-                if let Some(recording) = self.recordings_list.get(self.recordings_selected) {
+                if let Some(recording) = self.recordings.current() {
                     self.view_mode = ViewMode::ConfirmDeleteRecording(recording.path.clone());
                 }
             }
@@ -1072,18 +972,18 @@ impl App {
     fn handle_confirm_delete_recording_key(&mut self, key: KeyEvent, path: PathBuf) {
         if let KeyCode::Char('y' | 'Y') = key.code {
             if crate::recorder::Recorder::delete_recording(&path).is_ok() {
-                self.status_message = Some("Recording deleted".into());
+                self.feedback.status_message = Some("Recording deleted".into());
                 // Refresh the list
-                self.recordings_list =
+                self.recordings.list =
                     crate::recorder::Recorder::list_recordings(self.config.recordings_dir.as_deref());
                 // Adjust selection if needed
-                if self.recordings_selected >= self.recordings_list.len()
-                    && !self.recordings_list.is_empty()
+                if self.recordings.selected >= self.recordings.list.len()
+                    && !self.recordings.list.is_empty()
                 {
-                    self.recordings_selected = self.recordings_list.len() - 1;
+                    self.recordings.selected = self.recordings.list.len() - 1;
                 }
             } else {
-                self.status_message = Some("Failed to delete recording".into());
+                self.feedback.status_message = Some("Failed to delete recording".into());
             }
             self.view_mode = ViewMode::Recordings;
         } else {
@@ -1134,7 +1034,7 @@ impl App {
                 true
             }
             KeyCode::Char('r') if self.replay.is_none() => {
-                self.pending_action = Some(AppAction::ForceRefresh);
+                self.feedback.pending_action = Some(AppAction::ForceRefresh);
                 true
             }
             KeyCode::Char('?') => {
@@ -1152,9 +1052,9 @@ impl App {
             }
             KeyCode::Char('L') if self.replay.is_none() => {
                 // Open recordings browser (live mode only)
-                self.recordings_list =
+                self.recordings.list =
                     crate::recorder::Recorder::list_recordings(self.config.recordings_dir.as_deref());
-                self.recordings_selected = 0;
+                self.recordings.selected = 0;
                 self.view_mode = ViewMode::Recordings;
                 true
             }
@@ -1322,7 +1222,7 @@ impl App {
     }
 
     fn config_adjust(&mut self, direction: i8) {
-        let item = ConfigItem::ALL[self.config_selected];
+        let item = ConfigItem::ALL[self.config_overlay.selected];
         match item {
             ConfigItem::GraphMarker => {
                 self.config.graph_marker = if direction > 0 {
@@ -1343,7 +1243,7 @@ impl App {
                 let val = self.config.refresh_interval_secs as i64 + i64::from(direction);
                 self.config.refresh_interval_secs = val.clamp(1, 60) as u64;
                 self.refresh_interval_secs = self.config.refresh_interval_secs;
-                self.pending_action = Some(AppAction::RefreshIntervalChanged);
+                self.feedback.pending_action = Some(AppAction::RefreshIntervalChanged);
             }
             ConfigItem::WarnDuration => {
                 let val = f64::from(direction).mul_add(0.5, self.config.warn_duration_secs);

@@ -37,7 +37,7 @@ pub fn render_recordings(frame: &mut Frame, app: &App, area: Rect) {
         Line::from(""),
     ];
 
-    if app.recordings_list.is_empty() {
+    if app.recordings.list.is_empty() {
         lines.push(Line::from(vec![
             Span::styled("    ", Style::default()),
             Span::styled("No recordings found.", dim_style),
@@ -67,8 +67,8 @@ pub fn render_recordings(frame: &mut Frame, app: &App, area: Rect) {
         )]));
 
         // Data rows
-        for (i, recording) in app.recordings_list.iter().enumerate() {
-            let is_selected = i == app.recordings_selected;
+        for (i, recording) in app.recordings.list.iter().enumerate() {
+            let is_selected = i == app.recordings.selected;
             let indicator = if is_selected { "  > " } else { "    " };
 
             let connection = recording.connection_display();

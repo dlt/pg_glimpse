@@ -52,5 +52,5 @@ pub fn render_blocking(frame: &mut Frame, app: &mut App, area: Rect) {
     ];
 
     let table = styled_table(rows, widths, header, block);
-    frame.render_stateful_widget(table, area, &mut app.blocking_table_state);
+    frame.render_stateful_widget(table, area, &mut app.panels.blocking);
 }

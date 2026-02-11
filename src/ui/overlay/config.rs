@@ -33,7 +33,7 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
     let is_editing_dir = matches!(app.view_mode, ViewMode::ConfigEditRecordingsDir);
 
     for (i, item) in ConfigItem::ALL.iter().enumerate() {
-        let selected = i == app.config_selected;
+        let selected = i == app.config_overlay.selected;
         let indicator = if selected { "▸ " } else { "  " };
 
         // Check if this item is being edited
@@ -55,7 +55,7 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
             }
             ConfigItem::RecordingsDir => {
                 if is_editing_this {
-                    format!("{}█", app.config_input_buffer)
+                    format!("{}█", app.config_overlay.input_buffer)
                 } else {
                     app.config
                         .recordings_dir

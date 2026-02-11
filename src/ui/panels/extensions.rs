@@ -115,5 +115,5 @@ pub fn render_extensions(frame: &mut Frame, app: &mut App, area: Rect) {
     ];
 
     let table = styled_table(rows, widths, header, block);
-    frame.render_stateful_widget(table, area, &mut app.extensions_table_state);
+    frame.render_stateful_widget(table, area, &mut app.panels.extensions);
 }

@@ -25,7 +25,7 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let idx = app.queries.selected().unwrap_or(0);
+    let idx = app.panels.queries.selected().unwrap_or(0);
     let indices = app.sorted_query_indices();
     let Some(&real_idx) = indices.get(idx) else {
         frame.render_widget(
@@ -117,7 +117,7 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let sel = app.indexes.selected().unwrap_or(0);
+    let sel = app.panels.indexes.selected().unwrap_or(0);
     let indices = app.sorted_index_indices();
     let Some(&real_idx) = indices.get(sel) else {
         frame.render_widget(
@@ -200,7 +200,7 @@ pub fn render_replication_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let sel = app.replication_table_state.selected().unwrap_or(0);
+    let sel = app.panels.replication.selected().unwrap_or(0);
     let Some(r) = snap.replication.get(sel) else {
         frame.render_widget(
             Paragraph::new("No replication slot selected").block(block),
@@ -356,7 +356,7 @@ pub fn render_table_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let sel = app.table_stats.selected().unwrap_or(0);
+    let sel = app.panels.table_stats.selected().unwrap_or(0);
     let indices = app.sorted_table_stat_indices();
     let Some(&real_idx) = indices.get(sel) else {
         frame.render_widget(
@@ -545,7 +545,7 @@ pub fn render_blocking_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let sel = app.blocking_table_state.selected().unwrap_or(0);
+    let sel = app.panels.blocking.selected().unwrap_or(0);
     let Some(info) = snap.blocking_info.get(sel) else {
         frame.render_widget(
             Paragraph::new("No blocking info selected").block(block),
@@ -632,7 +632,7 @@ pub fn render_vacuum_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let sel = app.vacuum_table_state.selected().unwrap_or(0);
+    let sel = app.panels.vacuum.selected().unwrap_or(0);
     let Some(vac) = snap.vacuum_progress.get(sel) else {
         frame.render_widget(
             Paragraph::new("No vacuum in progress").block(block),
@@ -742,7 +742,7 @@ pub fn render_wraparound_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let sel = app.wraparound_table_state.selected().unwrap_or(0);
+    let sel = app.panels.wraparound.selected().unwrap_or(0);
     let Some(wrap) = snap.wraparound.get(sel) else {
         frame.render_widget(
             Paragraph::new("No wraparound data").block(block),
@@ -858,7 +858,7 @@ pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let sel = app.statements.selected().unwrap_or(0);
+    let sel = app.panels.statements.selected().unwrap_or(0);
     let indices = app.sorted_stmt_indices();
     let Some(&real_idx) = indices.get(sel) else {
         frame.render_widget(
@@ -1017,7 +1017,7 @@ pub fn render_settings_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let block = overlay_block("Setting Details", Theme::border_active());
 
     let indices = app.sorted_settings_indices();
-    let selected = app.settings_table_state.selected().unwrap_or(0);
+    let selected = app.panels.settings.selected().unwrap_or(0);
     let Some(&idx) = indices.get(selected) else {
         frame.render_widget(block, popup_area);
         return;
@@ -1128,7 +1128,7 @@ pub fn render_extensions_inspect(frame: &mut Frame, app: &App, area: Rect) {
     let block = overlay_block(" Extension Details  [j/k] scroll  [y] copy name  [Esc] close ", Theme::border_active());
 
     let indices = app.sorted_extensions_indices();
-    let selected = app.extensions_table_state.selected().unwrap_or(0);
+    let selected = app.panels.extensions.selected().unwrap_or(0);
     let Some(&idx) = indices.get(selected) else {
         frame.render_widget(
             Paragraph::new("No extension selected").block(block),

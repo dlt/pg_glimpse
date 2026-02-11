@@ -32,8 +32,8 @@ pub fn render_table_stats(frame: &mut Frame, app: &mut App, area: Rect) {
     }
 
     let sort_indicator = |col: TableStatSortColumn| -> &str {
-        if app.table_stats.sort_column == col {
-            if app.table_stats.sort_ascending {
+        if app.panels.table_stats.sort_column == col {
+            if app.panels.table_stats.sort_ascending {
                 " \u{2191}"
             } else {
                 " \u{2193}"
@@ -128,5 +128,5 @@ pub fn render_table_stats(frame: &mut Frame, app: &mut App, area: Rect) {
     ];
 
     let table = styled_table(rows, widths, header, block);
-    frame.render_stateful_widget(table, area, &mut app.table_stats.state);
+    frame.render_stateful_widget(table, area, &mut app.panels.table_stats.state);
 }

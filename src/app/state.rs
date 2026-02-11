@@ -6,7 +6,9 @@ use ratatui::widgets::TableState;
 use crate::db::models::PgSnapshot;
 use crate::history::RingBuffer;
 
+use super::panels::BottomPanel;
 use super::sorting::SortColumnTrait;
+use super::{IndexSortColumn, SortColumn, StatementSortColumn, TableStatSortColumn};
 
 /// Generic table view state with sort column and navigation
 pub struct TableViewState<S: SortColumnTrait> {
@@ -46,6 +48,171 @@ impl<S: SortColumnTrait> TableViewState<S> {
 
     pub const fn selected(&self) -> Option<usize> {
         self.state.selected()
+    }
+}
+
+/// Consolidated panel navigation states
+pub struct PanelStates {
+    // Sortable panels
+    pub queries: TableViewState<SortColumn>,
+    pub indexes: TableViewState<IndexSortColumn>,
+    pub statements: TableViewState<StatementSortColumn>,
+    pub table_stats: TableViewState<TableStatSortColumn>,
+    // Simple panels (no sorting/filtering)
+    pub replication: TableState,
+    pub blocking: TableState,
+    pub vacuum: TableState,
+    pub wraparound: TableState,
+    pub settings: TableState,
+    pub extensions: TableState,
+}
+
+impl PanelStates {
+    pub fn new() -> Self {
+        Self {
+            queries: TableViewState::new(SortColumn::Duration, false),
+            indexes: TableViewState::new(IndexSortColumn::Scans, true),
+            statements: TableViewState::new(StatementSortColumn::TotalTime, false),
+            table_stats: TableViewState::new(TableStatSortColumn::DeadTuples, false),
+            replication: TableState::default(),
+            blocking: TableState::default(),
+            vacuum: TableState::default(),
+            wraparound: TableState::default(),
+            settings: TableState::default(),
+            extensions: TableState::default(),
+        }
+    }
+
+    /// Reset selection to first item for the given panel
+    pub fn reset_selection(&mut self, panel: BottomPanel) {
+        match panel {
+            BottomPanel::Queries => self.queries.select_first(),
+            BottomPanel::Indexes => self.indexes.select_first(),
+            BottomPanel::Statements => self.statements.select_first(),
+            BottomPanel::TableStats => self.table_stats.select_first(),
+            BottomPanel::Replication => self.replication.select(Some(0)),
+            BottomPanel::Blocking => self.blocking.select(Some(0)),
+            BottomPanel::VacuumProgress => self.vacuum.select(Some(0)),
+            BottomPanel::Wraparound => self.wraparound.select(Some(0)),
+            BottomPanel::Settings => self.settings.select(Some(0)),
+            BottomPanel::Extensions => self.extensions.select(Some(0)),
+            BottomPanel::WaitEvents | BottomPanel::WalIo => {}
+        }
+    }
+
+    /// Handle navigation for simple table panels (no sorting).
+    /// Returns the new ViewMode if Enter was pressed, None otherwise.
+    pub fn simple_nav(
+        state: &mut TableState,
+        key_code: crossterm::event::KeyCode,
+        len: usize,
+    ) -> bool {
+        use crossterm::event::KeyCode;
+        match key_code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                let i = state.selected().unwrap_or(0);
+                state.select(Some(i.saturating_sub(1)));
+                false
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let max = len.saturating_sub(1);
+                let i = state.selected().unwrap_or(0);
+                state.select(Some((i + 1).min(max)));
+                false
+            }
+            KeyCode::Enter => {
+                if len > 0 {
+                    if state.selected().is_none() {
+                        state.select(Some(0));
+                    }
+                    true
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
+}
+
+impl Default for PanelStates {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+use std::path::PathBuf;
+use crate::recorder::RecordingInfo;
+
+/// State for recordings browser overlay
+pub struct RecordingsBrowser {
+    pub list: Vec<RecordingInfo>,
+    pub selected: usize,
+    pub pending_path: Option<PathBuf>,
+}
+
+impl RecordingsBrowser {
+    pub const fn new() -> Self {
+        Self {
+            list: vec![],
+            selected: 0,
+            pending_path: None,
+        }
+    }
+
+    pub fn current(&self) -> Option<&RecordingInfo> {
+        self.list.get(self.selected)
+    }
+}
+
+impl Default for RecordingsBrowser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// State for config settings overlay
+#[derive(Default)]
+pub struct ConfigOverlay {
+    pub selected: usize,
+    pub input_buffer: String,
+}
+
+impl ConfigOverlay {
+    pub const fn new() -> Self {
+        Self {
+            selected: 0,
+            input_buffer: String::new(),
+        }
+    }
+}
+
+use super::AppAction;
+
+/// UI feedback state (errors, status, loading indicators)
+#[derive(Default)]
+pub struct UiFeedback {
+    pub last_error: Option<String>,
+    pub status_message: Option<String>,
+    pub pending_action: Option<AppAction>,
+    pub bloat_loading: bool,
+    pub spinner_frame: u8,
+}
+
+impl UiFeedback {
+    pub const fn new() -> Self {
+        Self {
+            last_error: None,
+            status_message: None,
+            pending_action: None,
+            bloat_loading: false,
+            spinner_frame: 0,
+        }
+    }
+
+    /// Take pending action, leaving None in its place
+    pub fn take_action(&mut self) -> Option<AppAction> {
+        self.pending_action.take()
     }
 }
 

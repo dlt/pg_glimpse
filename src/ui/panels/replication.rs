@@ -153,7 +153,7 @@ fn render_physical_replication(
         )
         .highlight_symbol("\u{25ba} ");
 
-    frame.render_stateful_widget(table, table_area, &mut app.replication_table_state);
+    frame.render_stateful_widget(table, table_area, &mut app.panels.replication);
 }
 
 fn render_replication_slots(

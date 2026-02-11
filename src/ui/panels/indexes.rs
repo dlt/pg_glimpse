@@ -45,8 +45,8 @@ pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {
     }
 
     let sort_indicator = |col: IndexSortColumn| -> &str {
-        if app.indexes.sort_column == col {
-            if app.indexes.sort_ascending {
+        if app.panels.indexes.sort_column == col {
+            if app.panels.indexes.sort_ascending {
                 " \u{2191}"
             } else {
                 " \u{2193}"
@@ -144,5 +144,5 @@ pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {
     ];
 
     let table = styled_table(rows, widths, header, block);
-    frame.render_stateful_widget(table, area, &mut app.indexes.state);
+    frame.render_stateful_widget(table, area, &mut app.panels.indexes.state);
 }

@@ -219,7 +219,7 @@ pub async fn run_replay(path: &Path, config: AppConfig) -> Result<()> {
         }
 
         // Process pending actions (only SaveConfig matters in replay)
-        if matches!(app.pending_action.take(), Some(AppAction::SaveConfig)) {
+        if matches!(app.feedback.take_action(), Some(AppAction::SaveConfig)) {
             app.config.save();
         }
     }

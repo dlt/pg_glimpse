@@ -221,7 +221,7 @@ pub async fn run(cli: Cli) -> Result<()> {
                             Ok(snap) => {
                                 if let Some(ref mut rec) = recorder {
                                     if let Err(e) = rec.record(&snap) {
-                                        app.status_message = Some(format!("Recording failed: {e}"));
+                                        app.feedback.status_message = Some(format!("Recording failed: {e}"));
                                     }
                                 }
                                 app.update(snap);
@@ -231,30 +231,30 @@ pub async fn run(cli: Cli) -> Result<()> {
                             }
                         }
                         DbResult::CancelQuery(pid, Ok(true)) => {
-                            app.status_message = Some(format!("Cancelled query on PID {pid}"));
+                            app.feedback.status_message = Some(format!("Cancelled query on PID {pid}"));
                             let _ = cmd_tx.try_send(DbCommand::FetchSnapshot);
                         }
                         DbResult::CancelQuery(pid, Ok(false))
                         | DbResult::TerminateBackend(pid, Ok(false)) => {
-                            app.status_message = Some(format!("PID {pid} not found or already finished"));
+                            app.feedback.status_message = Some(format!("PID {pid} not found or already finished"));
                         }
                         DbResult::CancelQuery(_, Err(e)) => {
-                            app.status_message = Some(format!("Cancel failed: {e}"));
+                            app.feedback.status_message = Some(format!("Cancel failed: {e}"));
                         }
                         DbResult::TerminateBackend(pid, Ok(true)) => {
-                            app.status_message = Some(format!("Terminated backend PID {pid}"));
+                            app.feedback.status_message = Some(format!("Terminated backend PID {pid}"));
                             let _ = cmd_tx.try_send(DbCommand::FetchSnapshot);
                         }
                         DbResult::TerminateBackend(_, Err(e)) => {
-                            app.status_message = Some(format!("Terminate failed: {e}"));
+                            app.feedback.status_message = Some(format!("Terminate failed: {e}"));
                         }
                         DbResult::CancelQueries(results) => {
                             let total = results.len();
                             let succeeded = results.iter().filter(|(_, ok)| *ok).count();
                             if succeeded == total {
-                                app.status_message = Some(format!("Cancelled {succeeded}/{total} queries"));
+                                app.feedback.status_message = Some(format!("Cancelled {succeeded}/{total} queries"));
                             } else {
-                                app.status_message = Some(format!("Cancelled {}/{} queries ({} already finished)", succeeded, total, total - succeeded));
+                                app.feedback.status_message = Some(format!("Cancelled {}/{} queries ({} already finished)", succeeded, total, total - succeeded));
                             }
                             let _ = cmd_tx.try_send(DbCommand::FetchSnapshot);
                         }
@@ -262,24 +262,24 @@ pub async fn run(cli: Cli) -> Result<()> {
                             let total = results.len();
                             let succeeded = results.iter().filter(|(_, ok)| *ok).count();
                             if succeeded == total {
-                                app.status_message = Some(format!("Terminated {succeeded}/{total} backends"));
+                                app.feedback.status_message = Some(format!("Terminated {succeeded}/{total} backends"));
                             } else {
-                                app.status_message = Some(format!("Terminated {}/{} backends ({} already finished)", succeeded, total, total - succeeded));
+                                app.feedback.status_message = Some(format!("Terminated {}/{} backends ({} already finished)", succeeded, total, total - succeeded));
                             }
                             let _ = cmd_tx.try_send(DbCommand::FetchSnapshot);
                         }
                         DbResult::BloatData(Ok((table_bloat, index_bloat))) => {
-                            app.bloat_loading = false;
+                            app.feedback.bloat_loading = false;
                             app.apply_bloat_data(&table_bloat, &index_bloat);
                             let table_count = table_bloat.len();
                             let index_count = index_bloat.len();
-                            app.status_message = Some(format!(
+                            app.feedback.status_message = Some(format!(
                                 "Bloat estimates refreshed ({table_count} tables, {index_count} indexes)"
                             ));
                         }
                         DbResult::BloatData(Err(e)) => {
-                            app.bloat_loading = false;
-                            app.status_message = Some(format!("Bloat estimation failed: {e}"));
+                            app.feedback.bloat_loading = false;
+                            app.feedback.status_message = Some(format!("Bloat estimation failed: {e}"));
                         }
                     }
                 }
@@ -290,14 +290,14 @@ pub async fn run(cli: Cli) -> Result<()> {
                 }
             }
             _ = spinner_interval.tick() => {
-                if app.bloat_loading {
-                    app.spinner_frame = app.spinner_frame.wrapping_add(1);
+                if app.feedback.bloat_loading {
+                    app.feedback.spinner_frame = app.feedback.spinner_frame.wrapping_add(1);
                 }
             }
         }
 
         // Process pending actions
-        if let Some(action) = app.pending_action.take() {
+        if let Some(action) = app.feedback.take_action() {
             match action {
                 AppAction::ForceRefresh => {
                     let _ = cmd_tx.try_send(DbCommand::FetchSnapshot);
@@ -331,7 +331,7 @@ pub async fn run(cli: Cli) -> Result<()> {
         }
 
         // Check if user selected a recording to replay
-        if let Some(replay_path) = app.pending_replay_path.take() {
+        if let Some(replay_path) = app.recordings.pending_path.take() {
             // Run replay, then return to live mode
             run_replay(&replay_path, app.config.clone()).await?;
 
