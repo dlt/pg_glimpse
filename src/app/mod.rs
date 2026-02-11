@@ -1,0 +1,1383 @@
+//! Application state and key handling.
+
+mod actions;
+mod panels;
+mod sorting;
+mod state;
+
+pub use actions::AppAction;
+pub use panels::{BottomPanel, ViewMode};
+pub use sorting::{
+    IndexSortColumn, SortColumn, SortColumnTrait, StatementSortColumn, TableStatSortColumn,
+};
+pub use state::{ConnectionInfo, FilterState, MetricsHistory, ReplayState, TableViewState};
+
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
+use nucleo_matcher::{Config as MatcherConfig, Matcher};
+use ratatui::widgets::TableState;
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+use crate::config::{AppConfig, ConfigItem};
+use crate::db::models::{PgSnapshot, ServerInfo};
+use crate::db::queries::{IndexBloat, TableBloat};
+use crate::recorder::RecordingInfo;
+use crate::ui::theme;
+
+use sorting::{sort_by_key, sort_by_key_partial, Filterable};
+
+/// Handle navigation keys for simple table panels (no sorting/filtering).
+/// Standalone function to avoid borrow checker issues with &mut self.
+fn simple_table_nav(
+    key: KeyEvent,
+    state: &mut TableState,
+    len: usize,
+    inspect_mode: ViewMode,
+    overlay_scroll: &mut u16,
+    view_mode: &mut ViewMode,
+) {
+    match key.code {
+        KeyCode::Up | KeyCode::Char('k') => {
+            let i = state.selected().unwrap_or(0);
+            state.select(Some(i.saturating_sub(1)));
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            let max = len.saturating_sub(1);
+            let i = state.selected().unwrap_or(0);
+            state.select(Some((i + 1).min(max)));
+        }
+        KeyCode::Enter => {
+            if len > 0 {
+                if state.selected().is_none() {
+                    state.select(Some(0));
+                }
+                *overlay_scroll = 0;
+                *view_mode = inspect_mode;
+            }
+        }
+        _ => {}
+    }
+}
+
+pub struct App {
+    pub running: bool,
+    pub paused: bool,
+    pub snapshot: Option<PgSnapshot>,
+    pub view_mode: ViewMode,
+    pub bottom_panel: BottomPanel,
+
+    // Sortable panel views
+    pub queries: TableViewState<SortColumn>,
+    pub indexes: TableViewState<IndexSortColumn>,
+    pub statements: TableViewState<StatementSortColumn>,
+    pub table_stats: TableViewState<TableStatSortColumn>,
+
+    // Non-sortable panel views (simple TableState)
+    pub replication_table_state: TableState,
+    pub blocking_table_state: TableState,
+    pub vacuum_table_state: TableState,
+    pub wraparound_table_state: TableState,
+    pub settings_table_state: TableState,
+    pub extensions_table_state: TableState,
+
+    pub metrics: MetricsHistory,
+
+    pub server_info: ServerInfo,
+    pub connection: ConnectionInfo,
+    pub refresh_interval_secs: u64,
+
+    pub last_error: Option<String>,
+    pub status_message: Option<String>,
+    pub pending_action: Option<AppAction>,
+    pub bloat_loading: bool,
+    pub spinner_frame: u8,
+
+    pub config: AppConfig,
+    pub config_selected: usize,
+    pub config_input_buffer: String,
+
+    pub filter: FilterState,
+    pub replay: Option<ReplayState>,
+    pub overlay_scroll: u16,
+
+    // Recordings browser state
+    pub recordings_list: Vec<RecordingInfo>,
+    pub recordings_selected: usize,
+    pub pending_replay_path: Option<PathBuf>,
+}
+
+impl App {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        host: String,
+        port: u16,
+        dbname: String,
+        user: String,
+        refresh: u64,
+        history_len: usize,
+        config: AppConfig,
+        server_info: ServerInfo,
+    ) -> Self {
+        Self {
+            running: true,
+            paused: false,
+            snapshot: None,
+            view_mode: ViewMode::Normal,
+            bottom_panel: BottomPanel::Queries,
+            queries: TableViewState::new(SortColumn::Duration, false),
+            indexes: TableViewState::new(IndexSortColumn::Scans, true),
+            statements: TableViewState::new(StatementSortColumn::TotalTime, false),
+            table_stats: TableViewState::new(TableStatSortColumn::DeadTuples, false),
+            replication_table_state: TableState::default(),
+            blocking_table_state: TableState::default(),
+            vacuum_table_state: TableState::default(),
+            wraparound_table_state: TableState::default(),
+            settings_table_state: TableState::default(),
+            extensions_table_state: TableState::default(),
+            metrics: MetricsHistory::new(history_len),
+            server_info,
+            connection: ConnectionInfo::new(host, port, dbname, user),
+            refresh_interval_secs: refresh,
+            last_error: None,
+            status_message: None,
+            pending_action: None,
+            bloat_loading: false,
+            spinner_frame: 0,
+            config,
+            config_selected: 0,
+            config_input_buffer: String::new(),
+            filter: FilterState::default(),
+            replay: None,
+            overlay_scroll: 0,
+            recordings_list: vec![],
+            recordings_selected: 0,
+            pending_replay_path: None,
+        }
+    }
+
+    pub fn set_ssl_mode_label(&mut self, label: &str) {
+        self.connection.set_ssl_mode(label);
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_replay(
+        host: String,
+        port: u16,
+        dbname: String,
+        user: String,
+        history_len: usize,
+        config: AppConfig,
+        server_info: ServerInfo,
+        filename: String,
+        total_snapshots: usize,
+    ) -> Self {
+        let mut app = Self::new(host, port, dbname, user, 0, history_len, config, server_info);
+        app.replay = Some(ReplayState::new(filename, total_snapshots));
+        app
+    }
+
+    /// Returns true if in replay mode
+    pub const fn is_replay_mode(&self) -> bool {
+        self.replay.is_some()
+    }
+
+    pub fn update(&mut self, mut snapshot: PgSnapshot) {
+        // Update metrics history
+        self.metrics.push_snapshot_metrics(&snapshot);
+        self.metrics.calculate_rates(&snapshot);
+
+        // Preserve bloat data from previous snapshot
+        if let Some(ref old_snap) = self.snapshot {
+            // Build lookup maps from old snapshot's bloat data
+            let table_bloat: HashMap<String, (Option<i64>, Option<f64>)> = old_snap
+                .table_stats
+                .iter()
+                .filter(|t| t.bloat_pct.is_some())
+                .map(|t| {
+                    let key = format!("{}.{}", t.schemaname, t.relname);
+                    (key, (t.bloat_bytes, t.bloat_pct))
+                })
+                .collect();
+
+            let index_bloat: HashMap<String, (Option<i64>, Option<f64>)> = old_snap
+                .indexes
+                .iter()
+                .filter(|i| i.bloat_pct.is_some())
+                .map(|i| {
+                    let key = format!("{}.{}", i.schemaname, i.index_name);
+                    (key, (i.bloat_bytes, i.bloat_pct))
+                })
+                .collect();
+
+            // Apply to new snapshot
+            for table in &mut snapshot.table_stats {
+                let key = format!("{}.{}", table.schemaname, table.relname);
+                if let Some((bytes, pct)) = table_bloat.get(&key) {
+                    table.bloat_bytes = *bytes;
+                    table.bloat_pct = *pct;
+                }
+            }
+
+            for index in &mut snapshot.indexes {
+                let key = format!("{}.{}", index.schemaname, index.index_name);
+                if let Some((bytes, pct)) = index_bloat.get(&key) {
+                    index.bloat_bytes = *bytes;
+                    index.bloat_pct = *pct;
+                }
+            }
+        }
+
+        self.snapshot = Some(snapshot);
+        self.last_error = None;
+    }
+
+    pub fn update_error(&mut self, err: String) {
+        self.last_error = Some(err);
+    }
+
+    /// Apply bloat estimates to current snapshot's `table_stats` and indexes
+    pub fn apply_bloat_data(
+        &mut self,
+        table_bloat: &HashMap<String, TableBloat>,
+        index_bloat: &HashMap<String, IndexBloat>,
+    ) {
+        if let Some(ref mut snapshot) = self.snapshot {
+            // Apply table bloat
+            for table in &mut snapshot.table_stats {
+                let key = format!("{}.{}", table.schemaname, table.relname);
+                if let Some(bloat) = table_bloat.get(&key) {
+                    table.bloat_bytes = Some(bloat.bloat_bytes);
+                    table.bloat_pct = Some(bloat.bloat_pct);
+                    table.bloat_source = Some(bloat.source);
+                }
+            }
+            // Apply index bloat
+            for index in &mut snapshot.indexes {
+                let key = format!("{}.{}", index.schemaname, index.index_name);
+                if let Some(bloat) = index_bloat.get(&key) {
+                    index.bloat_bytes = Some(bloat.bloat_bytes);
+                    index.bloat_pct = Some(bloat.bloat_pct);
+                    index.bloat_source = Some(bloat.source);
+                }
+            }
+        }
+    }
+
+    /// Check if fuzzy filter should be applied for the given panel
+    fn should_apply_filter(&self, panel: BottomPanel) -> bool {
+        self.bottom_panel == panel
+            && !self.filter.text.is_empty()
+            && (self.filter.active || self.view_mode == ViewMode::Filter)
+    }
+
+    /// Apply fuzzy filter to indices, retaining only those that match the filter text.
+    fn apply_fuzzy_filter<T: Filterable>(&self, indices: &mut Vec<usize>, items: &[T]) {
+        let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
+        let pattern =
+            Pattern::parse(&self.filter.text, CaseMatching::Ignore, Normalization::Smart);
+        indices.retain(|&i| {
+            let haystack = items[i].filter_string();
+            let mut buf = Vec::new();
+            pattern
+                .score(
+                    nucleo_matcher::Utf32Str::new(&haystack, &mut buf),
+                    &mut matcher,
+                )
+                .is_some()
+        });
+    }
+
+    pub fn sorted_query_indices(&self) -> Vec<usize> {
+        let Some(snap) = &self.snapshot else {
+            return vec![];
+        };
+        let mut indices: Vec<usize> = (0..snap.active_queries.len()).collect();
+
+        if self.should_apply_filter(BottomPanel::Queries) {
+            self.apply_fuzzy_filter(&mut indices, &snap.active_queries);
+        }
+
+        let asc = self.queries.sort_ascending;
+        let q = &snap.active_queries;
+        match self.queries.sort_column {
+            SortColumn::Pid => sort_by_key(&mut indices, q, asc, |x| x.pid),
+            SortColumn::Duration => sort_by_key_partial(&mut indices, q, asc, |x| x.duration_secs),
+            SortColumn::State => sort_by_key(&mut indices, q, asc, |x| x.state.clone()),
+            SortColumn::User => sort_by_key(&mut indices, q, asc, |x| x.usename.clone()),
+        }
+        indices
+    }
+
+    pub fn selected_query_pid(&self) -> Option<i32> {
+        let snap = self.snapshot.as_ref()?;
+        let idx = self.queries.selected()?;
+        let indices = self.sorted_query_indices();
+        let &real_idx = indices.get(idx)?;
+        Some(snap.active_queries[real_idx].pid)
+    }
+
+    /// Get PIDs of all queries matching the current filter
+    pub fn get_filtered_pids(&self) -> Vec<i32> {
+        let Some(snap) = &self.snapshot else {
+            return vec![];
+        };
+        let indices = self.sorted_query_indices();
+        indices
+            .iter()
+            .map(|&i| snap.active_queries[i].pid)
+            .collect()
+    }
+
+    pub fn sorted_index_indices(&self) -> Vec<usize> {
+        let Some(snap) = &self.snapshot else {
+            return vec![];
+        };
+        let mut indices: Vec<usize> = (0..snap.indexes.len()).collect();
+
+        if self.should_apply_filter(BottomPanel::Indexes) {
+            self.apply_fuzzy_filter(&mut indices, &snap.indexes);
+        }
+
+        let asc = self.indexes.sort_ascending;
+        let idx = &snap.indexes;
+        match self.indexes.sort_column {
+            IndexSortColumn::Scans => sort_by_key(&mut indices, idx, asc, |x| x.idx_scan),
+            IndexSortColumn::Size => sort_by_key(&mut indices, idx, asc, |x| x.index_size_bytes),
+            IndexSortColumn::Name => sort_by_key(&mut indices, idx, asc, |x| x.index_name.clone()),
+            IndexSortColumn::TupRead => sort_by_key(&mut indices, idx, asc, |x| x.idx_tup_read),
+            IndexSortColumn::TupFetch => sort_by_key(&mut indices, idx, asc, |x| x.idx_tup_fetch),
+        }
+        indices
+    }
+
+    pub fn sorted_stmt_indices(&self) -> Vec<usize> {
+        let Some(snap) = &self.snapshot else {
+            return vec![];
+        };
+        let mut indices: Vec<usize> = (0..snap.stat_statements.len()).collect();
+
+        if self.should_apply_filter(BottomPanel::Statements) {
+            self.apply_fuzzy_filter(&mut indices, &snap.stat_statements);
+        }
+
+        let asc = self.statements.sort_ascending;
+        let s = &snap.stat_statements;
+        match self.statements.sort_column {
+            StatementSortColumn::TotalTime => {
+                sort_by_key_partial(&mut indices, s, asc, |x| x.total_exec_time)
+            }
+            StatementSortColumn::MeanTime => {
+                sort_by_key_partial(&mut indices, s, asc, |x| x.mean_exec_time)
+            }
+            StatementSortColumn::MaxTime => {
+                sort_by_key_partial(&mut indices, s, asc, |x| x.max_exec_time)
+            }
+            StatementSortColumn::Stddev => {
+                sort_by_key_partial(&mut indices, s, asc, |x| x.stddev_exec_time)
+            }
+            StatementSortColumn::Calls => sort_by_key(&mut indices, s, asc, |x| x.calls),
+            StatementSortColumn::Rows => sort_by_key(&mut indices, s, asc, |x| x.rows),
+            StatementSortColumn::HitRatio => {
+                sort_by_key_partial(&mut indices, s, asc, |x| x.hit_ratio)
+            }
+            StatementSortColumn::SharedReads => {
+                sort_by_key(&mut indices, s, asc, |x| x.shared_blks_read)
+            }
+            StatementSortColumn::IoTime => {
+                sort_by_key_partial(&mut indices, s, asc, |x| x.blk_read_time + x.blk_write_time)
+            }
+            StatementSortColumn::Temp => {
+                sort_by_key(&mut indices, s, asc, |x| x.temp_blks_read + x.temp_blks_written)
+            }
+        }
+        indices
+    }
+
+    pub fn sorted_table_stat_indices(&self) -> Vec<usize> {
+        let Some(snap) = &self.snapshot else {
+            return vec![];
+        };
+        let mut indices: Vec<usize> = (0..snap.table_stats.len()).collect();
+
+        if self.should_apply_filter(BottomPanel::TableStats) {
+            self.apply_fuzzy_filter(&mut indices, &snap.table_stats);
+        }
+
+        let asc = self.table_stats.sort_ascending;
+        let t = &snap.table_stats;
+        match self.table_stats.sort_column {
+            TableStatSortColumn::DeadTuples => sort_by_key(&mut indices, t, asc, |x| x.n_dead_tup),
+            TableStatSortColumn::Size => sort_by_key(&mut indices, t, asc, |x| x.total_size_bytes),
+            TableStatSortColumn::Name => sort_by_key(&mut indices, t, asc, |x| x.relname.clone()),
+            TableStatSortColumn::SeqScan => sort_by_key(&mut indices, t, asc, |x| x.seq_scan),
+            TableStatSortColumn::IdxScan => sort_by_key(&mut indices, t, asc, |x| x.idx_scan),
+            TableStatSortColumn::DeadRatio => {
+                sort_by_key_partial(&mut indices, t, asc, |x| x.dead_ratio)
+            }
+        }
+        indices
+    }
+
+    pub fn sorted_settings_indices(&self) -> Vec<usize> {
+        let mut indices: Vec<usize> = (0..self.server_info.settings.len()).collect();
+
+        if self.should_apply_filter(BottomPanel::Settings) {
+            self.apply_fuzzy_filter(&mut indices, &self.server_info.settings);
+        }
+
+        // Settings are already sorted by category, name from the query
+        indices
+    }
+
+    pub fn sorted_extensions_indices(&self) -> Vec<usize> {
+        let mut indices: Vec<usize> = (0..self.server_info.extensions_list.len()).collect();
+
+        if self.should_apply_filter(BottomPanel::Extensions) {
+            self.apply_fuzzy_filter(&mut indices, &self.server_info.extensions_list);
+        }
+
+        // Extensions are already sorted by name from the query
+        indices
+    }
+
+    fn copy_to_clipboard(&mut self, text: &str) {
+        match arboard::Clipboard::new().and_then(|mut cb| cb.set_text(text)) {
+            Ok(()) => {
+                let preview: String = text.chars().take(40).collect();
+                let suffix = if text.len() > 40 { "..." } else { "" };
+                self.status_message = Some(format!("Copied: {preview}{suffix}"));
+            }
+            Err(e) => {
+                self.status_message = Some(format!("Clipboard error: {e}"));
+            }
+        }
+    }
+
+    fn yank_selected(&mut self) {
+        let Some(snap) = &self.snapshot else {
+            return;
+        };
+        match self.bottom_panel {
+            BottomPanel::Queries => {
+                let idx = self.queries.selected().unwrap_or(0);
+                let indices = self.sorted_query_indices();
+                if let Some(&real_idx) = indices.get(idx) {
+                    if let Some(ref q) = snap.active_queries[real_idx].query {
+                        let text = q.clone();
+                        self.copy_to_clipboard(&text);
+                    }
+                }
+            }
+            BottomPanel::Indexes => {
+                let idx = self.indexes.selected().unwrap_or(0);
+                let indices = self.sorted_index_indices();
+                if let Some(&real_idx) = indices.get(idx) {
+                    let text = snap.indexes[real_idx].index_definition.clone();
+                    self.copy_to_clipboard(&text);
+                }
+            }
+            BottomPanel::Statements => {
+                let idx = self.statements.selected().unwrap_or(0);
+                let indices = self.sorted_stmt_indices();
+                if let Some(&real_idx) = indices.get(idx) {
+                    let text = snap.stat_statements[real_idx].query.clone();
+                    self.copy_to_clipboard(&text);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn switch_panel(&mut self, target: BottomPanel) {
+        if self.bottom_panel == target {
+            // Toggle back to Queries
+            self.bottom_panel = BottomPanel::Queries;
+        } else {
+            self.bottom_panel = target;
+        }
+        // Clear filter state when switching panels
+        self.filter.clear();
+        self.view_mode = ViewMode::Normal;
+    }
+
+    fn reset_panel_selection(&mut self) {
+        match self.bottom_panel {
+            BottomPanel::Queries => self.queries.select_first(),
+            BottomPanel::Indexes => self.indexes.select_first(),
+            BottomPanel::Statements => self.statements.select_first(),
+            BottomPanel::TableStats => self.table_stats.select_first(),
+            BottomPanel::Replication => self.replication_table_state.select(Some(0)),
+            BottomPanel::Settings => self.settings_table_state.select(Some(0)),
+            BottomPanel::Extensions => self.extensions_table_state.select(Some(0)),
+            _ => {}
+        }
+    }
+
+    fn handle_queries_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.queries.select_prev();
+                self.status_message = None;
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let max = self.sorted_query_indices().len();
+                self.queries.select_next(max);
+                self.status_message = None;
+            }
+            KeyCode::Enter | KeyCode::Char('i') => {
+                if self.selected_query_pid().is_some() {
+                    self.overlay_scroll = 0;
+                    self.view_mode = ViewMode::Inspect;
+                }
+            }
+            KeyCode::Char('K') if self.replay.is_none() => {
+                if let Some(pid) = self.selected_query_pid() {
+                    let filtered_pids = self.get_filtered_pids();
+                    if self.filter.active && filtered_pids.len() > 1 {
+                        // Multiple matches - show choice dialog
+                        self.view_mode = ViewMode::ConfirmKillChoice {
+                            selected_pid: pid,
+                            all_pids: filtered_pids,
+                        };
+                    } else {
+                        // Single query - existing behavior
+                        self.view_mode = ViewMode::ConfirmKill(pid);
+                    }
+                }
+            }
+            KeyCode::Char('C') if self.replay.is_none() => {
+                if let Some(pid) = self.selected_query_pid() {
+                    let filtered_pids = self.get_filtered_pids();
+                    if self.filter.active && filtered_pids.len() > 1 {
+                        // Multiple matches - show choice dialog
+                        self.view_mode = ViewMode::ConfirmCancelChoice {
+                            selected_pid: pid,
+                            all_pids: filtered_pids,
+                        };
+                    } else {
+                        // Single query - existing behavior
+                        self.view_mode = ViewMode::ConfirmCancel(pid);
+                    }
+                }
+            }
+            KeyCode::Char('s') => {
+                self.queries.cycle_sort();
+                self.status_message = Some(format!(
+                    "Sort: {} {}",
+                    self.queries.sort_column.label(),
+                    if self.queries.sort_ascending {
+                        "\u{2191}"
+                    } else {
+                        "\u{2193}"
+                    }
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_indexes_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.indexes.select_prev();
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let max = self.sorted_index_indices().len();
+                self.indexes.select_next(max);
+            }
+            KeyCode::Enter => {
+                if self
+                    .snapshot
+                    .as_ref()
+                    .is_some_and(|s| !s.indexes.is_empty())
+                {
+                    if self.indexes.selected().is_none() {
+                        self.indexes.select_first();
+                    }
+                    self.overlay_scroll = 0;
+                    self.view_mode = ViewMode::IndexInspect;
+                }
+            }
+            KeyCode::Char('s') => {
+                self.indexes.cycle_sort();
+                // Default ascending for Name/Scans, descending for others
+                self.indexes.sort_ascending = matches!(
+                    self.indexes.sort_column,
+                    IndexSortColumn::Scans | IndexSortColumn::Name
+                );
+            }
+            KeyCode::Char('b') if self.replay.is_none() => {
+                self.pending_action = Some(AppAction::RefreshBloat);
+                self.status_message = Some("Refreshing bloat estimates...".to_string());
+                self.bloat_loading = true;
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_statements_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.statements.select_prev();
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let max = self.sorted_stmt_indices().len();
+                self.statements.select_next(max);
+            }
+            KeyCode::Enter => {
+                if self
+                    .snapshot
+                    .as_ref()
+                    .is_some_and(|s| !s.stat_statements.is_empty())
+                {
+                    if self.statements.selected().is_none() {
+                        self.statements.select_first();
+                    }
+                    self.overlay_scroll = 0;
+                    self.view_mode = ViewMode::StatementInspect;
+                }
+            }
+            KeyCode::Char('s') => {
+                self.statements.cycle_sort();
+                self.status_message = Some(format!(
+                    "Sort: {} {}",
+                    self.statements.sort_column.label(),
+                    if self.statements.sort_ascending {
+                        "\u{2191}"
+                    } else {
+                        "\u{2193}"
+                    }
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_table_stats_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.table_stats.select_prev();
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let max = self.sorted_table_stat_indices().len();
+                self.table_stats.select_next(max);
+            }
+            KeyCode::Enter => {
+                if self
+                    .snapshot
+                    .as_ref()
+                    .is_some_and(|s| !s.table_stats.is_empty())
+                {
+                    if self.table_stats.selected().is_none() {
+                        self.table_stats.select_first();
+                    }
+                    self.overlay_scroll = 0;
+                    self.view_mode = ViewMode::TableInspect;
+                }
+            }
+            KeyCode::Char('s') => {
+                self.table_stats.cycle_sort();
+                self.status_message = Some(format!(
+                    "Sort: {} {}",
+                    self.table_stats.sort_column.label(),
+                    if self.table_stats.sort_ascending {
+                        "\u{2191}"
+                    } else {
+                        "\u{2193}"
+                    }
+                ));
+            }
+            KeyCode::Char('b') if self.replay.is_none() => {
+                self.pending_action = Some(AppAction::RefreshBloat);
+                self.status_message = Some("Refreshing bloat estimates...".to_string());
+                self.bloat_loading = true;
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_replication_key(&mut self, key: KeyEvent) {
+        let len = self.snapshot.as_ref().map_or(0, |s| s.replication.len());
+        simple_table_nav(
+            key,
+            &mut self.replication_table_state,
+            len,
+            ViewMode::ReplicationInspect,
+            &mut self.overlay_scroll,
+            &mut self.view_mode,
+        );
+    }
+
+    fn handle_blocking_key(&mut self, key: KeyEvent) {
+        let len = self.snapshot.as_ref().map_or(0, |s| s.blocking_info.len());
+        simple_table_nav(
+            key,
+            &mut self.blocking_table_state,
+            len,
+            ViewMode::BlockingInspect,
+            &mut self.overlay_scroll,
+            &mut self.view_mode,
+        );
+    }
+
+    fn handle_vacuum_key(&mut self, key: KeyEvent) {
+        let len = self
+            .snapshot
+            .as_ref()
+            .map_or(0, |s| s.vacuum_progress.len());
+        simple_table_nav(
+            key,
+            &mut self.vacuum_table_state,
+            len,
+            ViewMode::VacuumInspect,
+            &mut self.overlay_scroll,
+            &mut self.view_mode,
+        );
+    }
+
+    fn handle_wraparound_key(&mut self, key: KeyEvent) {
+        let len = self.snapshot.as_ref().map_or(0, |s| s.wraparound.len());
+        simple_table_nav(
+            key,
+            &mut self.wraparound_table_state,
+            len,
+            ViewMode::WraparoundInspect,
+            &mut self.overlay_scroll,
+            &mut self.view_mode,
+        );
+    }
+
+    fn handle_settings_key(&mut self, key: KeyEvent) {
+        let len = self.sorted_settings_indices().len();
+        simple_table_nav(
+            key,
+            &mut self.settings_table_state,
+            len,
+            ViewMode::SettingsInspect,
+            &mut self.overlay_scroll,
+            &mut self.view_mode,
+        );
+    }
+
+    fn handle_extensions_key(&mut self, key: KeyEvent) {
+        let len = self.sorted_extensions_indices().len();
+        simple_table_nav(
+            key,
+            &mut self.extensions_table_state,
+            len,
+            ViewMode::ExtensionsInspect,
+            &mut self.overlay_scroll,
+            &mut self.view_mode,
+        );
+    }
+
+    fn handle_panel_key(&mut self, key: KeyEvent) {
+        match self.bottom_panel {
+            BottomPanel::Queries => self.handle_queries_key(key),
+            BottomPanel::Indexes => self.handle_indexes_key(key),
+            BottomPanel::Statements => self.handle_statements_key(key),
+            BottomPanel::TableStats => self.handle_table_stats_key(key),
+            BottomPanel::Replication => self.handle_replication_key(key),
+            BottomPanel::Blocking => self.handle_blocking_key(key),
+            BottomPanel::VacuumProgress => self.handle_vacuum_key(key),
+            BottomPanel::Wraparound => self.handle_wraparound_key(key),
+            BottomPanel::Settings => self.handle_settings_key(key),
+            BottomPanel::Extensions => self.handle_extensions_key(key),
+            BottomPanel::WalIo | BottomPanel::WaitEvents => {}
+        }
+    }
+
+    // --- Modal overlay handlers ---
+
+    /// Handle simple yes/no confirmation dialogs.
+    /// On 'y'/'Y', executes the action. Any other key aborts with the given message.
+    fn handle_yes_no_confirm(&mut self, key: KeyEvent, action: AppAction, abort_msg: &str) {
+        if let KeyCode::Char('y' | 'Y') = key.code {
+            self.pending_action = Some(action);
+            self.view_mode = ViewMode::Normal;
+        } else {
+            self.view_mode = ViewMode::Normal;
+            self.status_message = Some(abort_msg.into());
+        }
+    }
+
+    /// Handle choice confirmation dialogs (single vs batch).
+    /// '1'/'o' selects single, 'a' goes to batch confirm, Esc aborts.
+    fn handle_choice_confirm(
+        &mut self,
+        key: KeyEvent,
+        single_action: AppAction,
+        batch_mode: ViewMode,
+        abort_msg: &str,
+    ) {
+        match key.code {
+            KeyCode::Char('1' | 'o') => {
+                self.pending_action = Some(single_action);
+                self.view_mode = ViewMode::Normal;
+            }
+            KeyCode::Char('a') => {
+                self.view_mode = batch_mode;
+            }
+            KeyCode::Esc => {
+                self.view_mode = ViewMode::Normal;
+                self.status_message = Some(abort_msg.into());
+            }
+            _ => {}
+        }
+    }
+
+    /// Handle overlay scroll keys, returns true if handled
+    fn handle_overlay_scroll(&mut self, key: KeyEvent) -> bool {
+        const PAGE_SIZE: u16 = 10;
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.overlay_scroll = self.overlay_scroll.saturating_sub(1);
+                true
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                self.overlay_scroll = self.overlay_scroll.saturating_add(1);
+                true
+            }
+            KeyCode::PageUp => {
+                self.overlay_scroll = self.overlay_scroll.saturating_sub(PAGE_SIZE);
+                true
+            }
+            KeyCode::PageDown => {
+                self.overlay_scroll = self.overlay_scroll.saturating_add(PAGE_SIZE);
+                true
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.overlay_scroll = self.overlay_scroll.saturating_sub(PAGE_SIZE);
+                true
+            }
+            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.overlay_scroll = self.overlay_scroll.saturating_add(PAGE_SIZE);
+                true
+            }
+            KeyCode::Char('g') => {
+                self.overlay_scroll = 0;
+                true
+            }
+            KeyCode::Char('G') => {
+                self.overlay_scroll = u16::MAX;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Get the text to copy for the current inspect overlay
+    fn get_inspect_copy_text(&self) -> Option<String> {
+        match self.view_mode {
+            ViewMode::Inspect => {
+                let snap = self.snapshot.as_ref()?;
+                let idx = self.queries.selected().unwrap_or(0);
+                let indices = self.sorted_query_indices();
+                let &real_idx = indices.get(idx)?;
+                snap.active_queries[real_idx].query.clone()
+            }
+            ViewMode::IndexInspect => {
+                let snap = self.snapshot.as_ref()?;
+                let idx = self.indexes.selected().unwrap_or(0);
+                let indices = self.sorted_index_indices();
+                let &real_idx = indices.get(idx)?;
+                Some(snap.indexes[real_idx].index_definition.clone())
+            }
+            ViewMode::StatementInspect => {
+                let snap = self.snapshot.as_ref()?;
+                let idx = self.statements.selected().unwrap_or(0);
+                let indices = self.sorted_stmt_indices();
+                let &real_idx = indices.get(idx)?;
+                Some(snap.stat_statements[real_idx].query.clone())
+            }
+            ViewMode::ReplicationInspect => {
+                let snap = self.snapshot.as_ref()?;
+                let sel = self.replication_table_state.selected().unwrap_or(0);
+                let r = snap.replication.get(sel)?;
+                Some(r.application_name.clone().unwrap_or_default())
+            }
+            ViewMode::TableInspect => {
+                let snap = self.snapshot.as_ref()?;
+                let sel = self.table_stats.selected().unwrap_or(0);
+                let indices = self.sorted_table_stat_indices();
+                let &real_idx = indices.get(sel)?;
+                let t = &snap.table_stats[real_idx];
+                Some(format!("{}.{}", t.schemaname, t.relname))
+            }
+            ViewMode::BlockingInspect => {
+                let snap = self.snapshot.as_ref()?;
+                let sel = self.blocking_table_state.selected().unwrap_or(0);
+                let info = snap.blocking_info.get(sel)?;
+                Some(info.blocked_query.clone().unwrap_or_default())
+            }
+            ViewMode::VacuumInspect => {
+                let snap = self.snapshot.as_ref()?;
+                let sel = self.vacuum_table_state.selected().unwrap_or(0);
+                let vac = snap.vacuum_progress.get(sel)?;
+                Some(vac.table_name.clone())
+            }
+            ViewMode::WraparoundInspect => {
+                let snap = self.snapshot.as_ref()?;
+                let sel = self.wraparound_table_state.selected().unwrap_or(0);
+                let wrap = snap.wraparound.get(sel)?;
+                Some(wrap.datname.clone())
+            }
+            ViewMode::SettingsInspect => {
+                let indices = self.sorted_settings_indices();
+                let &idx = indices.get(self.settings_table_state.selected().unwrap_or(0))?;
+                let s = &self.server_info.settings[idx];
+                Some(format!("{} = {}", s.name, s.setting))
+            }
+            ViewMode::ExtensionsInspect => {
+                let indices = self.sorted_extensions_indices();
+                let &idx = indices.get(self.extensions_table_state.selected().unwrap_or(0))?;
+                Some(self.server_info.extensions_list[idx].name.clone())
+            }
+            _ => None,
+        }
+    }
+
+    /// Unified handler for all inspect overlay key events.
+    /// `allow_enter_close` is true for Query inspect (legacy behavior).
+    fn handle_inspect_overlay_key(&mut self, key: KeyEvent, allow_enter_close: bool) {
+        let close = match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => true,
+            KeyCode::Enter if allow_enter_close => true,
+            _ => false,
+        };
+
+        if close {
+            self.overlay_scroll = 0;
+            self.view_mode = ViewMode::Normal;
+            return;
+        }
+
+        if key.code == KeyCode::Char('y') {
+            if let Some(text) = self.get_inspect_copy_text() {
+                self.copy_to_clipboard(&text);
+            }
+            return;
+        }
+
+        self.handle_overlay_scroll(key);
+    }
+
+    fn handle_config_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.pending_action = Some(AppAction::SaveConfig);
+                self.view_mode = ViewMode::Normal;
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.config_selected > 0 {
+                    self.config_selected -= 1;
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if self.config_selected < ConfigItem::ALL.len() - 1 {
+                    self.config_selected += 1;
+                }
+            }
+            KeyCode::Left | KeyCode::Char('h') => {
+                self.config_adjust(-1);
+            }
+            KeyCode::Right | KeyCode::Char('l') => {
+                self.config_adjust(1);
+            }
+            KeyCode::Enter => {
+                // Enter edit mode for RecordingsDir
+                if ConfigItem::ALL[self.config_selected] == ConfigItem::RecordingsDir {
+                    self.config_input_buffer =
+                        self.config.recordings_dir.clone().unwrap_or_default();
+                    self.view_mode = ViewMode::ConfigEditRecordingsDir;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_config_edit_recordings_dir_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                // Cancel editing
+                self.config_input_buffer.clear();
+                self.view_mode = ViewMode::Config;
+            }
+            KeyCode::Enter => {
+                // Save the input
+                let input = self.config_input_buffer.trim();
+                if input.is_empty() {
+                    self.config.recordings_dir = None;
+                } else {
+                    self.config.recordings_dir = Some(input.to_string());
+                }
+                self.config_input_buffer.clear();
+                self.view_mode = ViewMode::Config;
+            }
+            KeyCode::Backspace => {
+                self.config_input_buffer.pop();
+            }
+            KeyCode::Char(c) => {
+                self.config_input_buffer.push(c);
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_help_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
+                self.overlay_scroll = 0;
+                self.view_mode = ViewMode::Normal;
+            }
+            _ => {
+                self.handle_overlay_scroll(key);
+            }
+        }
+    }
+
+    fn handle_recordings_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.view_mode = ViewMode::Normal;
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.recordings_selected > 0 {
+                    self.recordings_selected -= 1;
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if !self.recordings_list.is_empty()
+                    && self.recordings_selected < self.recordings_list.len() - 1
+                {
+                    self.recordings_selected += 1;
+                }
+            }
+            KeyCode::Enter => {
+                if let Some(recording) = self.recordings_list.get(self.recordings_selected) {
+                    self.pending_replay_path = Some(recording.path.clone());
+                    self.running = false;
+                }
+            }
+            KeyCode::Char('d') => {
+                if let Some(recording) = self.recordings_list.get(self.recordings_selected) {
+                    self.view_mode = ViewMode::ConfirmDeleteRecording(recording.path.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_confirm_delete_recording_key(&mut self, key: KeyEvent, path: PathBuf) {
+        if let KeyCode::Char('y' | 'Y') = key.code {
+            if crate::recorder::Recorder::delete_recording(&path).is_ok() {
+                self.status_message = Some("Recording deleted".into());
+                // Refresh the list
+                self.recordings_list =
+                    crate::recorder::Recorder::list_recordings(self.config.recordings_dir.as_deref());
+                // Adjust selection if needed
+                if self.recordings_selected >= self.recordings_list.len()
+                    && !self.recordings_list.is_empty()
+                {
+                    self.recordings_selected = self.recordings_list.len() - 1;
+                }
+            } else {
+                self.status_message = Some("Failed to delete recording".into());
+            }
+            self.view_mode = ViewMode::Recordings;
+        } else {
+            self.view_mode = ViewMode::Recordings;
+        }
+    }
+
+    fn handle_filter_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                self.filter.clear();
+                self.view_mode = ViewMode::Normal;
+                self.reset_panel_selection();
+            }
+            KeyCode::Enter => {
+                self.filter.active = !self.filter.text.is_empty();
+                self.view_mode = ViewMode::Normal;
+                self.reset_panel_selection();
+            }
+            KeyCode::Backspace => {
+                self.filter.pop_char();
+                self.reset_panel_selection();
+            }
+            KeyCode::Char(c) => {
+                self.filter.push_char(c);
+                self.reset_panel_selection();
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_normal_global_key(&mut self, key: KeyEvent) -> bool {
+        match key.code {
+            KeyCode::Char('q') | KeyCode::Esc => {
+                if self.bottom_panel == BottomPanel::Queries {
+                    self.running = false;
+                } else {
+                    self.switch_panel(BottomPanel::Queries);
+                }
+                true
+            }
+            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.running = false;
+                true
+            }
+            KeyCode::Char('p') if self.replay.is_none() => {
+                self.paused = !self.paused;
+                true
+            }
+            KeyCode::Char('r') if self.replay.is_none() => {
+                self.pending_action = Some(AppAction::ForceRefresh);
+                true
+            }
+            KeyCode::Char('?') => {
+                self.overlay_scroll = 0;
+                self.view_mode = ViewMode::Help;
+                true
+            }
+            KeyCode::Char(',') => {
+                self.view_mode = ViewMode::Config;
+                true
+            }
+            KeyCode::Char('y') => {
+                self.yank_selected();
+                true
+            }
+            KeyCode::Char('L') if self.replay.is_none() => {
+                // Open recordings browser (live mode only)
+                self.recordings_list =
+                    crate::recorder::Recorder::list_recordings(self.config.recordings_dir.as_deref());
+                self.recordings_selected = 0;
+                self.view_mode = ViewMode::Recordings;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn handle_panel_switch_key(&mut self, key: KeyEvent) -> bool {
+        match key.code {
+            KeyCode::Char('Q') => {
+                self.switch_panel(BottomPanel::Queries);
+                true
+            }
+            KeyCode::Tab => {
+                self.switch_panel(BottomPanel::Blocking);
+                true
+            }
+            KeyCode::Char('w') => {
+                self.switch_panel(BottomPanel::WaitEvents);
+                true
+            }
+            KeyCode::Char('t') => {
+                self.switch_panel(BottomPanel::TableStats);
+                true
+            }
+            KeyCode::Char('R') => {
+                self.switch_panel(BottomPanel::Replication);
+                true
+            }
+            KeyCode::Char('v') => {
+                self.switch_panel(BottomPanel::VacuumProgress);
+                true
+            }
+            KeyCode::Char('x') => {
+                self.switch_panel(BottomPanel::Wraparound);
+                true
+            }
+            KeyCode::Char('I') => {
+                self.switch_panel(BottomPanel::Indexes);
+                true
+            }
+            KeyCode::Char('S') => {
+                self.switch_panel(BottomPanel::Statements);
+                true
+            }
+            KeyCode::Char('A') => {
+                self.switch_panel(BottomPanel::WalIo);
+                true
+            }
+            KeyCode::Char('P') => {
+                self.switch_panel(BottomPanel::Settings);
+                true
+            }
+            KeyCode::Char('E') => {
+                self.switch_panel(BottomPanel::Extensions);
+                true
+            }
+            KeyCode::Char('/') => {
+                if self.bottom_panel.supports_filter() {
+                    self.view_mode = ViewMode::Filter;
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn handle_key(&mut self, key: KeyEvent) {
+        // Layer 1: Modal overlays consume all input
+        match &self.view_mode {
+            ViewMode::ConfirmCancel(pid) => {
+                let action = AppAction::CancelQuery(*pid);
+                self.handle_yes_no_confirm(key, action, "Cancel aborted");
+                return;
+            }
+            ViewMode::ConfirmKill(pid) => {
+                let action = AppAction::TerminateBackend(*pid);
+                self.handle_yes_no_confirm(key, action, "Kill aborted");
+                return;
+            }
+            ViewMode::ConfirmCancelChoice {
+                selected_pid,
+                all_pids,
+            } => {
+                let action = AppAction::CancelQuery(*selected_pid);
+                let batch = ViewMode::ConfirmCancelBatch(all_pids.clone());
+                self.handle_choice_confirm(key, action, batch, "Cancel aborted");
+                return;
+            }
+            ViewMode::ConfirmKillChoice {
+                selected_pid,
+                all_pids,
+            } => {
+                let action = AppAction::TerminateBackend(*selected_pid);
+                let batch = ViewMode::ConfirmKillBatch(all_pids.clone());
+                self.handle_choice_confirm(key, action, batch, "Kill aborted");
+                return;
+            }
+            ViewMode::ConfirmCancelBatch(pids) => {
+                let action = AppAction::CancelQueries(pids.clone());
+                self.handle_yes_no_confirm(key, action, "Batch cancel aborted");
+                return;
+            }
+            ViewMode::ConfirmKillBatch(pids) => {
+                let action = AppAction::TerminateBackends(pids.clone());
+                self.handle_yes_no_confirm(key, action, "Batch kill aborted");
+                return;
+            }
+            ViewMode::Inspect => {
+                self.handle_inspect_overlay_key(key, true); // Query inspect allows Enter to close
+                return;
+            }
+            ViewMode::IndexInspect
+            | ViewMode::StatementInspect
+            | ViewMode::ReplicationInspect
+            | ViewMode::TableInspect
+            | ViewMode::BlockingInspect
+            | ViewMode::VacuumInspect
+            | ViewMode::WraparoundInspect
+            | ViewMode::SettingsInspect
+            | ViewMode::ExtensionsInspect => {
+                self.handle_inspect_overlay_key(key, false);
+                return;
+            }
+            ViewMode::Config => {
+                self.handle_config_key(key);
+                return;
+            }
+            ViewMode::ConfigEditRecordingsDir => {
+                self.handle_config_edit_recordings_dir_key(key);
+                return;
+            }
+            ViewMode::Help => {
+                self.handle_help_key(key);
+                return;
+            }
+            ViewMode::Filter => {
+                self.handle_filter_key(key);
+                return;
+            }
+            ViewMode::Recordings => {
+                self.handle_recordings_key(key);
+                return;
+            }
+            ViewMode::ConfirmDeleteRecording(ref path) => {
+                let path = path.clone();
+                self.handle_confirm_delete_recording_key(key, path);
+                return;
+            }
+            ViewMode::Normal => {}
+        }
+
+        // Layer 2: Normal mode global keys
+        if self.handle_normal_global_key(key) {
+            return;
+        }
+
+        // Layer 3: Panel-switch keys
+        if self.handle_panel_switch_key(key) {
+            return;
+        }
+
+        // Layer 4: Panel-specific keys
+        self.handle_panel_key(key);
+    }
+
+    fn config_adjust(&mut self, direction: i8) {
+        let item = ConfigItem::ALL[self.config_selected];
+        match item {
+            ConfigItem::GraphMarker => {
+                self.config.graph_marker = if direction > 0 {
+                    self.config.graph_marker.next()
+                } else {
+                    self.config.graph_marker.prev()
+                };
+            }
+            ConfigItem::ColorTheme => {
+                self.config.color_theme = if direction > 0 {
+                    self.config.color_theme.next()
+                } else {
+                    self.config.color_theme.prev()
+                };
+                theme::set_theme(self.config.color_theme.colors());
+            }
+            ConfigItem::RefreshInterval => {
+                let val = self.config.refresh_interval_secs as i64 + i64::from(direction);
+                self.config.refresh_interval_secs = val.clamp(1, 60) as u64;
+                self.refresh_interval_secs = self.config.refresh_interval_secs;
+                self.pending_action = Some(AppAction::RefreshIntervalChanged);
+            }
+            ConfigItem::WarnDuration => {
+                let val = f64::from(direction).mul_add(0.5, self.config.warn_duration_secs);
+                self.config.warn_duration_secs = val.clamp(0.1, self.config.danger_duration_secs);
+                theme::set_duration_thresholds(
+                    self.config.warn_duration_secs,
+                    self.config.danger_duration_secs,
+                );
+            }
+            ConfigItem::DangerDuration => {
+                let val = f64::from(direction).mul_add(1.0, self.config.danger_duration_secs);
+                self.config.danger_duration_secs =
+                    val.clamp(self.config.warn_duration_secs, 300.0);
+                theme::set_duration_thresholds(
+                    self.config.warn_duration_secs,
+                    self.config.danger_duration_secs,
+                );
+            }
+            ConfigItem::RecordingRetention => {
+                let step: i64 = if self.config.recording_retention_secs >= 7200 {
+                    3600
+                } else {
+                    600
+                };
+                let val =
+                    self.config.recording_retention_secs as i64 + i64::from(direction) * step;
+                self.config.recording_retention_secs = val.clamp(600, 86400) as u64;
+            }
+            ConfigItem::RecordingsDir => {
+                // Path cannot be adjusted with arrows - edit config.toml to change
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests;
