@@ -25,6 +25,9 @@ use crate::ui::theme;
 
 use sorting::{sort_by_key, sort_by_key_partial, Filterable};
 
+/// Max characters to show in clipboard preview messages
+const CLIPBOARD_PREVIEW_LEN: usize = 40;
+
 pub struct App {
     // Core runtime
     pub running: bool,
@@ -377,8 +380,8 @@ impl App {
     fn copy_to_clipboard(&mut self, text: &str) {
         match arboard::Clipboard::new().and_then(|mut cb| cb.set_text(text)) {
             Ok(()) => {
-                let preview: String = text.chars().take(40).collect();
-                let suffix = if text.len() > 40 { "..." } else { "" };
+                let preview: String = text.chars().take(CLIPBOARD_PREVIEW_LEN).collect();
+                let suffix = if text.len() > CLIPBOARD_PREVIEW_LEN { "..." } else { "" };
                 self.feedback.status_message = Some(format!("Copied: {preview}{suffix}"));
             }
             Err(e) => {
