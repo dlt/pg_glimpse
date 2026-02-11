@@ -207,32 +207,32 @@ impl App {
             && (self.filter.active || self.view_mode == ViewMode::Filter)
     }
 
-    /// Apply fuzzy filter to indices, retaining only those that match the filter text.
-    fn apply_fuzzy_filter<T: Filterable>(&self, indices: &mut Vec<usize>, items: &[T]) {
-        let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
-        let pattern =
-            Pattern::parse(&self.filter.text, CaseMatching::Ignore, Normalization::Smart);
-        indices.retain(|&i| {
-            let haystack = items[i].filter_string();
-            let mut buf = Vec::new();
-            pattern
-                .score(
-                    nucleo_matcher::Utf32Str::new(&haystack, &mut buf),
-                    &mut matcher,
-                )
-                .is_some()
-        });
+    /// Build indices for items, optionally applying fuzzy filter.
+    fn filtered_indices<T: Filterable>(&self, items: &[T], panel: BottomPanel) -> Vec<usize> {
+        let mut indices: Vec<usize> = (0..items.len()).collect();
+        if self.should_apply_filter(panel) {
+            let mut matcher = Matcher::new(MatcherConfig::DEFAULT);
+            let pattern =
+                Pattern::parse(&self.filter.text, CaseMatching::Ignore, Normalization::Smart);
+            indices.retain(|&i| {
+                let haystack = items[i].filter_string();
+                let mut buf = Vec::new();
+                pattern
+                    .score(
+                        nucleo_matcher::Utf32Str::new(&haystack, &mut buf),
+                        &mut matcher,
+                    )
+                    .is_some()
+            });
+        }
+        indices
     }
 
     pub fn sorted_query_indices(&self) -> Vec<usize> {
         let Some(snap) = &self.snapshot else {
             return vec![];
         };
-        let mut indices: Vec<usize> = (0..snap.active_queries.len()).collect();
-
-        if self.should_apply_filter(BottomPanel::Queries) {
-            self.apply_fuzzy_filter(&mut indices, &snap.active_queries);
-        }
+        let mut indices = self.filtered_indices(&snap.active_queries, BottomPanel::Queries);
 
         let asc = self.panels.queries.sort_ascending;
         let q = &snap.active_queries;
@@ -269,11 +269,7 @@ impl App {
         let Some(snap) = &self.snapshot else {
             return vec![];
         };
-        let mut indices: Vec<usize> = (0..snap.indexes.len()).collect();
-
-        if self.should_apply_filter(BottomPanel::Indexes) {
-            self.apply_fuzzy_filter(&mut indices, &snap.indexes);
-        }
+        let mut indices = self.filtered_indices(&snap.indexes, BottomPanel::Indexes);
 
         let asc = self.panels.indexes.sort_ascending;
         let idx = &snap.indexes;
@@ -291,11 +287,7 @@ impl App {
         let Some(snap) = &self.snapshot else {
             return vec![];
         };
-        let mut indices: Vec<usize> = (0..snap.stat_statements.len()).collect();
-
-        if self.should_apply_filter(BottomPanel::Statements) {
-            self.apply_fuzzy_filter(&mut indices, &snap.stat_statements);
-        }
+        let mut indices = self.filtered_indices(&snap.stat_statements, BottomPanel::Statements);
 
         let asc = self.panels.statements.sort_ascending;
         let s = &snap.stat_statements;
@@ -334,11 +326,7 @@ impl App {
         let Some(snap) = &self.snapshot else {
             return vec![];
         };
-        let mut indices: Vec<usize> = (0..snap.table_stats.len()).collect();
-
-        if self.should_apply_filter(BottomPanel::TableStats) {
-            self.apply_fuzzy_filter(&mut indices, &snap.table_stats);
-        }
+        let mut indices = self.filtered_indices(&snap.table_stats, BottomPanel::TableStats);
 
         let asc = self.panels.table_stats.sort_ascending;
         let t = &snap.table_stats;
@@ -356,25 +344,13 @@ impl App {
     }
 
     pub fn sorted_settings_indices(&self) -> Vec<usize> {
-        let mut indices: Vec<usize> = (0..self.server_info.settings.len()).collect();
-
-        if self.should_apply_filter(BottomPanel::Settings) {
-            self.apply_fuzzy_filter(&mut indices, &self.server_info.settings);
-        }
-
         // Settings are already sorted by category, name from the query
-        indices
+        self.filtered_indices(&self.server_info.settings, BottomPanel::Settings)
     }
 
     pub fn sorted_extensions_indices(&self) -> Vec<usize> {
-        let mut indices: Vec<usize> = (0..self.server_info.extensions_list.len()).collect();
-
-        if self.should_apply_filter(BottomPanel::Extensions) {
-            self.apply_fuzzy_filter(&mut indices, &self.server_info.extensions_list);
-        }
-
         // Extensions are already sorted by name from the query
-        indices
+        self.filtered_indices(&self.server_info.extensions_list, BottomPanel::Extensions)
     }
 
     fn copy_to_clipboard(&mut self, text: &str) {
