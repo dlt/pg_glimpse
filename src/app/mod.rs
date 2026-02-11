@@ -6,7 +6,7 @@ mod sorting;
 mod state;
 
 pub use actions::AppAction;
-pub use panels::{BottomPanel, ViewMode};
+pub use panels::{BottomPanel, ConfirmAction, InspectTarget, ViewMode};
 pub use sorting::{
     IndexSortColumn, SortColumn, SortColumnTrait, StatementSortColumn, TableStatSortColumn,
 };
@@ -431,7 +431,7 @@ impl App {
             KeyCode::Enter | KeyCode::Char('i') => {
                 if self.selected_query_pid().is_some() {
                     self.overlay_scroll = 0;
-                    self.view_mode = ViewMode::Inspect;
+                    self.view_mode = ViewMode::Inspect(InspectTarget::Query);
                 }
             }
             KeyCode::Char('K') if self.replay.is_none() => {
@@ -439,13 +439,13 @@ impl App {
                     let filtered_pids = self.get_filtered_pids();
                     if self.filter.active && filtered_pids.len() > 1 {
                         // Multiple matches - show choice dialog
-                        self.view_mode = ViewMode::ConfirmKillChoice {
+                        self.view_mode = ViewMode::Confirm(ConfirmAction::KillChoice {
                             selected_pid: pid,
                             all_pids: filtered_pids,
-                        };
+                        });
                     } else {
                         // Single query - existing behavior
-                        self.view_mode = ViewMode::ConfirmKill(pid);
+                        self.view_mode = ViewMode::Confirm(ConfirmAction::Kill(pid));
                     }
                 }
             }
@@ -454,13 +454,13 @@ impl App {
                     let filtered_pids = self.get_filtered_pids();
                     if self.filter.active && filtered_pids.len() > 1 {
                         // Multiple matches - show choice dialog
-                        self.view_mode = ViewMode::ConfirmCancelChoice {
+                        self.view_mode = ViewMode::Confirm(ConfirmAction::CancelChoice {
                             selected_pid: pid,
                             all_pids: filtered_pids,
-                        };
+                        });
                     } else {
                         // Single query - existing behavior
-                        self.view_mode = ViewMode::ConfirmCancel(pid);
+                        self.view_mode = ViewMode::Confirm(ConfirmAction::Cancel(pid));
                     }
                 }
             }
@@ -499,7 +499,7 @@ impl App {
                         self.panels.indexes.select_first();
                     }
                     self.overlay_scroll = 0;
-                    self.view_mode = ViewMode::IndexInspect;
+                    self.view_mode = ViewMode::Inspect(InspectTarget::Index);
                 }
             }
             KeyCode::Char('s') => {
@@ -538,7 +538,7 @@ impl App {
                         self.panels.statements.select_first();
                     }
                     self.overlay_scroll = 0;
-                    self.view_mode = ViewMode::StatementInspect;
+                    self.view_mode = ViewMode::Inspect(InspectTarget::Statement);
                 }
             }
             KeyCode::Char('s') => {
@@ -576,7 +576,7 @@ impl App {
                         self.panels.table_stats.select_first();
                     }
                     self.overlay_scroll = 0;
-                    self.view_mode = ViewMode::TableInspect;
+                    self.view_mode = ViewMode::Inspect(InspectTarget::Table);
                 }
             }
             KeyCode::Char('s') => {
@@ -604,7 +604,7 @@ impl App {
         let len = self.snapshot.as_ref().map_or(0, |s| s.replication.len());
         if PanelStates::simple_nav(&mut self.panels.replication, key.code, len) {
             self.overlay_scroll = 0;
-            self.view_mode = ViewMode::ReplicationInspect;
+            self.view_mode = ViewMode::Inspect(InspectTarget::Replication);
         }
     }
 
@@ -612,7 +612,7 @@ impl App {
         let len = self.snapshot.as_ref().map_or(0, |s| s.blocking_info.len());
         if PanelStates::simple_nav(&mut self.panels.blocking, key.code, len) {
             self.overlay_scroll = 0;
-            self.view_mode = ViewMode::BlockingInspect;
+            self.view_mode = ViewMode::Inspect(InspectTarget::Blocking);
         }
     }
 
@@ -623,7 +623,7 @@ impl App {
             .map_or(0, |s| s.vacuum_progress.len());
         if PanelStates::simple_nav(&mut self.panels.vacuum, key.code, len) {
             self.overlay_scroll = 0;
-            self.view_mode = ViewMode::VacuumInspect;
+            self.view_mode = ViewMode::Inspect(InspectTarget::Vacuum);
         }
     }
 
@@ -631,7 +631,7 @@ impl App {
         let len = self.snapshot.as_ref().map_or(0, |s| s.wraparound.len());
         if PanelStates::simple_nav(&mut self.panels.wraparound, key.code, len) {
             self.overlay_scroll = 0;
-            self.view_mode = ViewMode::WraparoundInspect;
+            self.view_mode = ViewMode::Inspect(InspectTarget::Wraparound);
         }
     }
 
@@ -639,7 +639,7 @@ impl App {
         let len = self.sorted_settings_indices().len();
         if PanelStates::simple_nav(&mut self.panels.settings, key.code, len) {
             self.overlay_scroll = 0;
-            self.view_mode = ViewMode::SettingsInspect;
+            self.view_mode = ViewMode::Inspect(InspectTarget::Settings);
         }
     }
 
@@ -647,7 +647,7 @@ impl App {
         let len = self.sorted_extensions_indices().len();
         if PanelStates::simple_nav(&mut self.panels.extensions, key.code, len) {
             self.overlay_scroll = 0;
-            self.view_mode = ViewMode::ExtensionsInspect;
+            self.view_mode = ViewMode::Inspect(InspectTarget::Extensions);
         }
     }
 
@@ -748,35 +748,38 @@ impl App {
 
     /// Get the text to copy for the current inspect overlay
     fn get_inspect_copy_text(&self) -> Option<String> {
-        match self.view_mode {
-            ViewMode::Inspect => {
+        let ViewMode::Inspect(target) = self.view_mode else {
+            return None;
+        };
+        match target {
+            InspectTarget::Query => {
                 let snap = self.snapshot.as_ref()?;
                 let idx = self.panels.queries.selected().unwrap_or(0);
                 let indices = self.sorted_query_indices();
                 let &real_idx = indices.get(idx)?;
                 snap.active_queries[real_idx].query.clone()
             }
-            ViewMode::IndexInspect => {
+            InspectTarget::Index => {
                 let snap = self.snapshot.as_ref()?;
                 let idx = self.panels.indexes.selected().unwrap_or(0);
                 let indices = self.sorted_index_indices();
                 let &real_idx = indices.get(idx)?;
                 Some(snap.indexes[real_idx].index_definition.clone())
             }
-            ViewMode::StatementInspect => {
+            InspectTarget::Statement => {
                 let snap = self.snapshot.as_ref()?;
                 let idx = self.panels.statements.selected().unwrap_or(0);
                 let indices = self.sorted_stmt_indices();
                 let &real_idx = indices.get(idx)?;
                 Some(snap.stat_statements[real_idx].query.clone())
             }
-            ViewMode::ReplicationInspect => {
+            InspectTarget::Replication => {
                 let snap = self.snapshot.as_ref()?;
                 let sel = self.panels.replication.selected().unwrap_or(0);
                 let r = snap.replication.get(sel)?;
                 Some(r.application_name.clone().unwrap_or_default())
             }
-            ViewMode::TableInspect => {
+            InspectTarget::Table => {
                 let snap = self.snapshot.as_ref()?;
                 let sel = self.panels.table_stats.selected().unwrap_or(0);
                 let indices = self.sorted_table_stat_indices();
@@ -784,36 +787,35 @@ impl App {
                 let t = &snap.table_stats[real_idx];
                 Some(format!("{}.{}", t.schemaname, t.relname))
             }
-            ViewMode::BlockingInspect => {
+            InspectTarget::Blocking => {
                 let snap = self.snapshot.as_ref()?;
                 let sel = self.panels.blocking.selected().unwrap_or(0);
                 let info = snap.blocking_info.get(sel)?;
                 Some(info.blocked_query.clone().unwrap_or_default())
             }
-            ViewMode::VacuumInspect => {
+            InspectTarget::Vacuum => {
                 let snap = self.snapshot.as_ref()?;
                 let sel = self.panels.vacuum.selected().unwrap_or(0);
                 let vac = snap.vacuum_progress.get(sel)?;
                 Some(vac.table_name.clone())
             }
-            ViewMode::WraparoundInspect => {
+            InspectTarget::Wraparound => {
                 let snap = self.snapshot.as_ref()?;
                 let sel = self.panels.wraparound.selected().unwrap_or(0);
                 let wrap = snap.wraparound.get(sel)?;
                 Some(wrap.datname.clone())
             }
-            ViewMode::SettingsInspect => {
+            InspectTarget::Settings => {
                 let indices = self.sorted_settings_indices();
                 let &idx = indices.get(self.panels.settings.selected().unwrap_or(0))?;
                 let s = &self.server_info.settings[idx];
                 Some(format!("{} = {}", s.name, s.setting))
             }
-            ViewMode::ExtensionsInspect => {
+            InspectTarget::Extensions => {
                 let indices = self.sorted_extensions_indices();
                 let &idx = indices.get(self.panels.extensions.selected().unwrap_or(0))?;
                 Some(self.server_info.extensions_list[idx].name.clone())
             }
-            _ => None,
         }
     }
 
@@ -941,7 +943,8 @@ impl App {
             }
             KeyCode::Char('d') => {
                 if let Some(recording) = self.recordings.current() {
-                    self.view_mode = ViewMode::ConfirmDeleteRecording(recording.path.clone());
+                    self.view_mode =
+                        ViewMode::Confirm(ConfirmAction::DeleteRecording(recording.path.clone()));
                 }
             }
             _ => {}
@@ -1104,58 +1107,51 @@ impl App {
     pub fn handle_key(&mut self, key: KeyEvent) {
         // Layer 1: Modal overlays consume all input
         match &self.view_mode {
-            ViewMode::ConfirmCancel(pid) => {
-                let action = AppAction::CancelQuery(*pid);
-                self.handle_yes_no_confirm(key, action, "Cancel aborted");
+            ViewMode::Confirm(action) => {
+                match action {
+                    ConfirmAction::Cancel(pid) => {
+                        let action = AppAction::CancelQuery(*pid);
+                        self.handle_yes_no_confirm(key, action, "Cancel aborted");
+                    }
+                    ConfirmAction::Kill(pid) => {
+                        let action = AppAction::TerminateBackend(*pid);
+                        self.handle_yes_no_confirm(key, action, "Kill aborted");
+                    }
+                    ConfirmAction::CancelChoice {
+                        selected_pid,
+                        all_pids,
+                    } => {
+                        let action = AppAction::CancelQuery(*selected_pid);
+                        let batch = ViewMode::Confirm(ConfirmAction::CancelBatch(all_pids.clone()));
+                        self.handle_choice_confirm(key, action, batch, "Cancel aborted");
+                    }
+                    ConfirmAction::KillChoice {
+                        selected_pid,
+                        all_pids,
+                    } => {
+                        let action = AppAction::TerminateBackend(*selected_pid);
+                        let batch = ViewMode::Confirm(ConfirmAction::KillBatch(all_pids.clone()));
+                        self.handle_choice_confirm(key, action, batch, "Kill aborted");
+                    }
+                    ConfirmAction::CancelBatch(pids) => {
+                        let action = AppAction::CancelQueries(pids.clone());
+                        self.handle_yes_no_confirm(key, action, "Batch cancel aborted");
+                    }
+                    ConfirmAction::KillBatch(pids) => {
+                        let action = AppAction::TerminateBackends(pids.clone());
+                        self.handle_yes_no_confirm(key, action, "Batch kill aborted");
+                    }
+                    ConfirmAction::DeleteRecording(ref path) => {
+                        let path = path.clone();
+                        self.handle_confirm_delete_recording_key(key, path);
+                    }
+                }
                 return;
             }
-            ViewMode::ConfirmKill(pid) => {
-                let action = AppAction::TerminateBackend(*pid);
-                self.handle_yes_no_confirm(key, action, "Kill aborted");
-                return;
-            }
-            ViewMode::ConfirmCancelChoice {
-                selected_pid,
-                all_pids,
-            } => {
-                let action = AppAction::CancelQuery(*selected_pid);
-                let batch = ViewMode::ConfirmCancelBatch(all_pids.clone());
-                self.handle_choice_confirm(key, action, batch, "Cancel aborted");
-                return;
-            }
-            ViewMode::ConfirmKillChoice {
-                selected_pid,
-                all_pids,
-            } => {
-                let action = AppAction::TerminateBackend(*selected_pid);
-                let batch = ViewMode::ConfirmKillBatch(all_pids.clone());
-                self.handle_choice_confirm(key, action, batch, "Kill aborted");
-                return;
-            }
-            ViewMode::ConfirmCancelBatch(pids) => {
-                let action = AppAction::CancelQueries(pids.clone());
-                self.handle_yes_no_confirm(key, action, "Batch cancel aborted");
-                return;
-            }
-            ViewMode::ConfirmKillBatch(pids) => {
-                let action = AppAction::TerminateBackends(pids.clone());
-                self.handle_yes_no_confirm(key, action, "Batch kill aborted");
-                return;
-            }
-            ViewMode::Inspect => {
-                self.handle_inspect_overlay_key(key, true); // Query inspect allows Enter to close
-                return;
-            }
-            ViewMode::IndexInspect
-            | ViewMode::StatementInspect
-            | ViewMode::ReplicationInspect
-            | ViewMode::TableInspect
-            | ViewMode::BlockingInspect
-            | ViewMode::VacuumInspect
-            | ViewMode::WraparoundInspect
-            | ViewMode::SettingsInspect
-            | ViewMode::ExtensionsInspect => {
-                self.handle_inspect_overlay_key(key, false);
+            ViewMode::Inspect(target) => {
+                // Query inspect allows Enter to close (legacy behavior)
+                let allow_enter_close = *target == InspectTarget::Query;
+                self.handle_inspect_overlay_key(key, allow_enter_close);
                 return;
             }
             ViewMode::Config => {
@@ -1176,11 +1172,6 @@ impl App {
             }
             ViewMode::Recordings => {
                 self.handle_recordings_key(key);
-                return;
-            }
-            ViewMode::ConfirmDeleteRecording(ref path) => {
-                let path = path.clone();
-                self.handle_confirm_delete_recording_key(key, path);
                 return;
             }
             ViewMode::Normal => {}

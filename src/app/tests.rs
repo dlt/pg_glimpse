@@ -473,7 +473,7 @@ fn help_exit_keys() {
 #[test]
 fn confirm_cancel_yes() {
     let mut app = make_app();
-    app.view_mode = ViewMode::ConfirmCancel(12345);
+    app.view_mode = ViewMode::Confirm(ConfirmAction::Cancel(12345));
     app.handle_key(key(KeyCode::Char('y')));
     assert_eq!(app.view_mode, ViewMode::Normal);
     assert!(matches!(app.feedback.pending_action, Some(AppAction::CancelQuery(12345))));
@@ -482,7 +482,7 @@ fn confirm_cancel_yes() {
 #[test]
 fn confirm_cancel_any_other_key_aborts() {
     let mut app = make_app();
-    app.view_mode = ViewMode::ConfirmCancel(12345);
+    app.view_mode = ViewMode::Confirm(ConfirmAction::Cancel(12345));
     app.handle_key(key(KeyCode::Char('n')));
     assert_eq!(app.view_mode, ViewMode::Normal);
     assert!(app.feedback.pending_action.is_none());
@@ -492,7 +492,7 @@ fn confirm_cancel_any_other_key_aborts() {
 #[test]
 fn confirm_kill_yes() {
     let mut app = make_app();
-    app.view_mode = ViewMode::ConfirmKill(12345);
+    app.view_mode = ViewMode::Confirm(ConfirmAction::Kill(12345));
     app.handle_key(key(KeyCode::Char('Y')));
     assert_eq!(app.view_mode, ViewMode::Normal);
     assert!(matches!(app.feedback.pending_action, Some(AppAction::TerminateBackend(12345))));
@@ -501,10 +501,10 @@ fn confirm_kill_yes() {
 #[test]
 fn confirm_cancel_choice_one() {
     let mut app = make_app();
-    app.view_mode = ViewMode::ConfirmCancelChoice {
+    app.view_mode = ViewMode::Confirm(ConfirmAction::CancelChoice {
         selected_pid: 100,
         all_pids: vec![100, 200, 300],
-    };
+    });
     app.handle_key(key(KeyCode::Char('1')));
     assert_eq!(app.view_mode, ViewMode::Normal);
     assert!(matches!(app.feedback.pending_action, Some(AppAction::CancelQuery(100))));
@@ -513,18 +513,18 @@ fn confirm_cancel_choice_one() {
 #[test]
 fn confirm_cancel_choice_all() {
     let mut app = make_app();
-    app.view_mode = ViewMode::ConfirmCancelChoice {
+    app.view_mode = ViewMode::Confirm(ConfirmAction::CancelChoice {
         selected_pid: 100,
         all_pids: vec![100, 200, 300],
-    };
+    });
     app.handle_key(key(KeyCode::Char('a')));
-    assert!(matches!(app.view_mode, ViewMode::ConfirmCancelBatch(_)));
+    assert!(matches!(app.view_mode, ViewMode::Confirm(ConfirmAction::CancelBatch(_))));
 }
 
 #[test]
 fn confirm_cancel_batch_yes() {
     let mut app = make_app();
-    app.view_mode = ViewMode::ConfirmCancelBatch(vec![100, 200, 300]);
+    app.view_mode = ViewMode::Confirm(ConfirmAction::CancelBatch(vec![100, 200, 300]));
     app.handle_key(key(KeyCode::Char('y')));
     assert_eq!(app.view_mode, ViewMode::Normal);
     match &app.feedback.pending_action {
@@ -536,10 +536,10 @@ fn confirm_cancel_batch_yes() {
 #[test]
 fn confirm_kill_choice_esc() {
     let mut app = make_app();
-    app.view_mode = ViewMode::ConfirmKillChoice {
+    app.view_mode = ViewMode::Confirm(ConfirmAction::KillChoice {
         selected_pid: 100,
         all_pids: vec![100, 200],
-    };
+    });
     app.handle_key(key(KeyCode::Esc));
     assert_eq!(app.view_mode, ViewMode::Normal);
     assert!(app.feedback.pending_action.is_none());
@@ -551,30 +551,30 @@ fn confirm_kill_choice_esc() {
 
 #[test]
 fn inspect_scroll_and_exit() {
-    let modes = [
-        ViewMode::Inspect,
-        ViewMode::IndexInspect,
-        ViewMode::StatementInspect,
-        ViewMode::ReplicationInspect,
-        ViewMode::TableInspect,
-        ViewMode::BlockingInspect,
-        ViewMode::VacuumInspect,
-        ViewMode::WraparoundInspect,
+    let targets = [
+        InspectTarget::Query,
+        InspectTarget::Index,
+        InspectTarget::Statement,
+        InspectTarget::Replication,
+        InspectTarget::Table,
+        InspectTarget::Blocking,
+        InspectTarget::Vacuum,
+        InspectTarget::Wraparound,
     ];
-    for mode in modes {
+    for target in targets {
         let mut app = make_app();
-        app.view_mode = mode.clone();
+        app.view_mode = ViewMode::Inspect(target);
         app.overlay_scroll = 5;
 
         app.handle_key(key(KeyCode::Down));
-        assert_eq!(app.overlay_scroll, 6, "Down should scroll in {mode:?}");
+        assert_eq!(app.overlay_scroll, 6, "Down should scroll in {target:?}");
 
         app.handle_key(key(KeyCode::Char('k')));
-        assert_eq!(app.overlay_scroll, 5, "k should scroll up in {mode:?}");
+        assert_eq!(app.overlay_scroll, 5, "k should scroll up in {target:?}");
 
         app.handle_key(key(KeyCode::Esc));
-        assert_eq!(app.view_mode, ViewMode::Normal, "Esc should exit {mode:?}");
-        assert_eq!(app.overlay_scroll, 0, "Overlay scroll should reset after {mode:?}");
+        assert_eq!(app.view_mode, ViewMode::Normal, "Esc should exit {target:?}");
+        assert_eq!(app.overlay_scroll, 0, "Overlay scroll should reset after {target:?}");
     }
 }
 
@@ -673,7 +673,7 @@ fn modal_blocks_global_keys() {
 #[test]
 fn confirm_modal_blocks_panel_switch() {
     let mut app = make_app();
-    app.view_mode = ViewMode::ConfirmCancel(123);
+    app.view_mode = ViewMode::Confirm(ConfirmAction::Cancel(123));
 
     // Tab should not switch panels
     app.handle_key(key(KeyCode::Tab));
@@ -1822,7 +1822,7 @@ fn inspect_with_no_selection_no_panic() {
     app.panels.queries.state.select(None);
 
     // Trying to enter inspect mode should be safe
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
 
     // App should handle this state gracefully
     assert!(app.snapshot.is_some());
@@ -2057,7 +2057,7 @@ fn extensions_inspect_opens() {
     app.panels.extensions.select(Some(0));
 
     app.handle_key(key(KeyCode::Enter));
-    assert_eq!(app.view_mode, ViewMode::ExtensionsInspect);
+    assert_eq!(app.view_mode, ViewMode::Inspect(InspectTarget::Extensions));
     assert_eq!(app.overlay_scroll, 0);
 }
 
@@ -2073,7 +2073,7 @@ fn extensions_inspect_does_not_open_when_empty() {
 #[test]
 fn extensions_inspect_closes_with_esc() {
     let mut app = make_app_with_extensions();
-    app.view_mode = ViewMode::ExtensionsInspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Extensions);
     app.overlay_scroll = 5;
 
     app.handle_key(key(KeyCode::Esc));
@@ -2084,7 +2084,7 @@ fn extensions_inspect_closes_with_esc() {
 #[test]
 fn extensions_inspect_closes_with_q() {
     let mut app = make_app_with_extensions();
-    app.view_mode = ViewMode::ExtensionsInspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Extensions);
 
     app.handle_key(key(KeyCode::Char('q')));
     assert_eq!(app.view_mode, ViewMode::Normal);
@@ -2093,7 +2093,7 @@ fn extensions_inspect_closes_with_q() {
 #[test]
 fn extensions_inspect_scroll_down() {
     let mut app = make_app_with_extensions();
-    app.view_mode = ViewMode::ExtensionsInspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Extensions);
     app.overlay_scroll = 0;
 
     app.handle_key(key(KeyCode::Down));
@@ -2106,7 +2106,7 @@ fn extensions_inspect_scroll_down() {
 #[test]
 fn extensions_inspect_scroll_up() {
     let mut app = make_app_with_extensions();
-    app.view_mode = ViewMode::ExtensionsInspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Extensions);
     app.overlay_scroll = 5;
 
     app.handle_key(key(KeyCode::Up));
@@ -2335,7 +2335,7 @@ fn recordings_d_key_opens_delete_confirm() {
     }];
 
     app.handle_key(key(KeyCode::Char('d')));
-    assert_eq!(app.view_mode, ViewMode::ConfirmDeleteRecording(test_path));
+    assert_eq!(app.view_mode, ViewMode::Confirm(ConfirmAction::DeleteRecording(test_path)));
 }
 
 #[test]
@@ -2344,7 +2344,7 @@ fn recordings_delete_confirm_cancel() {
 
     let mut app = make_app();
     let test_path = PathBuf::from("/tmp/test.jsonl");
-    app.view_mode = ViewMode::ConfirmDeleteRecording(test_path);
+    app.view_mode = ViewMode::Confirm(ConfirmAction::DeleteRecording(test_path));
 
     // Any key except y should cancel
     app.handle_key(key(KeyCode::Esc));

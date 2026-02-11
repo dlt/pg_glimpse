@@ -46,30 +46,42 @@ impl BottomPanel {
     }
 }
 
+/// Target for inspect overlays
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InspectTarget {
+    Query,
+    Index,
+    Statement,
+    Replication,
+    Table,
+    Blocking,
+    Vacuum,
+    Wraparound,
+    Settings,
+    Extensions,
+}
+
+/// Confirmation action types
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConfirmAction {
+    Cancel(i32),
+    Kill(i32),
+    CancelChoice { selected_pid: i32, all_pids: Vec<i32> },
+    KillChoice { selected_pid: i32, all_pids: Vec<i32> },
+    CancelBatch(Vec<i32>),
+    KillBatch(Vec<i32>),
+    DeleteRecording(PathBuf),
+}
+
 /// Current view/interaction mode.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ViewMode {
     Normal,
     Filter,
-    Inspect,
-    IndexInspect,
-    StatementInspect,
-    ReplicationInspect,
-    TableInspect,
-    BlockingInspect,
-    VacuumInspect,
-    WraparoundInspect,
-    SettingsInspect,
-    ExtensionsInspect,
-    ConfirmCancel(i32),
-    ConfirmKill(i32),
-    ConfirmCancelChoice { selected_pid: i32, all_pids: Vec<i32> },
-    ConfirmKillChoice { selected_pid: i32, all_pids: Vec<i32> },
-    ConfirmCancelBatch(Vec<i32>),
-    ConfirmKillBatch(Vec<i32>),
+    Inspect(InspectTarget),
+    Confirm(ConfirmAction),
     Config,
     ConfigEditRecordingsDir,
     Help,
     Recordings,
-    ConfirmDeleteRecording(PathBuf),
 }

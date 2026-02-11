@@ -10,7 +10,7 @@ use ratatui::Terminal;
 
 use std::path::PathBuf;
 
-use crate::app::{App, BottomPanel, SortColumn, ViewMode};
+use crate::app::{App, BottomPanel, InspectTarget, SortColumn, ViewMode};
 use crate::config::AppConfig;
 use crate::db::models::*;
 use crate::recorder::RecordingInfo;
@@ -1221,7 +1221,7 @@ fn overlay_query_inspect() {
     let backend = TestBackend::new(100, 40);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
     app.panels.queries.state.select(Some(0));
 
     terminal.draw(|frame| {
@@ -1236,7 +1236,7 @@ fn overlay_query_inspect_no_selection() {
     let backend = TestBackend::new(100, 40);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_empty_snapshot()));
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
 
     terminal.draw(|frame| {
         super::overlay::render_inspect(frame, &app, frame.area());
@@ -1251,7 +1251,7 @@ fn overlay_index_inspect() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
     app.bottom_panel = BottomPanel::Indexes;
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
     app.panels.indexes.state.select(Some(0));
 
     terminal.draw(|frame| {
@@ -1267,7 +1267,7 @@ fn overlay_index_inspect_unused() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
     app.bottom_panel = BottomPanel::Indexes;
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
     // Select the second index which has 0 scans (unused)
     app.panels.indexes.state.select(Some(1));
 
@@ -1284,7 +1284,7 @@ fn overlay_statement_inspect() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
     app.bottom_panel = BottomPanel::Statements;
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
     app.panels.statements.state.select(Some(0));
 
     terminal.draw(|frame| {
@@ -1300,7 +1300,7 @@ fn overlay_table_inspect() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
     app.bottom_panel = BottomPanel::TableStats;
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
     app.panels.table_stats.state.select(Some(0));
 
     terminal.draw(|frame| {
@@ -1316,7 +1316,7 @@ fn overlay_replication_inspect() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
     app.bottom_panel = BottomPanel::Replication;
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
     app.panels.replication.select(Some(0));
 
     terminal.draw(|frame| {
@@ -1332,7 +1332,7 @@ fn overlay_blocking_inspect() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
     app.bottom_panel = BottomPanel::Blocking;
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
     app.panels.blocking.select(Some(0));
 
     terminal.draw(|frame| {
@@ -1348,7 +1348,7 @@ fn overlay_vacuum_inspect() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
     app.bottom_panel = BottomPanel::VacuumProgress;
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
     app.panels.vacuum.select(Some(0));
 
     terminal.draw(|frame| {
@@ -1364,7 +1364,7 @@ fn overlay_wraparound_inspect() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_snapshot()));
     app.bottom_panel = BottomPanel::Wraparound;
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
     app.panels.wraparound.select(Some(0));
 
     terminal.draw(|frame| {
@@ -1390,7 +1390,7 @@ fn overlay_wraparound_inspect_warning() {
 
     let mut app = make_app(Some(snapshot));
     app.bottom_panel = BottomPanel::Wraparound;
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
     app.panels.wraparound.select(Some(0));
 
     terminal.draw(|frame| {
@@ -2021,7 +2021,7 @@ fn overlay_query_inspect_extreme_values() {
     let backend = TestBackend::new(100, 40);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_extreme_snapshot()));
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
     app.panels.queries.state.select(Some(0));
 
     terminal.draw(|frame| {
@@ -2036,7 +2036,7 @@ fn overlay_query_inspect_all_none_fields() {
     let backend = TestBackend::new(100, 40);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_extreme_snapshot()));
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
     // Select the query with all None fields
     app.panels.queries.state.select(Some(1));
 
@@ -2052,7 +2052,7 @@ fn overlay_query_inspect_unicode() {
     let backend = TestBackend::new(100, 40);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_extreme_snapshot()));
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
     // Select the Unicode query
     app.panels.queries.state.select(Some(2));
 
@@ -2069,7 +2069,7 @@ fn overlay_replication_inspect_all_none() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_extreme_snapshot()));
     app.bottom_panel = BottomPanel::Replication;
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
     app.panels.replication.select(Some(0));
 
     terminal.draw(|frame| {
@@ -2085,7 +2085,7 @@ fn overlay_blocking_inspect_all_none() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_extreme_snapshot()));
     app.bottom_panel = BottomPanel::Blocking;
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
     app.panels.blocking.select(Some(0));
 
     terminal.draw(|frame| {
@@ -2101,7 +2101,7 @@ fn overlay_wraparound_inspect_critical() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_extreme_snapshot()));
     app.bottom_panel = BottomPanel::Wraparound;
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
     app.panels.wraparound.select(Some(0));
 
     terminal.draw(|frame| {
@@ -2144,7 +2144,7 @@ fn overlay_settings_inspect() {
     ];
 
     app.bottom_panel = BottomPanel::Settings;
-    app.view_mode = ViewMode::SettingsInspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Settings);
     app.panels.settings.select(Some(0));
 
     terminal.draw(|frame| {
@@ -2177,7 +2177,7 @@ fn overlay_settings_inspect_pending_restart() {
     ];
 
     app.bottom_panel = BottomPanel::Settings;
-    app.view_mode = ViewMode::SettingsInspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Settings);
     app.panels.settings.select(Some(0));
 
     terminal.draw(|frame| {
@@ -2210,7 +2210,7 @@ fn overlay_settings_inspect_sighup() {
     ];
 
     app.bottom_panel = BottomPanel::Settings;
-    app.view_mode = ViewMode::SettingsInspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Settings);
     app.panels.settings.select(Some(0));
 
     terminal.draw(|frame| {
@@ -2243,7 +2243,7 @@ fn overlay_settings_inspect_user() {
     ];
 
     app.bottom_panel = BottomPanel::Settings;
-    app.view_mode = ViewMode::SettingsInspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Settings);
     app.panels.settings.select(Some(0));
 
     terminal.draw(|frame| {
@@ -2347,7 +2347,7 @@ fn overlay_query_inspect_sql_injection() {
     let backend = TestBackend::new(100, 40);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_special_chars_snapshot()));
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
     app.panels.queries.state.select(Some(0));
 
     terminal.draw(|frame| {
@@ -2362,7 +2362,7 @@ fn overlay_query_inspect_newlines_tabs() {
     let backend = TestBackend::new(100, 40);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_special_chars_snapshot()));
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
     app.panels.queries.state.select(Some(1));
 
     terminal.draw(|frame| {
@@ -2377,7 +2377,7 @@ fn overlay_query_inspect_ansi_escapes() {
     let backend = TestBackend::new(100, 40);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_special_chars_snapshot()));
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
     app.panels.queries.state.select(Some(2));
 
     terminal.draw(|frame| {
@@ -2392,7 +2392,7 @@ fn overlay_query_inspect_empty_strings() {
     let backend = TestBackend::new(100, 40);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_special_chars_snapshot()));
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
     app.panels.queries.state.select(Some(3));
 
     terminal.draw(|frame| {
@@ -2556,7 +2556,7 @@ fn overlay_table_inspect_zero_values() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut app = make_app(Some(make_zero_values_snapshot()));
     app.bottom_panel = BottomPanel::TableStats;
-    app.view_mode = ViewMode::Inspect;
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
     app.panels.table_stats.state.select(Some(0));
 
     terminal.draw(|frame| {
