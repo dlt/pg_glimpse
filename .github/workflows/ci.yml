@@ -51,3 +51,32 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: cobertura.xml
           fail_ci_if_error: false
+
+  sonarqube:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for blame information
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install tools
+        run: |
+          cargo install cargo-tarpaulin
+          cargo install clippy-sarif sarif-fmt
+
+      - name: Generate coverage report
+        run: cargo tarpaulin --out xml --skip-clean
+
+      - name: Run clippy with SARIF output
+        run: |
+          cargo clippy --all-targets --message-format=json 2>&1 | clippy-sarif > clippy-results.sarif
+        continue-on-error: true
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

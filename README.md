@@ -12,6 +12,8 @@
 <p align="center">
   <a href="https://github.com/dlt/pg_glimpse/actions/workflows/ci.yml"><img src="https://github.com/dlt/pg_glimpse/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://codecov.io/gh/dlt/pg_glimpse"><img src="https://codecov.io/gh/dlt/pg_glimpse/branch/main/graph/badge.svg" alt="Coverage"></a>
+  <a href="https://sonarcloud.io/summary/new_code?id=dlt_pg_glimpse"><img src="https://sonarcloud.io/api/project_badges/measure?project=dlt_pg_glimpse&metric=alert_status" alt="Quality Gate"></a>
+  <a href="https://sonarcloud.io/summary/new_code?id=dlt_pg_glimpse"><img src="https://sonarcloud.io/api/project_badges/measure?project=dlt_pg_glimpse&metric=security_rating" alt="Security"></a>
   <a href="https://crates.io/crates/pg_glimpse"><img src="https://img.shields.io/crates/v/pg_glimpse.svg" alt="Crates.io"></a>
   <a href="https://crates.io/crates/pg_glimpse"><img src="https://img.shields.io/crates/d/pg_glimpse.svg" alt="Downloads"></a>
   <a href="LICENSE"><img src="https://img.shields.io/crates/l/pg_glimpse.svg" alt="License"></a>
