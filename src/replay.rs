@@ -99,6 +99,10 @@ impl ReplaySession {
         self.snapshots.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.snapshots.is_empty()
+    }
+
     pub fn step_forward(&mut self) -> bool {
         if self.position + 1 < self.snapshots.len() {
             self.position += 1;
