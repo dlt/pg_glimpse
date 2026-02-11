@@ -1,0 +1,21 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+          ╭  Recordings  [j/k] nav  [Enter] open  [d] delete  [Esc] close  ──────────────╮          
+          │                                                                              │          
+          │  Available Recordings ────────────────────────────────────────               │          
+          │                                                                              │          
+          │    Connection                      Recorded At           Version Size        │          
+          │    ──────────────────────────────────────────────────────────────────────    │          
+          │    localhost:5432/production       2024-01-15 XX:XX:XX   PG 15    1.4MB      │          
+          │  > db.example.com:5433/staging     2024-01-14 XX:XX:XX   PG 14    250KB      │          
+          │    192.168.1.100:5432/dev          2024-01-13 XX:XX:XX   PG 16     49KB      │          
+          │                                                                              │          
+          │    Press Enter to start replay, d to delete                                  │          
+          │                                                                              │          
+          │                                                                              │          
+          ╰──────────────────────────────────────────────────────────────────────────────╯

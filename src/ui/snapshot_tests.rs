@@ -8,9 +8,12 @@ use chrono::{Duration, TimeZone, Utc};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
+use std::path::PathBuf;
+
 use crate::app::{App, BottomPanel, SortColumn, ViewMode};
 use crate::config::AppConfig;
 use crate::db::models::*;
+use crate::recorder::RecordingInfo;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Test Fixtures
@@ -2558,6 +2561,319 @@ fn overlay_table_inspect_zero_values() {
 
     terminal.draw(|frame| {
         super::overlay::render_table_inspect(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Panel Tests - Settings
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn panel_settings_with_data() {
+    let backend = TestBackend::new(140, 15);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+
+    // Add settings data
+    app.server_info.settings = vec![
+        PgSetting {
+            name: "max_connections".to_string(),
+            setting: "100".to_string(),
+            unit: None,
+            category: "Connections and Authentication".to_string(),
+            short_desc: "Sets the maximum number of concurrent connections.".to_string(),
+            context: "postmaster".to_string(),
+            source: "configuration file".to_string(),
+            pending_restart: false,
+        },
+        PgSetting {
+            name: "shared_buffers".to_string(),
+            setting: "128MB".to_string(),
+            unit: Some("8kB".to_string()),
+            category: "Resource Usage / Memory".to_string(),
+            short_desc: "Sets the number of shared memory buffers.".to_string(),
+            context: "postmaster".to_string(),
+            source: "configuration file".to_string(),
+            pending_restart: true,
+        },
+        PgSetting {
+            name: "work_mem".to_string(),
+            setting: "4MB".to_string(),
+            unit: Some("kB".to_string()),
+            category: "Resource Usage / Memory".to_string(),
+            short_desc: "Sets the memory for internal sort operations.".to_string(),
+            context: "user".to_string(),
+            source: "default".to_string(),
+            pending_restart: false,
+        },
+        PgSetting {
+            name: "maintenance_work_mem".to_string(),
+            setting: "64MB".to_string(),
+            unit: Some("kB".to_string()),
+            category: "Resource Usage / Memory".to_string(),
+            short_desc: "Sets the memory for maintenance operations.".to_string(),
+            context: "user".to_string(),
+            source: "session".to_string(),
+            pending_restart: false,
+        },
+    ];
+    app.bottom_panel = BottomPanel::Settings;
+
+    terminal.draw(|frame| {
+        super::panels::render_settings(frame, &mut app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn panel_settings_empty() {
+    let backend = TestBackend::new(140, 10);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_empty_snapshot()));
+    app.server_info.settings = vec![];
+    app.bottom_panel = BottomPanel::Settings;
+
+    terminal.draw(|frame| {
+        super::panels::render_settings(frame, &mut app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn panel_settings_with_filter() {
+    let backend = TestBackend::new(140, 12);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+
+    // Add settings data
+    app.server_info.settings = vec![
+        PgSetting {
+            name: "max_connections".to_string(),
+            setting: "100".to_string(),
+            unit: None,
+            category: "Connections".to_string(),
+            short_desc: "Maximum connections".to_string(),
+            context: "postmaster".to_string(),
+            source: "configuration file".to_string(),
+            pending_restart: false,
+        },
+        PgSetting {
+            name: "max_wal_senders".to_string(),
+            setting: "10".to_string(),
+            unit: None,
+            category: "Replication".to_string(),
+            short_desc: "Maximum WAL senders".to_string(),
+            context: "postmaster".to_string(),
+            source: "default".to_string(),
+            pending_restart: false,
+        },
+        PgSetting {
+            name: "work_mem".to_string(),
+            setting: "4MB".to_string(),
+            unit: Some("kB".to_string()),
+            category: "Memory".to_string(),
+            short_desc: "Work memory".to_string(),
+            context: "user".to_string(),
+            source: "default".to_string(),
+            pending_restart: false,
+        },
+    ];
+    app.bottom_panel = BottomPanel::Settings;
+    app.filter.text = "max".to_string();
+    app.filter.active = true;
+
+    terminal.draw(|frame| {
+        super::panels::render_settings(frame, &mut app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Panel Tests - Extensions
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn panel_extensions_with_data() {
+    let backend = TestBackend::new(140, 12);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+
+    // Add extensions data
+    app.server_info.extensions_list = vec![
+        PgExtension {
+            name: "pg_stat_statements".to_string(),
+            version: "1.10".to_string(),
+            schema: "public".to_string(),
+            relocatable: false,
+            description: Some("Track execution statistics of all SQL statements".to_string()),
+        },
+        PgExtension {
+            name: "pgcrypto".to_string(),
+            version: "1.3".to_string(),
+            schema: "public".to_string(),
+            relocatable: true,
+            description: Some("Cryptographic functions".to_string()),
+        },
+        PgExtension {
+            name: "uuid-ossp".to_string(),
+            version: "1.1".to_string(),
+            schema: "extensions".to_string(),
+            relocatable: true,
+            description: Some("Generate universally unique identifiers (UUIDs)".to_string()),
+        },
+        PgExtension {
+            name: "postgis".to_string(),
+            version: "3.3.2".to_string(),
+            schema: "public".to_string(),
+            relocatable: false,
+            description: Some("PostGIS geometry and geography spatial types and functions".to_string()),
+        },
+    ];
+    app.bottom_panel = BottomPanel::Extensions;
+
+    terminal.draw(|frame| {
+        super::panels::render_extensions(frame, &mut app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn panel_extensions_empty() {
+    let backend = TestBackend::new(140, 10);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_empty_snapshot()));
+    app.server_info.extensions_list = vec![];
+    app.bottom_panel = BottomPanel::Extensions;
+
+    terminal.draw(|frame| {
+        super::panels::render_extensions(frame, &mut app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn panel_extensions_with_filter() {
+    let backend = TestBackend::new(140, 12);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+
+    // Add extensions data
+    app.server_info.extensions_list = vec![
+        PgExtension {
+            name: "pg_stat_statements".to_string(),
+            version: "1.10".to_string(),
+            schema: "public".to_string(),
+            relocatable: false,
+            description: Some("Track SQL statistics".to_string()),
+        },
+        PgExtension {
+            name: "pg_trgm".to_string(),
+            version: "1.6".to_string(),
+            schema: "public".to_string(),
+            relocatable: true,
+            description: Some("Trigram matching".to_string()),
+        },
+        PgExtension {
+            name: "uuid-ossp".to_string(),
+            version: "1.1".to_string(),
+            schema: "public".to_string(),
+            relocatable: true,
+            description: Some("UUID generation".to_string()),
+        },
+    ];
+    app.bottom_panel = BottomPanel::Extensions;
+    app.filter.text = "pg_".to_string();
+    app.filter.active = true;
+
+    terminal.draw(|frame| {
+        super::panels::render_extensions(frame, &mut app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Overlay Tests - Recordings
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn overlay_recordings_with_data() {
+    let backend = TestBackend::new(100, 20);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+
+    app.view_mode = ViewMode::Recordings;
+    app.recordings_list = vec![
+        RecordingInfo {
+            path: PathBuf::from("/tmp/recording1.jsonl"),
+            host: "localhost".to_string(),
+            port: 5432,
+            dbname: "production".to_string(),
+            recorded_at: Utc.with_ymd_and_hms(2024, 1, 15, 10, 30, 0).unwrap(),
+            pg_version: "PostgreSQL 15.4".to_string(),
+            file_size: 1_500_000,
+        },
+        RecordingInfo {
+            path: PathBuf::from("/tmp/recording2.jsonl"),
+            host: "db.example.com".to_string(),
+            port: 5433,
+            dbname: "staging".to_string(),
+            recorded_at: Utc.with_ymd_and_hms(2024, 1, 14, 14, 45, 30).unwrap(),
+            pg_version: "PostgreSQL 14.10".to_string(),
+            file_size: 256_000,
+        },
+        RecordingInfo {
+            path: PathBuf::from("/tmp/recording3.jsonl"),
+            host: "192.168.1.100".to_string(),
+            port: 5432,
+            dbname: "dev".to_string(),
+            recorded_at: Utc.with_ymd_and_hms(2024, 1, 13, 9, 0, 0).unwrap(),
+            pg_version: "PostgreSQL 16.1".to_string(),
+            file_size: 50_000,
+        },
+    ];
+    app.recordings_selected = 1; // Select the second item
+
+    terminal.draw(|frame| {
+        super::overlay::render_recordings(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_recordings_empty() {
+    let backend = TestBackend::new(100, 15);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut app = make_app(Some(make_snapshot()));
+
+    app.view_mode = ViewMode::Recordings;
+    app.recordings_list = vec![];
+
+    terminal.draw(|frame| {
+        super::overlay::render_recordings(frame, &app, frame.area());
+    }).unwrap();
+
+    insta::assert_snapshot!(buffer_to_string(&terminal));
+}
+
+#[test]
+fn overlay_recordings_delete_confirm() {
+    let backend = TestBackend::new(80, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let _app = make_app(Some(make_snapshot()));
+
+    let path = PathBuf::from("/home/user/.local/share/pg_glimpse/recordings/2024-01-15_103000_localhost_production.jsonl");
+
+    terminal.draw(|frame| {
+        super::overlay::render_confirm_delete_recording(frame, &path, frame.area());
     }).unwrap();
 
     insta::assert_snapshot!(buffer_to_string(&terminal));

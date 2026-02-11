@@ -1,0 +1,17 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+                                                                                                    
+                                                                                                    
+          ╭  Recordings  [j/k] nav  [Enter] open  [d] delete  [Esc] close  ──────────────╮          
+          │                                                                              │          
+          │  Available Recordings ────────────────────────────────────────               │          
+          │                                                                              │          
+          │    No recordings found.                                                      │          
+          │                                                                              │          
+          │    Recordings are automatically created when running in live mode.           │          
+          │                                                                              │          
+          │    Press Enter to start replay, d to delete                                  │          
+          │                                                                              │          
+          ╰──────────────────────────────────────────────────────────────────────────────╯

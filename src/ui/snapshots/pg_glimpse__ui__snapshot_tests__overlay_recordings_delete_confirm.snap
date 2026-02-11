@@ -1,0 +1,29 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                    ╭  Delete Recording  ──────────────────╮                    
+                    │                                      │                    
+                    │  Delete this recording?              │                    
+                    │                                      │                    
+                    │  2024-01-15_103000_localhost_producti│                    
+                    │                                      │                    
+                    │  Press y to confirm, any other key to│                    
+                    │                                      │                    
+                    │                                      │                    
+                    ╰──────────────────────────────────────╯

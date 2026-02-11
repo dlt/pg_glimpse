@@ -1,0 +1,16 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+╭ Extensions [2/3] (filter: pg_) ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Name                                               Version    Schema       Relocatable  Description                                       │
+│pg_stat_statements                                 1.10       public       No           Track SQL statistics                              │
+│pg_trgm                                            1.6        public       Yes          Trigram matching                                  │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯

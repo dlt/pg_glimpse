@@ -1,0 +1,19 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&terminal)
+---
+╭ PostgreSQL Settings [4] ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Name                                          Value                                         Unit     Source             Context           │
+│max_connections                               100                                           -        configuration file postmaster [restar│
+│shared_buffers                                128MB                                         8kB      configuration file postmaster [restar│
+│work_mem                                      4MB                                           kB       default            user              │
+│maintenance_work_mem                          64MB                                          kB       session            user              │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
