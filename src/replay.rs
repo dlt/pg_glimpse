@@ -1,10 +1,17 @@
+//! Replay session loading and runtime.
+
 use color_eyre::{eyre::eyre, Result};
+use crossterm::event::KeyCode;
 use serde::Deserialize;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
+use std::time::{Duration, Instant};
 
+use crate::app::{App, AppAction, ViewMode};
+use crate::config::AppConfig;
 use crate::db::models::{PgSnapshot, ServerInfo};
+use crate::{event, ui};
 
 #[derive(Deserialize)]
 #[serde(tag = "type")]
@@ -123,6 +130,202 @@ impl ReplaySession {
     pub fn at_end(&self) -> bool {
         self.position + 1 >= self.snapshots.len()
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Replay Runtime
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Run the application in replay mode.
+pub async fn run_replay(path: &Path, config: AppConfig) -> Result<()> {
+    let mut session = ReplaySession::load(path)?;
+
+    let filename = path
+        .file_name()
+        .and_then(|f| f.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+
+    let mut app = App::new_replay(
+        session.host.clone(),
+        session.port,
+        session.dbname.clone(),
+        session.user.clone(),
+        120,
+        config,
+        session.server_info.clone(),
+        filename,
+        session.len(),
+    );
+
+    // Feed first snapshot
+    if let Some(snap) = session.current() {
+        app.update(snap.clone());
+        if let Some(ref mut replay) = app.replay {
+            replay.position = 1;
+            replay.playing = true; // Auto-play on open
+        }
+    }
+
+    let mut terminal = ratatui::init();
+    let mut events = event::EventHandler::new(Duration::from_millis(10));
+
+    let mut last_advance = Instant::now();
+
+    while app.running {
+        terminal.draw(|frame| ui::render(frame, &mut app))?;
+
+        // Auto-advance when playing
+        let should_advance = app.replay.as_ref().is_some_and(|r| r.playing && !session.at_end());
+        if should_advance {
+            let speed = app.replay.as_ref().map_or(1.0, |r| r.speed);
+            let interval = compute_replay_interval(&session, speed);
+            if last_advance.elapsed() >= interval {
+                if session.step_forward() {
+                    sync_replay_position(&mut app, &session);
+                }
+                last_advance = Instant::now();
+                if session.at_end() {
+                    if let Some(ref mut replay) = app.replay {
+                        replay.playing = false;
+                    }
+                }
+            }
+        }
+
+        // Handle events with a short timeout so auto-advance works
+        tokio::select! {
+            biased;
+
+            event = events.next() => {
+                if let Some(evt) = event {
+                    match evt {
+                        event::AppEvent::Key(key) => {
+                            // Replay-specific keys first
+                            let handled = handle_replay_key(&mut app, &mut session, key.code, &mut last_advance);
+                            if !handled {
+                                app.handle_key(key);
+                            }
+                        }
+                        event::AppEvent::Resize(_, _) => {}
+                    }
+                }
+            }
+            () = tokio::time::sleep(Duration::from_millis(10)) => {}
+        }
+
+        // Process pending actions (only SaveConfig matters in replay)
+        if matches!(app.pending_action.take(), Some(AppAction::SaveConfig)) {
+            app.config.save();
+        }
+    }
+
+    ratatui::restore();
+    Ok(())
+}
+
+/// Sync app state with current replay session position.
+fn sync_replay_position(app: &mut App, session: &ReplaySession) {
+    if let Some(snap) = session.current() {
+        app.update(snap.clone());
+        if let Some(ref mut replay) = app.replay {
+            replay.position = session.position + 1;
+        }
+    }
+}
+
+fn handle_replay_key(
+    app: &mut App,
+    session: &mut ReplaySession,
+    code: KeyCode,
+    last_advance: &mut Instant,
+) -> bool {
+    let Some(ref mut replay) = app.replay else {
+        return false;
+    };
+
+    match code {
+        KeyCode::Char(' ') => {
+            replay.playing = !replay.playing;
+            *last_advance = Instant::now();
+            true
+        }
+        KeyCode::Right | KeyCode::Char('l')
+            if app.view_mode == ViewMode::Normal =>
+        {
+            if session.step_forward() {
+                sync_replay_position(app, session);
+            }
+            true
+        }
+        KeyCode::Left | KeyCode::Char('h')
+            if app.view_mode == ViewMode::Normal =>
+        {
+            if session.step_back() {
+                sync_replay_position(app, session);
+            }
+            true
+        }
+        KeyCode::Char('>') => {
+            replay.speed = next_speed(replay.speed);
+            true
+        }
+        KeyCode::Char('<') => {
+            replay.speed = prev_speed(replay.speed);
+            true
+        }
+        KeyCode::Char('g') if app.view_mode == ViewMode::Normal => {
+            session.jump_start();
+            sync_replay_position(app, session);
+            true
+        }
+        KeyCode::Char('G') if app.view_mode == ViewMode::Normal => {
+            session.jump_end();
+            sync_replay_position(app, session);
+            if let Some(ref mut replay) = app.replay {
+                replay.playing = false;
+            }
+            true
+        }
+        _ => false,
+    }
+}
+
+fn compute_replay_interval(session: &ReplaySession, speed: f64) -> Duration {
+    // Try to use timestamps from adjacent snapshots
+    let pos = session.position;
+    if pos + 1 < session.len() {
+        let current_ts = session.snapshots[pos].timestamp;
+        let next_ts = session.snapshots[pos + 1].timestamp;
+        let diff = (next_ts - current_ts).num_milliseconds().unsigned_abs();
+        if diff > 0 {
+            let adjusted = (diff as f64 / speed) as u64;
+            return Duration::from_millis(adjusted.max(50));
+        }
+    }
+    // Fallback: 2 seconds / speed
+    let ms = (2000.0 / speed) as u64;
+    Duration::from_millis(ms.max(50))
+}
+
+const SPEEDS: [f64; 6] = [0.25, 0.5, 1.0, 2.0, 4.0, 8.0];
+
+fn next_speed(current: f64) -> f64 {
+    for &s in &SPEEDS {
+        if s > current + 0.01 {
+            return s;
+        }
+    }
+    *SPEEDS.last().unwrap()
+}
+
+fn prev_speed(current: f64) -> f64 {
+    for &s in SPEEDS.iter().rev() {
+        if s < current - 0.01 {
+            return s;
+        }
+    }
+    SPEEDS[0]
 }
 
 #[cfg(test)]
@@ -432,6 +635,30 @@ mod tests {
 
         assert!(session.at_end()); // Single snapshot, always at end
         assert_eq!(session.len(), 1);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Speed control tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_next_speed() {
+        assert!((next_speed(0.25) - 0.5).abs() < 0.01);
+        assert!((next_speed(0.5) - 1.0).abs() < 0.01);
+        assert!((next_speed(1.0) - 2.0).abs() < 0.01);
+        assert!((next_speed(2.0) - 4.0).abs() < 0.01);
+        assert!((next_speed(4.0) - 8.0).abs() < 0.01);
+        assert!((next_speed(8.0) - 8.0).abs() < 0.01); // Max stays at max
+    }
+
+    #[test]
+    fn test_prev_speed() {
+        assert!((prev_speed(8.0) - 4.0).abs() < 0.01);
+        assert!((prev_speed(4.0) - 2.0).abs() < 0.01);
+        assert!((prev_speed(2.0) - 1.0).abs() < 0.01);
+        assert!((prev_speed(1.0) - 0.5).abs() < 0.01);
+        assert!((prev_speed(0.5) - 0.25).abs() < 0.01);
+        assert!((prev_speed(0.25) - 0.25).abs() < 0.01); // Min stays at min
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
