@@ -366,7 +366,9 @@ async fn run(cli: Cli) -> Result<()> {
                         DbResult::Snapshot(result) => match *result {
                             Ok(snap) => {
                                 if let Some(ref mut rec) = recorder {
-                                    let _ = rec.record(&snap);
+                                    if let Err(e) = rec.record(&snap) {
+                                        app.status_message = Some(format!("Recording failed: {e}"));
+                                    }
                                 }
                                 app.update(snap);
                             }
