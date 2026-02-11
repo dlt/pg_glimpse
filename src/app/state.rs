@@ -1,14 +1,17 @@
 //! Application state types.
 
+use std::path::PathBuf;
+
 use chrono::{DateTime, Utc};
 use ratatui::widgets::TableState;
 
 use crate::db::models::PgSnapshot;
 use crate::history::RingBuffer;
+use crate::recorder::RecordingInfo;
 
 use super::panels::BottomPanel;
 use super::sorting::SortColumnTrait;
-use super::{IndexSortColumn, SortColumn, StatementSortColumn, TableStatSortColumn};
+use super::{AppAction, IndexSortColumn, SortColumn, StatementSortColumn, TableStatSortColumn};
 
 /// Generic table view state with sort column and navigation
 pub struct TableViewState<S: SortColumnTrait> {
@@ -141,9 +144,6 @@ impl Default for PanelStates {
     }
 }
 
-use std::path::PathBuf;
-use crate::recorder::RecordingInfo;
-
 /// State for recordings browser overlay
 pub struct RecordingsBrowser {
     pub list: Vec<RecordingInfo>,
@@ -186,8 +186,6 @@ impl ConfigOverlay {
         }
     }
 }
-
-use super::AppAction;
 
 /// UI feedback state (errors, status, loading indicators)
 #[derive(Default)]
