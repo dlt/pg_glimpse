@@ -174,7 +174,6 @@ impl Default for RecordingsBrowser {
 }
 
 /// State for config settings overlay
-#[derive(Default)]
 pub struct ConfigOverlay {
     pub selected: usize,
     pub input_buffer: String,
@@ -189,8 +188,13 @@ impl ConfigOverlay {
     }
 }
 
+impl Default for ConfigOverlay {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// UI feedback state (errors, status, loading indicators)
-#[derive(Default)]
 pub struct UiFeedback {
     pub last_error: Option<String>,
     pub status_message: Option<String>,
@@ -214,6 +218,12 @@ impl UiFeedback {
     #[must_use]
     pub fn take_action(&mut self) -> Option<AppAction> {
         self.pending_action.take()
+    }
+}
+
+impl Default for UiFeedback {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
