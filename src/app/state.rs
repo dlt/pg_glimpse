@@ -155,7 +155,7 @@ pub struct RecordingsBrowser {
 impl RecordingsBrowser {
     pub const fn new() -> Self {
         Self {
-            list: vec![],
+            list: Vec::new(),
             selected: 0,
             pending_path: None,
         }
