@@ -104,7 +104,7 @@ impl PanelStates {
     }
 
     /// Handle navigation for simple table panels (no sorting).
-    /// Returns the new ViewMode if Enter was pressed, None otherwise.
+    /// Returns `true` if Enter was pressed (caller should open inspect view).
     pub fn simple_nav(
         state: &mut TableState,
         key_code: crossterm::event::KeyCode,
