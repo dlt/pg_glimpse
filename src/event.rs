@@ -4,8 +4,6 @@ use tokio::sync::mpsc;
 
 pub enum AppEvent {
     Key(KeyEvent),
-    #[allow(dead_code)]
-    Resize(u16, u16),
 }
 
 pub struct EventHandler {
@@ -17,18 +15,10 @@ impl EventHandler {
         let (tx, rx) = mpsc::unbounded_channel();
         std::thread::spawn(move || loop {
             if event::poll(poll_rate).unwrap_or(false) {
-                match event::read() {
-                    Ok(CEvent::Key(key)) => {
-                        if tx.send(AppEvent::Key(key)).is_err() {
-                            break;
-                        }
+                if let Ok(CEvent::Key(key)) = event::read() {
+                    if tx.send(AppEvent::Key(key)).is_err() {
+                        break;
                     }
-                    Ok(CEvent::Resize(w, h)) => {
-                        if tx.send(AppEvent::Resize(w, h)).is_err() {
-                            break;
-                        }
-                    }
-                    _ => {}
                 }
             }
         });

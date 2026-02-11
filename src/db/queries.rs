@@ -11,20 +11,7 @@ use super::models::{
     WraparoundInfo,
 };
 
-/// Query result limits - these values are embedded in the SQL constants below.
-/// Change both the constant and the corresponding SQL if adjusting limits.
-pub mod limits {
-    /// Maximum active queries to fetch from `pg_stat_activity`
-    pub const MAX_ACTIVE_QUERIES: u32 = 100;
-    /// Maximum blocking chains to fetch
-    pub const MAX_BLOCKING_CHAINS: u32 = 50;
-    /// Maximum table stats entries to fetch
-    pub const MAX_TABLE_STATS: u32 = 30;
-    /// Maximum `pg_stat_statements` entries to fetch
-    pub const MAX_STAT_STATEMENTS: u32 = 100;
-}
-
-/// See `limits::MAX_ACTIVE_QUERIES`
+/// Limit: 100 active queries
 const ACTIVE_QUERIES_SQL: &str = "
 SELECT
     pid,

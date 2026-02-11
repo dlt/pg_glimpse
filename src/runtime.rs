@@ -205,13 +205,8 @@ pub async fn run(cli: Cli) -> Result<()> {
             biased;
 
             event = events.next() => {
-                if let Some(evt) = event {
-                    match evt {
-                        event::AppEvent::Key(key) => {
-                            app.handle_key(key);
-                        }
-                        event::AppEvent::Resize(_, _) => {}
-                    }
+                if let Some(event::AppEvent::Key(key)) = event {
+                    app.handle_key(key);
                 }
             }
             result = result_rx.recv() => {

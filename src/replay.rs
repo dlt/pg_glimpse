@@ -202,16 +202,11 @@ pub async fn run_replay(path: &Path, config: AppConfig) -> Result<()> {
             biased;
 
             event = events.next() => {
-                if let Some(evt) = event {
-                    match evt {
-                        event::AppEvent::Key(key) => {
-                            // Replay-specific keys first
-                            let handled = handle_replay_key(&mut app, &mut session, key.code, &mut last_advance);
-                            if !handled {
-                                app.handle_key(key);
-                            }
-                        }
-                        event::AppEvent::Resize(_, _) => {}
+                if let Some(event::AppEvent::Key(key)) = event {
+                    // Replay-specific keys first
+                    let handled = handle_replay_key(&mut app, &mut session, key.code, &mut last_advance);
+                    if !handled {
+                        app.handle_key(key);
                     }
                 }
             }
