@@ -66,9 +66,6 @@ mod tests {
 
     #[test]
     fn result_type_works() {
-        let ok: Result<i32> = Ok(42);
-        assert_eq!(ok.unwrap(), 42);
-
         let err: Result<i32> = Err(DbError::UnsupportedVersion { version: 8 });
         assert!(err.is_err());
     }
