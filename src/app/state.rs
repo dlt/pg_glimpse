@@ -14,6 +14,7 @@ use super::sorting::SortColumnTrait;
 use super::{AppAction, IndexSortColumn, SortColumn, StatementSortColumn, TableStatSortColumn};
 
 /// Generic table view state with sort column and navigation
+#[derive(Debug)]
 pub struct TableViewState<S: SortColumnTrait> {
     pub state: TableState,
     pub sort_column: S,
@@ -56,6 +57,7 @@ impl<S: SortColumnTrait> TableViewState<S> {
 }
 
 /// Consolidated panel navigation states
+#[derive(Debug)]
 pub struct PanelStates {
     // Sortable panels
     pub queries: TableViewState<SortColumn>,
@@ -146,6 +148,7 @@ impl Default for PanelStates {
 }
 
 /// State for recordings browser overlay
+#[derive(Debug)]
 pub struct RecordingsBrowser {
     pub list: Vec<RecordingInfo>,
     pub selected: usize,
@@ -174,6 +177,7 @@ impl Default for RecordingsBrowser {
 }
 
 /// State for config settings overlay
+#[derive(Debug)]
 pub struct ConfigOverlay {
     pub selected: usize,
     pub input_buffer: String,
@@ -195,6 +199,7 @@ impl Default for ConfigOverlay {
 }
 
 /// UI feedback state (errors, status, loading indicators)
+#[derive(Debug)]
 pub struct UiFeedback {
     pub last_error: Option<String>,
     pub status_message: Option<String>,
@@ -228,6 +233,7 @@ impl Default for UiFeedback {
 }
 
 /// State for replay mode (when reviewing recorded sessions)
+#[derive(Debug)]
 pub struct ReplayState {
     pub filename: String,
     pub position: usize,
@@ -248,7 +254,8 @@ impl ReplayState {
     }
 }
 
-/// Connection information (read-only after construction)
+/// Connection information
+#[derive(Debug)]
 pub struct ConnectionInfo {
     pub host: String,
     pub port: u16,
@@ -274,7 +281,7 @@ impl ConnectionInfo {
 }
 
 /// Filter state for panel filtering
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct FilterState {
     pub text: String,
     pub active: bool,
@@ -296,6 +303,7 @@ impl FilterState {
 }
 
 /// Lightweight struct for rate delta calculations (avoids cloning full `PgSnapshot`)
+#[derive(Debug)]
 pub(super) struct PrevMetrics {
     pub timestamp: DateTime<Utc>,
     pub xact_commit: i64,
@@ -305,6 +313,7 @@ pub(super) struct PrevMetrics {
 }
 
 /// Metrics history for sparklines and rate calculations
+#[derive(Debug)]
 pub struct MetricsHistory {
     // Sparkline data
     pub connections: RingBuffer<u64>,
