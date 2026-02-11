@@ -6,13 +6,13 @@ pg_glimpse is a terminal-based PostgreSQL monitoring tool built with Rust. It fo
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                           Event Loop (runtime.rs)                    │
-│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐      │
-│  │  Events  │───▶│   App    │───▶│  Render  │───▶│ Terminal │      │
-│  │ (input)  │    │ (state)  │    │   (ui)   │    │ (output) │      │
-│  └──────────┘    └──────────┘    └──────────┘    └──────────┘      │
-│       ▲               │                                              │
-│       │               ▼                                              │
+│                           Event Loop (runtime.rs)                   │
+│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐       │
+│  │  Events  │───▶│   App    │───▶│  Render  │───▶│ Terminal │       │
+│  │ (input)  │    │ (state)  │    │   (ui)   │    │ (output) │       │
+│  └──────────┘    └──────────┘    └──────────┘    └──────────┘       │
+│       ▲               │                                             │
+│       │               ▼                                             │
 │  ┌──────────┐    ┌──────────┐                                       │
 │  │  Timer   │    │ Actions  │──▶ DB Commands (async)                │
 │  │  Ticks   │    │ (effects)│                                       │
