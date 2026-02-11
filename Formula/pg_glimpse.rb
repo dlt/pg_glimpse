@@ -2,29 +2,29 @@ class PgGlimpse < Formula
   desc "Terminal-based PostgreSQL monitoring tool with live TUI"
   homepage "https://github.com/dlt/pg_glimpse"
   license "MIT"
-  version "0.4.0"
+  version "0.5.0"
 
   on_macos do
     on_arm do
       url "https://github.com/dlt/pg_glimpse/releases/download/v#{version}/pg_glimpse-v#{version}-aarch64-apple-darwin.tar.gz"
-      sha256 "21fb863d9694ce653540d8cff9d7efff09d084d657bf7f836928cbce14284a10"
+      sha256 "24ffbe371606e48c438d4fc406a20fd8c6324f5ed5b7a3febbe3c63200e70c19"
     end
 
     on_intel do
       url "https://github.com/dlt/pg_glimpse/releases/download/v#{version}/pg_glimpse-v#{version}-x86_64-apple-darwin.tar.gz"
-      sha256 "7add009ce8568c310dcbe23ac358cfec613dfa3b65d2373e4690a75af3cf101f"
+      sha256 "441b6ffbcb399190befddf07b7ac0bb8e9ef6847b2dcd6c638f6424c8e4ab4a7"
     end
   end
 
   on_linux do
     on_arm do
       url "https://github.com/dlt/pg_glimpse/releases/download/v#{version}/pg_glimpse-v#{version}-aarch64-unknown-linux-musl.tar.gz"
-      sha256 "209182141a6c2f086ba52ff013db5be699ccd2a34cc3d69f4674abd9ea0f9451"
+      sha256 "40e1afe70f5b3c5aff1cdd9508f33ccb006662bbd2c00a66bc36f9ae9da33755"
     end
 
     on_intel do
       url "https://github.com/dlt/pg_glimpse/releases/download/v#{version}/pg_glimpse-v#{version}-x86_64-unknown-linux-musl.tar.gz"
-      sha256 "4e6275cad88c9ba29963d2416a522639e08143669b415279db006bca680b1de3"
+      sha256 "21af727e2342e40f2a818c4027c80181ddc4d9be6207f783e2e49a856b6bb740"
     end
   end
 
