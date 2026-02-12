@@ -552,18 +552,18 @@ fn confirm_kill_choice_esc() {
 #[test]
 fn inspect_scroll_and_exit() {
     let targets = [
-        InspectTarget::Query,
-        InspectTarget::Index,
-        InspectTarget::Statement,
-        InspectTarget::Replication,
-        InspectTarget::Table,
-        InspectTarget::Blocking,
-        InspectTarget::Vacuum,
-        InspectTarget::Wraparound,
+        InspectTarget::Query(12345),
+        InspectTarget::Index("public.test_idx".to_string()),
+        InspectTarget::Statement(123456789),
+        InspectTarget::Replication(12345),
+        InspectTarget::Table("public.test".to_string()),
+        InspectTarget::Blocking(12345),
+        InspectTarget::Vacuum(12345),
+        InspectTarget::Wraparound("testdb".to_string()),
     ];
     for target in targets {
         let mut app = make_app();
-        app.view_mode = ViewMode::Inspect(target);
+        app.view_mode = ViewMode::Inspect(target.clone());
         app.overlay_scroll = 5;
 
         app.handle_key(key(KeyCode::Down));
@@ -1822,7 +1822,7 @@ fn inspect_with_no_selection_no_panic() {
     app.panels.queries.state.select(None);
 
     // Trying to enter inspect mode should be safe
-    app.view_mode = ViewMode::Inspect(InspectTarget::Query);
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query(99999));
 
     // App should handle this state gracefully
     assert!(app.snapshot.is_some());
@@ -2057,7 +2057,7 @@ fn extensions_inspect_opens() {
     app.panels.extensions.select(Some(0));
 
     app.handle_key(key(KeyCode::Enter));
-    assert_eq!(app.view_mode, ViewMode::Inspect(InspectTarget::Extensions));
+    assert_eq!(app.view_mode, ViewMode::Inspect(InspectTarget::Extensions("pg_stat_statements".to_string())));
     assert_eq!(app.overlay_scroll, 0);
 }
 
@@ -2073,7 +2073,7 @@ fn extensions_inspect_does_not_open_when_empty() {
 #[test]
 fn extensions_inspect_closes_with_esc() {
     let mut app = make_app_with_extensions();
-    app.view_mode = ViewMode::Inspect(InspectTarget::Extensions);
+    app.view_mode = ViewMode::Inspect(InspectTarget::Extensions("pg_stat_statements".to_string()));
     app.overlay_scroll = 5;
 
     app.handle_key(key(KeyCode::Esc));
@@ -2084,7 +2084,7 @@ fn extensions_inspect_closes_with_esc() {
 #[test]
 fn extensions_inspect_closes_with_q() {
     let mut app = make_app_with_extensions();
-    app.view_mode = ViewMode::Inspect(InspectTarget::Extensions);
+    app.view_mode = ViewMode::Inspect(InspectTarget::Extensions("pg_stat_statements".to_string()));
 
     app.handle_key(key(KeyCode::Char('q')));
     assert_eq!(app.view_mode, ViewMode::Normal);
@@ -2093,7 +2093,7 @@ fn extensions_inspect_closes_with_q() {
 #[test]
 fn extensions_inspect_scroll_down() {
     let mut app = make_app_with_extensions();
-    app.view_mode = ViewMode::Inspect(InspectTarget::Extensions);
+    app.view_mode = ViewMode::Inspect(InspectTarget::Extensions("pg_stat_statements".to_string()));
     app.overlay_scroll = 0;
 
     app.handle_key(key(KeyCode::Down));
@@ -2106,7 +2106,7 @@ fn extensions_inspect_scroll_down() {
 #[test]
 fn extensions_inspect_scroll_up() {
     let mut app = make_app_with_extensions();
-    app.view_mode = ViewMode::Inspect(InspectTarget::Extensions);
+    app.view_mode = ViewMode::Inspect(InspectTarget::Extensions("pg_stat_statements".to_string()));
     app.overlay_scroll = 5;
 
     app.handle_key(key(KeyCode::Up));

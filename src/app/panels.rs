@@ -46,19 +46,19 @@ impl BottomPanel {
     }
 }
 
-/// Target for inspect overlays
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Target for inspect overlays with stable identifiers
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InspectTarget {
-    Query,
-    Index,
-    Statement,
-    Replication,
-    Table,
-    Blocking,
-    Vacuum,
-    Wraparound,
-    Settings,
-    Extensions,
+    Query(i32),           // PID
+    Index(String),        // schema.index_name
+    Statement(i64),       // queryid
+    Replication(i32),     // PID
+    Table(String),        // schema.table_name
+    Blocking(i32),        // blocked_pid
+    Vacuum(i32),          // PID
+    Wraparound(String),   // datname
+    Settings(String),     // setting name
+    Extensions(String),   // extension name
 }
 
 /// Confirmation action types

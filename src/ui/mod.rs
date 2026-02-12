@@ -93,16 +93,16 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         ViewMode::Inspect(target) => {
             let area = frame.area();
             match target {
-                InspectTarget::Query => overlay::render_inspect(frame, app, area),
-                InspectTarget::Index => overlay::render_index_inspect(frame, app, area),
-                InspectTarget::Statement => overlay::render_statement_inspect(frame, app, area),
-                InspectTarget::Replication => overlay::render_replication_inspect(frame, app, area),
-                InspectTarget::Table => overlay::render_table_inspect(frame, app, area),
-                InspectTarget::Blocking => overlay::render_blocking_inspect(frame, app, area),
-                InspectTarget::Vacuum => overlay::render_vacuum_inspect(frame, app, area),
-                InspectTarget::Wraparound => overlay::render_wraparound_inspect(frame, app, area),
-                InspectTarget::Settings => overlay::render_settings_inspect(frame, app, area),
-                InspectTarget::Extensions => overlay::render_extensions_inspect(frame, app, area),
+                InspectTarget::Query(pid) => overlay::render_inspect(frame, app, area, *pid),
+                InspectTarget::Index(key) => overlay::render_index_inspect(frame, app, area, key),
+                InspectTarget::Statement(queryid) => overlay::render_statement_inspect(frame, app, area, *queryid),
+                InspectTarget::Replication(pid) => overlay::render_replication_inspect(frame, app, area, *pid),
+                InspectTarget::Table(key) => overlay::render_table_inspect(frame, app, area, key),
+                InspectTarget::Blocking(pid) => overlay::render_blocking_inspect(frame, app, area, *pid),
+                InspectTarget::Vacuum(pid) => overlay::render_vacuum_inspect(frame, app, area, *pid),
+                InspectTarget::Wraparound(datname) => overlay::render_wraparound_inspect(frame, app, area, datname),
+                InspectTarget::Settings(name) => overlay::render_settings_inspect(frame, app, area, name),
+                InspectTarget::Extensions(name) => overlay::render_extensions_inspect(frame, app, area, name),
             }
         }
         ViewMode::Confirm(action) => {

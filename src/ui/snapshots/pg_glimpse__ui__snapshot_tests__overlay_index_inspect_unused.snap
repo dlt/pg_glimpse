@@ -10,18 +10,18 @@ expression: buffer_to_string(&terminal)
                                                                                                     
                                                                                                     
             ╭  Index Details  [j/k] scroll  [y] copy definition  [Esc] close  ────────╮             
+            │Index no longer exists                                                   │             
             │                                                                         │             
-            │  Index Info ────────────────────────────────────────                    │             
-            │  Schema:      public     Table: orders                                  │             
-            │  Index:       orders_pkey                                               │             
-            │  Size:        50.0 MB                                                   │             
             │                                                                         │             
-            │  Usage Stats ────────────────────────────────────────                   │             
-            │  Scans:        50000                                                    │             
-            │  Tup Read:    50000     Tup Fetch: 49500                                │             
             │                                                                         │             
-            │  Definition ────────────────────────────────────────                    │             
-            │  CREATE UNIQUE INDEX orders_pkey ON public.orders USING btree (id)      │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             

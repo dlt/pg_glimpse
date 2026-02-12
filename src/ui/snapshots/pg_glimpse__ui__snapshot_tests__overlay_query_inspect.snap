@@ -11,15 +11,15 @@ expression: buffer_to_string(&terminal)
                ╭  Query Details  [j/k] scroll  [y] copy query  [C] cancel  [K] kill ╮               
                │                                                                    │               
                │  Connection ────────────────────────────────────────               │               
-               │  PID:       12346     User: admin     DB: production               │               
+               │  PID:       12345     User: app_user     DB: production            │               
                │  Backend:   client backend                                         │               
                │                                                                    │               
                │  Status ────────────────────────────────────────                   │               
-               │  State:      idle in transaction      Duration: 3m45s              │               
-               │  Wait:      Client / ClientRead                                    │               
+               │  State:      active      Duration: 5.5s                            │               
+               │  Wait:      IO / DataFileRead                                      │               
                │                                                                    │               
                │  Query ────────────────────────────────────────                    │               
-               │  UPDATE orders SET status = 'shipped'                              │               
+               │  SELECT * FROM users WHERE id = $1                                 │               
                │                                                                    │               
                │                                                                    │               
                │                                                                    │               

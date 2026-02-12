@@ -11,7 +11,7 @@ use crate::ui::util::{format_bytes, format_compact, format_duration, format_lag,
 use super::sql_highlight::highlight_sql;
 use super::{centered_rect, overlay_block, section_header};
 
-pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
+pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect, pid: i32) {
     let popup = centered_rect(70, 70, area);
     frame.render_widget(Clear, popup);
 
@@ -25,16 +25,13 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let idx = app.panels.queries.selected().unwrap_or(0);
-    let indices = app.sorted_query_indices();
-    let Some(&real_idx) = indices.get(idx) else {
+    let Some(q) = snap.active_queries.iter().find(|q| q.pid == pid) else {
         frame.render_widget(
-            Paragraph::new("No query selected").block(block),
+            Paragraph::new("Query no longer exists").block(block),
             popup,
         );
         return;
     };
-    let q = &snap.active_queries[real_idx];
 
     let duration_color = Theme::duration_color(q.duration_secs);
     let state_color = Theme::state_color(q.state.as_deref());
@@ -106,7 +103,7 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, popup);
 }
 
-pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
+pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect, key: &str) {
     let popup = centered_rect(75, 60, area);
     frame.render_widget(Clear, popup);
 
@@ -117,16 +114,15 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let sel = app.panels.indexes.selected().unwrap_or(0);
-    let indices = app.sorted_index_indices();
-    let Some(&real_idx) = indices.get(sel) else {
+    let Some(idx) = snap.indexes.iter().find(|i| {
+        format!("{}.{}", i.schemaname, i.index_name) == key
+    }) else {
         frame.render_widget(
-            Paragraph::new("No index selected").block(block),
+            Paragraph::new("Index no longer exists").block(block),
             popup,
         );
         return;
     };
-    let idx = &snap.indexes[real_idx];
 
     let scan_color = Theme::index_usage_color(idx.idx_scan);
 
@@ -189,7 +185,7 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, popup);
 }
 
-pub fn render_replication_inspect(frame: &mut Frame, app: &App, area: Rect) {
+pub fn render_replication_inspect(frame: &mut Frame, app: &App, area: Rect, pid: i32) {
     let popup = centered_rect(70, 70, area);
     frame.render_widget(Clear, popup);
 
@@ -200,10 +196,9 @@ pub fn render_replication_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let sel = app.panels.replication.selected().unwrap_or(0);
-    let Some(r) = snap.replication.get(sel) else {
+    let Some(r) = snap.replication.iter().find(|r| r.pid == pid) else {
         frame.render_widget(
-            Paragraph::new("No replication slot selected").block(block),
+            Paragraph::new("Replication slot no longer exists").block(block),
             popup,
         );
         return;
@@ -345,7 +340,7 @@ pub fn render_replication_inspect(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, popup);
 }
 
-pub fn render_table_inspect(frame: &mut Frame, app: &App, area: Rect) {
+pub fn render_table_inspect(frame: &mut Frame, app: &App, area: Rect, key: &str) {
     let popup = centered_rect(75, 75, area);
     frame.render_widget(Clear, popup);
 
@@ -356,16 +351,15 @@ pub fn render_table_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let sel = app.panels.table_stats.selected().unwrap_or(0);
-    let indices = app.sorted_table_stat_indices();
-    let Some(&real_idx) = indices.get(sel) else {
+    let Some(tbl) = snap.table_stats.iter().find(|t| {
+        format!("{}.{}", t.schemaname, t.relname) == key
+    }) else {
         frame.render_widget(
-            Paragraph::new("No table selected").block(block),
+            Paragraph::new("Table no longer exists").block(block),
             popup,
         );
         return;
     };
-    let tbl = &snap.table_stats[real_idx];
 
     let dead_color = Theme::dead_ratio_color(tbl.dead_ratio);
 
@@ -534,7 +528,7 @@ pub fn render_table_inspect(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, popup);
 }
 
-pub fn render_blocking_inspect(frame: &mut Frame, app: &App, area: Rect) {
+pub fn render_blocking_inspect(frame: &mut Frame, app: &App, area: Rect, blocked_pid: i32) {
     let popup = centered_rect(80, 70, area);
     frame.render_widget(Clear, popup);
 
@@ -545,10 +539,9 @@ pub fn render_blocking_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let sel = app.panels.blocking.selected().unwrap_or(0);
-    let Some(info) = snap.blocking_info.get(sel) else {
+    let Some(info) = snap.blocking_info.iter().find(|b| b.blocked_pid == blocked_pid) else {
         frame.render_widget(
-            Paragraph::new("No blocking info selected").block(block),
+            Paragraph::new("Lock info no longer exists").block(block),
             popup,
         );
         return;
@@ -621,7 +614,7 @@ pub fn render_blocking_inspect(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, popup);
 }
 
-pub fn render_vacuum_inspect(frame: &mut Frame, app: &App, area: Rect) {
+pub fn render_vacuum_inspect(frame: &mut Frame, app: &App, area: Rect, pid: i32) {
     let popup = centered_rect(70, 60, area);
     frame.render_widget(Clear, popup);
 
@@ -632,10 +625,9 @@ pub fn render_vacuum_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let sel = app.panels.vacuum.selected().unwrap_or(0);
-    let Some(vac) = snap.vacuum_progress.get(sel) else {
+    let Some(vac) = snap.vacuum_progress.iter().find(|v| v.pid == pid) else {
         frame.render_widget(
-            Paragraph::new("No vacuum in progress").block(block),
+            Paragraph::new("Vacuum no longer in progress").block(block),
             popup,
         );
         return;
@@ -731,7 +723,7 @@ pub fn render_vacuum_inspect(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, popup);
 }
 
-pub fn render_wraparound_inspect(frame: &mut Frame, app: &App, area: Rect) {
+pub fn render_wraparound_inspect(frame: &mut Frame, app: &App, area: Rect, datname: &str) {
     let popup = centered_rect(70, 65, area);
     frame.render_widget(Clear, popup);
 
@@ -742,10 +734,9 @@ pub fn render_wraparound_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let sel = app.panels.wraparound.selected().unwrap_or(0);
-    let Some(wrap) = snap.wraparound.get(sel) else {
+    let Some(wrap) = snap.wraparound.iter().find(|w| w.datname == datname) else {
         frame.render_widget(
-            Paragraph::new("No wraparound data").block(block),
+            Paragraph::new("Database no longer in wraparound list").block(block),
             popup,
         );
         return;
@@ -847,7 +838,7 @@ pub fn render_wraparound_inspect(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, popup);
 }
 
-pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
+pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect, queryid: i64) {
     let popup = centered_rect(80, 80, area);
     frame.render_widget(Clear, popup);
 
@@ -858,16 +849,13 @@ pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
-    let sel = app.panels.statements.selected().unwrap_or(0);
-    let indices = app.sorted_stmt_indices();
-    let Some(&real_idx) = indices.get(sel) else {
+    let Some(stmt) = snap.stat_statements.iter().find(|s| s.queryid == queryid) else {
         frame.render_widget(
-            Paragraph::new("No statement selected").block(block),
+            Paragraph::new("Statement no longer exists").block(block),
             popup,
         );
         return;
     };
-    let stmt = &snap.stat_statements[real_idx];
 
     let hit_color = Theme::hit_ratio_color(stmt.hit_ratio);
 
@@ -1010,20 +998,19 @@ pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, popup);
 }
 
-pub fn render_settings_inspect(frame: &mut Frame, app: &App, area: Rect) {
+pub fn render_settings_inspect(frame: &mut Frame, app: &App, area: Rect, name: &str) {
     let popup_area = centered_rect(60, 70, area);
     frame.render_widget(Clear, popup_area);
 
     let block = overlay_block("Setting Details", Theme::border_active());
 
-    let indices = app.sorted_settings_indices();
-    let selected = app.panels.settings.selected().unwrap_or(0);
-    let Some(&idx) = indices.get(selected) else {
-        frame.render_widget(block, popup_area);
+    let Some(s) = app.server_info.settings.iter().find(|s| s.name == name) else {
+        frame.render_widget(
+            Paragraph::new("Setting not found").block(block),
+            popup_area,
+        );
         return;
     };
-
-    let s = &app.server_info.settings[idx];
 
     let mut lines = vec![
         // Setting section
@@ -1121,23 +1108,19 @@ fn settings_context_description(context: &str) -> (&'static str, Color) {
     }
 }
 
-pub fn render_extensions_inspect(frame: &mut Frame, app: &App, area: Rect) {
+pub fn render_extensions_inspect(frame: &mut Frame, app: &App, area: Rect, name: &str) {
     let popup_area = centered_rect(60, 55, area);
     frame.render_widget(Clear, popup_area);
 
     let block = overlay_block(" Extension Details  [j/k] scroll  [y] copy name  [Esc] close ", Theme::border_active());
 
-    let indices = app.sorted_extensions_indices();
-    let selected = app.panels.extensions.selected().unwrap_or(0);
-    let Some(&idx) = indices.get(selected) else {
+    let Some(ext) = app.server_info.extensions_list.iter().find(|e| e.name == name) else {
         frame.render_widget(
-            Paragraph::new("No extension selected").block(block),
+            Paragraph::new("Extension not found").block(block),
             popup_area,
         );
         return;
     };
-
-    let ext = &app.server_info.extensions_list[idx];
 
     let relocatable_color = if ext.relocatable {
         Theme::border_ok()

@@ -253,6 +253,70 @@ impl App {
         Some(snap.active_queries[real_idx].pid)
     }
 
+    pub fn selected_index_key(&self) -> Option<String> {
+        let snap = self.snapshot.as_ref()?;
+        let idx = self.panels.indexes.selected().or(Some(0))?;
+        let indices = self.sorted_index_indices();
+        let &real_idx = indices.get(idx)?;
+        let index = &snap.indexes[real_idx];
+        Some(format!("{}.{}", index.schemaname, index.index_name))
+    }
+
+    pub fn selected_statement_queryid(&self) -> Option<i64> {
+        let snap = self.snapshot.as_ref()?;
+        let idx = self.panels.statements.selected().or(Some(0))?;
+        let indices = self.sorted_stmt_indices();
+        let &real_idx = indices.get(idx)?;
+        Some(snap.stat_statements[real_idx].queryid)
+    }
+
+    pub fn selected_table_key(&self) -> Option<String> {
+        let snap = self.snapshot.as_ref()?;
+        let idx = self.panels.table_stats.selected().or(Some(0))?;
+        let indices = self.sorted_table_stat_indices();
+        let &real_idx = indices.get(idx)?;
+        let table = &snap.table_stats[real_idx];
+        Some(format!("{}.{}", table.schemaname, table.relname))
+    }
+
+    pub fn selected_replication_pid(&self) -> Option<i32> {
+        let snap = self.snapshot.as_ref()?;
+        let sel = self.panels.replication.selected().or(Some(0))?;
+        Some(snap.replication.get(sel)?.pid)
+    }
+
+    pub fn selected_blocking_pid(&self) -> Option<i32> {
+        let snap = self.snapshot.as_ref()?;
+        let sel = self.panels.blocking.selected().or(Some(0))?;
+        Some(snap.blocking_info.get(sel)?.blocked_pid)
+    }
+
+    pub fn selected_vacuum_pid(&self) -> Option<i32> {
+        let snap = self.snapshot.as_ref()?;
+        let sel = self.panels.vacuum.selected().or(Some(0))?;
+        Some(snap.vacuum_progress.get(sel)?.pid)
+    }
+
+    pub fn selected_wraparound_datname(&self) -> Option<String> {
+        let snap = self.snapshot.as_ref()?;
+        let sel = self.panels.wraparound.selected().or(Some(0))?;
+        Some(snap.wraparound.get(sel)?.datname.clone())
+    }
+
+    pub fn selected_setting_name(&self) -> Option<String> {
+        let indices = self.sorted_settings_indices();
+        let idx = self.panels.settings.selected().or(Some(0))?;
+        let &real_idx = indices.get(idx)?;
+        Some(self.server_info.settings[real_idx].name.clone())
+    }
+
+    pub fn selected_extension_name(&self) -> Option<String> {
+        let indices = self.sorted_extensions_indices();
+        let idx = self.panels.extensions.selected().or(Some(0))?;
+        let &real_idx = indices.get(idx)?;
+        Some(self.server_info.extensions_list[real_idx].name.clone())
+    }
+
     /// Get PIDs of all queries matching the current filter
     pub fn get_filtered_pids(&self) -> Vec<i32> {
         let Some(snap) = &self.snapshot else {
@@ -429,9 +493,9 @@ impl App {
                 self.feedback.status_message = None;
             }
             KeyCode::Enter | KeyCode::Char('i') => {
-                if self.selected_query_pid().is_some() {
+                if let Some(pid) = self.selected_query_pid() {
                     self.overlay_scroll = 0;
-                    self.view_mode = ViewMode::Inspect(InspectTarget::Query);
+                    self.view_mode = ViewMode::Inspect(InspectTarget::Query(pid));
                 }
             }
             KeyCode::Char('K') if self.replay.is_none() => {
@@ -466,6 +530,7 @@ impl App {
             }
             KeyCode::Char('s') => {
                 self.panels.queries.cycle_sort();
+                self.panels.queries.select_first();
                 self.feedback.status_message = Some(format!(
                     "Sort: {} {}",
                     self.panels.queries.sort_column.label(),
@@ -490,20 +555,14 @@ impl App {
                 self.panels.indexes.select_next(max);
             }
             KeyCode::Enter => {
-                if self
-                    .snapshot
-                    .as_ref()
-                    .is_some_and(|s| !s.indexes.is_empty())
-                {
-                    if self.panels.indexes.selected().is_none() {
-                        self.panels.indexes.select_first();
-                    }
+                if let Some(key) = self.selected_index_key() {
                     self.overlay_scroll = 0;
-                    self.view_mode = ViewMode::Inspect(InspectTarget::Index);
+                    self.view_mode = ViewMode::Inspect(InspectTarget::Index(key));
                 }
             }
             KeyCode::Char('s') => {
                 self.panels.indexes.cycle_sort();
+                self.panels.indexes.select_first();
                 // Default ascending for Name/Scans, descending for others
                 self.panels.indexes.sort_ascending = matches!(
                     self.panels.indexes.sort_column,
@@ -529,20 +588,14 @@ impl App {
                 self.panels.statements.select_next(max);
             }
             KeyCode::Enter => {
-                if self
-                    .snapshot
-                    .as_ref()
-                    .is_some_and(|s| !s.stat_statements.is_empty())
-                {
-                    if self.panels.statements.selected().is_none() {
-                        self.panels.statements.select_first();
-                    }
+                if let Some(queryid) = self.selected_statement_queryid() {
                     self.overlay_scroll = 0;
-                    self.view_mode = ViewMode::Inspect(InspectTarget::Statement);
+                    self.view_mode = ViewMode::Inspect(InspectTarget::Statement(queryid));
                 }
             }
             KeyCode::Char('s') => {
                 self.panels.statements.cycle_sort();
+                self.panels.statements.select_first();
                 self.feedback.status_message = Some(format!(
                     "Sort: {} {}",
                     self.panels.statements.sort_column.label(),
@@ -567,20 +620,14 @@ impl App {
                 self.panels.table_stats.select_next(max);
             }
             KeyCode::Enter => {
-                if self
-                    .snapshot
-                    .as_ref()
-                    .is_some_and(|s| !s.table_stats.is_empty())
-                {
-                    if self.panels.table_stats.selected().is_none() {
-                        self.panels.table_stats.select_first();
-                    }
+                if let Some(key) = self.selected_table_key() {
                     self.overlay_scroll = 0;
-                    self.view_mode = ViewMode::Inspect(InspectTarget::Table);
+                    self.view_mode = ViewMode::Inspect(InspectTarget::Table(key));
                 }
             }
             KeyCode::Char('s') => {
                 self.panels.table_stats.cycle_sort();
+                self.panels.table_stats.select_first();
                 self.feedback.status_message = Some(format!(
                     "Sort: {} {}",
                     self.panels.table_stats.sort_column.label(),
@@ -603,16 +650,20 @@ impl App {
     fn handle_replication_key(&mut self, key: KeyEvent) {
         let len = self.snapshot.as_ref().map_or(0, |s| s.replication.len());
         if PanelStates::simple_nav(&mut self.panels.replication, key.code, len) {
-            self.overlay_scroll = 0;
-            self.view_mode = ViewMode::Inspect(InspectTarget::Replication);
+            if let Some(pid) = self.selected_replication_pid() {
+                self.overlay_scroll = 0;
+                self.view_mode = ViewMode::Inspect(InspectTarget::Replication(pid));
+            }
         }
     }
 
     fn handle_blocking_key(&mut self, key: KeyEvent) {
         let len = self.snapshot.as_ref().map_or(0, |s| s.blocking_info.len());
         if PanelStates::simple_nav(&mut self.panels.blocking, key.code, len) {
-            self.overlay_scroll = 0;
-            self.view_mode = ViewMode::Inspect(InspectTarget::Blocking);
+            if let Some(pid) = self.selected_blocking_pid() {
+                self.overlay_scroll = 0;
+                self.view_mode = ViewMode::Inspect(InspectTarget::Blocking(pid));
+            }
         }
     }
 
@@ -622,32 +673,40 @@ impl App {
             .as_ref()
             .map_or(0, |s| s.vacuum_progress.len());
         if PanelStates::simple_nav(&mut self.panels.vacuum, key.code, len) {
-            self.overlay_scroll = 0;
-            self.view_mode = ViewMode::Inspect(InspectTarget::Vacuum);
+            if let Some(pid) = self.selected_vacuum_pid() {
+                self.overlay_scroll = 0;
+                self.view_mode = ViewMode::Inspect(InspectTarget::Vacuum(pid));
+            }
         }
     }
 
     fn handle_wraparound_key(&mut self, key: KeyEvent) {
         let len = self.snapshot.as_ref().map_or(0, |s| s.wraparound.len());
         if PanelStates::simple_nav(&mut self.panels.wraparound, key.code, len) {
-            self.overlay_scroll = 0;
-            self.view_mode = ViewMode::Inspect(InspectTarget::Wraparound);
+            if let Some(datname) = self.selected_wraparound_datname() {
+                self.overlay_scroll = 0;
+                self.view_mode = ViewMode::Inspect(InspectTarget::Wraparound(datname));
+            }
         }
     }
 
     fn handle_settings_key(&mut self, key: KeyEvent) {
         let len = self.sorted_settings_indices().len();
         if PanelStates::simple_nav(&mut self.panels.settings, key.code, len) {
-            self.overlay_scroll = 0;
-            self.view_mode = ViewMode::Inspect(InspectTarget::Settings);
+            if let Some(name) = self.selected_setting_name() {
+                self.overlay_scroll = 0;
+                self.view_mode = ViewMode::Inspect(InspectTarget::Settings(name));
+            }
         }
     }
 
     fn handle_extensions_key(&mut self, key: KeyEvent) {
         let len = self.sorted_extensions_indices().len();
         if PanelStates::simple_nav(&mut self.panels.extensions, key.code, len) {
-            self.overlay_scroll = 0;
-            self.view_mode = ViewMode::Inspect(InspectTarget::Extensions);
+            if let Some(name) = self.selected_extension_name() {
+                self.overlay_scroll = 0;
+                self.view_mode = ViewMode::Inspect(InspectTarget::Extensions(name));
+            }
         }
     }
 
@@ -748,83 +807,65 @@ impl App {
 
     /// Get the text to copy for the current inspect overlay
     fn get_inspect_copy_text(&self) -> Option<String> {
-        let ViewMode::Inspect(target) = self.view_mode else {
+        let ViewMode::Inspect(ref target) = self.view_mode else {
             return None;
         };
         match target {
-            InspectTarget::Query => {
+            InspectTarget::Query(pid) => {
                 let snap = self.snapshot.as_ref()?;
-                let idx = self.panels.queries.selected().unwrap_or(0);
-                let indices = self.sorted_query_indices();
-                let &real_idx = indices.get(idx)?;
-                snap.active_queries[real_idx].query.clone()
+                let q = snap.active_queries.iter().find(|q| q.pid == *pid)?;
+                q.query.clone()
             }
-            InspectTarget::Index => {
+            InspectTarget::Index(key) => {
                 let snap = self.snapshot.as_ref()?;
-                let idx = self.panels.indexes.selected().unwrap_or(0);
-                let indices = self.sorted_index_indices();
-                let &real_idx = indices.get(idx)?;
-                Some(snap.indexes[real_idx].index_definition.clone())
+                let idx = snap.indexes.iter().find(|i| {
+                    format!("{}.{}", i.schemaname, i.index_name) == *key
+                })?;
+                Some(idx.index_definition.clone())
             }
-            InspectTarget::Statement => {
+            InspectTarget::Statement(queryid) => {
                 let snap = self.snapshot.as_ref()?;
-                let idx = self.panels.statements.selected().unwrap_or(0);
-                let indices = self.sorted_stmt_indices();
-                let &real_idx = indices.get(idx)?;
-                Some(snap.stat_statements[real_idx].query.clone())
+                let stmt = snap.stat_statements.iter().find(|s| s.queryid == *queryid)?;
+                Some(stmt.query.clone())
             }
-            InspectTarget::Replication => {
+            InspectTarget::Replication(pid) => {
                 let snap = self.snapshot.as_ref()?;
-                let sel = self.panels.replication.selected().unwrap_or(0);
-                let r = snap.replication.get(sel)?;
+                let r = snap.replication.iter().find(|r| r.pid == *pid)?;
                 Some(r.application_name.clone().unwrap_or_default())
             }
-            InspectTarget::Table => {
-                let snap = self.snapshot.as_ref()?;
-                let sel = self.panels.table_stats.selected().unwrap_or(0);
-                let indices = self.sorted_table_stat_indices();
-                let &real_idx = indices.get(sel)?;
-                let t = &snap.table_stats[real_idx];
-                Some(format!("{}.{}", t.schemaname, t.relname))
+            InspectTarget::Table(key) => {
+                Some(key.clone())
             }
-            InspectTarget::Blocking => {
+            InspectTarget::Blocking(blocked_pid) => {
                 let snap = self.snapshot.as_ref()?;
-                let sel = self.panels.blocking.selected().unwrap_or(0);
-                let info = snap.blocking_info.get(sel)?;
+                let info = snap.blocking_info.iter().find(|b| b.blocked_pid == *blocked_pid)?;
                 Some(info.blocked_query.clone().unwrap_or_default())
             }
-            InspectTarget::Vacuum => {
+            InspectTarget::Vacuum(pid) => {
                 let snap = self.snapshot.as_ref()?;
-                let sel = self.panels.vacuum.selected().unwrap_or(0);
-                let vac = snap.vacuum_progress.get(sel)?;
+                let vac = snap.vacuum_progress.iter().find(|v| v.pid == *pid)?;
                 Some(vac.table_name.clone())
             }
-            InspectTarget::Wraparound => {
-                let snap = self.snapshot.as_ref()?;
-                let sel = self.panels.wraparound.selected().unwrap_or(0);
-                let wrap = snap.wraparound.get(sel)?;
-                Some(wrap.datname.clone())
+            InspectTarget::Wraparound(datname) => {
+                Some(datname.clone())
             }
-            InspectTarget::Settings => {
-                let indices = self.sorted_settings_indices();
-                let &idx = indices.get(self.panels.settings.selected().unwrap_or(0))?;
-                let s = &self.server_info.settings[idx];
+            InspectTarget::Settings(name) => {
+                let s = self.server_info.settings.iter().find(|s| s.name == *name)?;
                 Some(format!("{} = {}", s.name, s.setting))
             }
-            InspectTarget::Extensions => {
-                let indices = self.sorted_extensions_indices();
-                let &idx = indices.get(self.panels.extensions.selected().unwrap_or(0))?;
-                Some(self.server_info.extensions_list[idx].name.clone())
+            InspectTarget::Extensions(name) => {
+                Some(name.clone())
             }
         }
     }
 
     /// Unified handler for all inspect overlay key events.
-    /// `allow_enter_close` is true for Query inspect (legacy behavior).
-    fn handle_inspect_overlay_key(&mut self, key: KeyEvent, allow_enter_close: bool) {
+    fn handle_inspect_overlay_key(&mut self, key: KeyEvent) {
+        // Query inspect allows Enter to close (legacy behavior)
+        let is_query_inspect = matches!(self.view_mode, ViewMode::Inspect(InspectTarget::Query(_)));
         let close = match key.code {
             KeyCode::Esc | KeyCode::Char('q') => true,
-            KeyCode::Enter if allow_enter_close => true,
+            KeyCode::Enter if is_query_inspect => true,
             _ => false,
         };
 
@@ -1148,10 +1189,8 @@ impl App {
                 }
                 return;
             }
-            ViewMode::Inspect(target) => {
-                // Query inspect allows Enter to close (legacy behavior)
-                let allow_enter_close = *target == InspectTarget::Query;
-                self.handle_inspect_overlay_key(key, allow_enter_close);
+            ViewMode::Inspect(_) => {
+                self.handle_inspect_overlay_key(key);
                 return;
             }
             ViewMode::Config => {
