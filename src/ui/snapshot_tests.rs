@@ -531,6 +531,16 @@ fn redact_timestamps(s: &str) -> String {
             result.push_str("XX:XX:");
             i += 6;
         }
+        // Handle severely truncated timestamp DD: at end of line (very tiny terminals)
+        else if i + 2 < chars.len()
+            && chars[i].is_ascii_digit()
+            && chars[i + 1].is_ascii_digit()
+            && chars[i + 2] == ':'
+            && (i + 3 >= chars.len() || chars[i + 3] == '\n')
+        {
+            result.push_str("XX:");
+            i += 3;
+        }
         // Look for uptime pattern: "up XXXd YYh" (e.g., "up 756d 10h")
         else if is_uptime_start(&chars, i) {
             if let Some((replacement, skip)) = extract_uptime(&chars, i) {

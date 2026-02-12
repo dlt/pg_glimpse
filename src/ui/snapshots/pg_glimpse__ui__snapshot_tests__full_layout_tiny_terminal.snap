@@ -2,7 +2,7 @@
 source: src/ui/snapshot_tests.rs
 expression: buffer_to_string(&terminal)
 ---
- 🐘  pg_glimpse   ◆ localhost:5432/production  as postgres  25/100 conns  ⟳ 1s11:
+ 🐘  pg_glimpse   ◆ localhost:5432/production  as postgres  25/100 conns  ⟳ 1sXX:
 ╭ 🔌  Connections ── 29 ────────────────╮╭ Server Stats ────────────────────────╮
 │                                      ││PG 15.4 · up XXXd XXh                 │
 │⣠⣤⣤⣤⣤⣤⣴⣶⣶⣶⣶⣶⣦⣤⣤⣤⣤⣤⣤⣴⣶⣶⣶⣶⣶⣦⣠⣤⣤⣤⣤⣤⣴⣶⣶⣶⣶⣶││DB: 10.0 GB · 25/100 conn (25%)       │
