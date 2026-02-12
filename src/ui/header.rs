@@ -33,8 +33,10 @@ fn render_live(frame: &mut Frame, app: &App, area: Rect) {
     let normal_style = Style::default().fg(Theme::fg());
     let label_style = Style::default().fg(Theme::fg_dim());
 
+    let emoji = if app.config.show_emojis { "🐘 " } else { "" };
+    let brand_text = format!(" {emoji}pg_glimpse ");
     let mut spans = vec![
-        Span::styled(" 🐘 pg_glimpse ", brand_style),
+        Span::styled(brand_text, brand_style),
         Span::styled("  ", dim_style),
         Span::styled("◆ ", Style::default().fg(Theme::border_ok())),
         Span::styled(

@@ -297,6 +297,7 @@ impl ThemeColors {
 pub struct AppConfig {
     pub graph_marker: GraphMarkerStyle,
     pub color_theme: ColorTheme,
+    pub show_emojis: bool,
     pub refresh_interval_secs: u64,
     pub warn_duration_secs: f64,
     pub danger_duration_secs: f64,
@@ -309,6 +310,7 @@ impl Default for AppConfig {
         Self {
             graph_marker: GraphMarkerStyle::Braille,
             color_theme: ColorTheme::TokyoNight,
+            show_emojis: true,
             refresh_interval_secs: 2,
             warn_duration_secs: 1.0,
             danger_duration_secs: 10.0,
@@ -348,6 +350,7 @@ impl AppConfig {
 pub enum ConfigItem {
     GraphMarker,
     ColorTheme,
+    ShowEmojis,
     RefreshInterval,
     WarnDuration,
     DangerDuration,
@@ -356,9 +359,10 @@ pub enum ConfigItem {
 }
 
 impl ConfigItem {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::GraphMarker,
         Self::ColorTheme,
+        Self::ShowEmojis,
         Self::RefreshInterval,
         Self::WarnDuration,
         Self::DangerDuration,
@@ -370,6 +374,7 @@ impl ConfigItem {
         match self {
             Self::GraphMarker => "Graph Marker",
             Self::ColorTheme => "Color Theme",
+            Self::ShowEmojis => "Show Emojis",
             Self::RefreshInterval => "Refresh Interval",
             Self::WarnDuration => "Warn Duration",
             Self::DangerDuration => "Danger Duration",
@@ -522,6 +527,7 @@ mod tests {
         let config = AppConfig::default();
         assert_eq!(config.graph_marker, GraphMarkerStyle::Braille);
         assert_eq!(config.color_theme, ColorTheme::TokyoNight);
+        assert!(config.show_emojis);
         assert_eq!(config.refresh_interval_secs, 2);
         assert_eq!(config.warn_duration_secs, 1.0);
         assert_eq!(config.danger_duration_secs, 10.0);
@@ -533,6 +539,7 @@ mod tests {
         let config = AppConfig {
             graph_marker: GraphMarkerStyle::Block,
             color_theme: ColorTheme::Nord,
+            show_emojis: true,
             refresh_interval_secs: 5,
             warn_duration_secs: 2.5,
             danger_duration_secs: 15.0,
@@ -579,6 +586,7 @@ mod tests {
         let config = AppConfig {
             graph_marker: GraphMarkerStyle::HalfBlock,
             color_theme: ColorTheme::Dracula,
+            show_emojis: false,
             refresh_interval_secs: 3,
             warn_duration_secs: 0.5,
             danger_duration_secs: 5.0,
@@ -600,11 +608,12 @@ mod tests {
     #[test]
     fn config_item_all_contains_all_variants() {
         // Ensure ALL array has correct count
-        assert_eq!(ConfigItem::ALL.len(), 7);
+        assert_eq!(ConfigItem::ALL.len(), 8);
 
         // Ensure all variants are present
         assert!(ConfigItem::ALL.contains(&ConfigItem::GraphMarker));
         assert!(ConfigItem::ALL.contains(&ConfigItem::ColorTheme));
+        assert!(ConfigItem::ALL.contains(&ConfigItem::ShowEmojis));
         assert!(ConfigItem::ALL.contains(&ConfigItem::RefreshInterval));
         assert!(ConfigItem::ALL.contains(&ConfigItem::WarnDuration));
         assert!(ConfigItem::ALL.contains(&ConfigItem::DangerDuration));
@@ -794,6 +803,7 @@ mod tests {
         let config = AppConfig {
             graph_marker: GraphMarkerStyle::HalfBlock,
             color_theme: ColorTheme::Dracula,
+            show_emojis: true,
             refresh_interval_secs: 5,
             warn_duration_secs: 2.5,
             danger_duration_secs: 15.0,
@@ -1001,6 +1011,7 @@ mod tests {
                 let config = AppConfig {
                     graph_marker: GraphMarkerStyle::Braille,
                     color_theme: ColorTheme::TokyoNight,
+                    show_emojis: true,
                     refresh_interval_secs: refresh,
                     warn_duration_secs: warn,
                     danger_duration_secs: danger,

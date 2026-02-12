@@ -24,13 +24,17 @@ pub fn render(frame: &mut Frame, app: &mut App) {
 
     header::render(frame, app, areas.header);
 
+    let show_emojis = app.config.show_emojis;
+
     // Top half: 2x2 graph grid
     let conn_data = app.metrics.connections.as_vec();
     let conn_current = app.metrics.connections.last().unwrap_or(0);
+    let conn_emoji = if show_emojis { "🔌 " } else { "" };
+    let conn_title = format!("{conn_emoji}Connections");
     graph::render_line_chart(
         frame,
         areas.graph_tl,
-        "🔌 Connections",
+        &conn_title,
         &conn_current.to_string(),
         &conn_data,
         Theme::graph_connections(),
@@ -44,10 +48,12 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     let cache_current = app.metrics.hit_ratio.last().unwrap_or(0);
     let cache_pct = cache_current as f64 / 10.0;
     let cache_color = Theme::hit_ratio_color(cache_pct);
+    let cache_emoji = if show_emojis { "💾 " } else { "" };
+    let cache_title = format!("{cache_emoji}Cache Hit");
     graph::render_ratio_chart(
         frame,
         areas.graph_bl,
-        "💾 Cache Hit",
+        &cache_title,
         &format!("{cache_pct:.1}%"),
         &cache_data,
         cache_color,
@@ -58,10 +64,12 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     let avg_data = app.metrics.avg_query_time.as_vec();
     let avg_current = app.metrics.avg_query_time.last().unwrap_or(0);
     let avg_label = format_duration(avg_current as f64 / 1000.0);
+    let avg_emoji = if show_emojis { "⏱️ " } else { "" };
+    let avg_title = format!("{avg_emoji}Avg Duration");
     graph::render_line_chart(
         frame,
         areas.graph_br,
-        "⏱️ Avg Duration",
+        &avg_title,
         &avg_label,
         &avg_data,
         Theme::graph_latency(),

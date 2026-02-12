@@ -30,13 +30,14 @@ pub fn render(frame: &mut Frame, app: &mut App, area: Rect) {
         }
     };
 
+    let emoji = if app.config.show_emojis { "🔍 " } else { "" };
     let title = if app.bottom_panel == BottomPanel::Queries && (app.filter.active || (!app.filter.text.is_empty() && app.view_mode == crate::app::ViewMode::Filter)) {
         format!(
-            " 🔍 Queries [{}/{}] (filter: {}) ",
+            " {emoji}Queries [{}/{}] (filter: {}) ",
             filtered_count, total_count, app.filter.text
         )
     } else {
-        format!(" 🔍 Queries [{total_count}] ")
+        format!(" {emoji}Queries [{total_count}] ")
     };
     let block = Block::default()
         .title(title)

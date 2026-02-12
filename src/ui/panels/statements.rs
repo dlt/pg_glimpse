@@ -19,17 +19,18 @@ pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
     let indices = app.sorted_stmt_indices();
     let filtered_count = indices.len();
 
+    let emoji = if app.config.show_emojis { "📝 " } else { "" };
     let title = if app.filter.active
         || (!app.filter.text.is_empty()
             && app.view_mode == ViewMode::Filter
             && app.bottom_panel == BottomPanel::Statements)
     {
         format!(
-            "📝 Statements [{}/{}] (filter: {})",
+            "{emoji}Statements [{}/{}] (filter: {})",
             filtered_count, total_count, app.filter.text
         )
     } else {
-        format!("📝 Statements [{total_count}]")
+        format!("{emoji}Statements [{total_count}]")
     };
 
     let block = panel_block(&title);

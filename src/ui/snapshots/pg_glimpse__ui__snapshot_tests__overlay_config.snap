@@ -17,10 +17,10 @@ expression: buffer_to_string(&terminal)
            │  Settings ────────────────────────────────────│          
            │  ▸ Graph Marker        ◀  Braille  ▶          │          
            │    Color Theme         ◀  Tokyo Night  ▶      │          
+           │    Show Emojis         ◀  On  ▶               │          
            │    Refresh Interval    ◀  2s  ▶               │          
            │    Warn Duration       ◀  1.0s  ▶             │          
            │    Danger Duration     ◀  10.0s  ▶            │          
            │    Recording Retention ◀  1h  ▶               │          
            │    Recordings Dir      ◀  <RECORDINGS_DIR>│          
-           │                                               │          
            ╰───────────────────────────────────────────────╯

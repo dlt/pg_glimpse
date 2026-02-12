@@ -22,7 +22,9 @@
       "Bash(curl:*)",
       "Bash(shasum:*)",
       "Bash(gh release view:*)",
-      "Bash(cargo insta test:*)"
+      "Bash(cargo insta test:*)",
+      "Bash(find:*)",
+      "Bash(cargo llvm-cov:*)"
     ]
   }
 }

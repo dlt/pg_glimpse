@@ -9,7 +9,9 @@ use crate::ui::util::{empty_state, styled_table, truncate};
 use super::panel_block;
 
 pub fn render_vacuum_progress(frame: &mut Frame, app: &mut App, area: Rect) {
-    let block = panel_block("🧹 Vacuum");
+    let emoji = if app.config.show_emojis { "🧹 " } else { "" };
+    let title = format!("{emoji}Vacuum");
+    let block = panel_block(&title);
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), area);

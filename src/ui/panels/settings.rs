@@ -15,17 +15,18 @@ pub fn render_settings(frame: &mut Frame, app: &mut App, area: Rect) {
     let indices = app.sorted_settings_indices();
     let filtered_count = indices.len();
 
+    let emoji = if app.config.show_emojis { "⚙️ " } else { "" };
     let title = if app.filter.active
         || (!app.filter.text.is_empty()
             && app.view_mode == ViewMode::Filter
             && app.bottom_panel == BottomPanel::Settings)
     {
         format!(
-            "⚙️ Settings [{}/{}] (filter: {})",
+            "{emoji}Settings [{}/{}] (filter: {})",
             filtered_count, total_count, app.filter.text
         )
     } else {
-        format!("⚙️ Settings [{total_count}]")
+        format!("{emoji}Settings [{total_count}]")
     };
 
     let block = panel_block(&title);

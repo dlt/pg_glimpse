@@ -9,7 +9,7 @@ expression: buffer_to_string(&terminal)
                                                                                                     
                                                                                                     
                                                                                                     
-               ╭ 🧹  Vacuum Progress  [j/k] scroll  [y] copy table  [Esc] close  ────╮               
+               ╭ 🧹  Vacuum Progress  [j/k] scroll  [y] copy table  [Esc] close ─────╮               
                │                                                                    │               
                │  Vacuum Target ────────────────────────────────────────            │               
                │  Table:         public.large_table                                 │               

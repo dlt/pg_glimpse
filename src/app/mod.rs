@@ -1269,6 +1269,9 @@ impl App {
                 };
                 theme::set_theme(self.config.color_theme.colors());
             }
+            ConfigItem::ShowEmojis => {
+                self.config.show_emojis = !self.config.show_emojis;
+            }
             ConfigItem::RefreshInterval => {
                 let val = self.config.refresh_interval_secs as i64 + i64::from(direction);
                 self.config.refresh_interval_secs = val.clamp(1, 60) as u64;

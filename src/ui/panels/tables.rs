@@ -18,7 +18,8 @@ pub fn render_table_stats(frame: &mut Frame, app: &mut App, area: Rect) {
         .as_ref()
         .map_or(0, |s| s.table_stats.len());
 
-    let title = format!("📋 Table Stats [{total_count}]");
+    let emoji = if app.config.show_emojis { "📋 " } else { "" };
+    let title = format!("{emoji}Table Stats [{total_count}]");
     let block = panel_block(&title);
 
     let Some(snap) = &app.snapshot else {

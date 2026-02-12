@@ -19,17 +19,18 @@ pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {
     let indices = app.sorted_index_indices();
     let filtered_count = indices.len();
 
+    let emoji = if app.config.show_emojis { "📑 " } else { "" };
     let title = if app.filter.active
         || (!app.filter.text.is_empty()
             && app.view_mode == ViewMode::Filter
             && app.bottom_panel == BottomPanel::Indexes)
     {
         format!(
-            "📑 Indexes [{}/{}] (filter: {})",
+            "{emoji}Indexes [{}/{}] (filter: {})",
             filtered_count, total_count, app.filter.text
         )
     } else {
-        format!("📑 Indexes [{total_count}]")
+        format!("{emoji}Indexes [{total_count}]")
     };
 
     let block = panel_block(&title);

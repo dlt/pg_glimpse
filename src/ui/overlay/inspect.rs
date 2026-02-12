@@ -15,7 +15,9 @@ pub fn render_inspect(frame: &mut Frame, app: &App, area: Rect, pid: i32) {
     let popup = centered_rect(70, 70, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("🔍 Query Details  [j/k] scroll  [y] copy query  [C] cancel  [K] kill  [Esc] close ", Theme::border_active());
+    let emoji = if app.config.show_emojis { "🔍 " } else { "" };
+    let title = format!("{emoji}Query Details  [j/k] scroll  [y] copy query  [C] cancel  [K] kill  [Esc] close");
+    let block = overlay_block(&title, Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(
@@ -107,7 +109,9 @@ pub fn render_index_inspect(frame: &mut Frame, app: &App, area: Rect, key: &str)
     let popup = centered_rect(75, 60, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("📑 Index Details  [j/k] scroll  [y] copy definition  [Esc] close ", Theme::border_active());
+    let emoji = if app.config.show_emojis { "📑 " } else { "" };
+    let title = format!("{emoji}Index Details  [j/k] scroll  [y] copy definition  [Esc] close");
+    let block = overlay_block(&title, Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -189,7 +193,9 @@ pub fn render_replication_inspect(frame: &mut Frame, app: &App, area: Rect, pid:
     let popup = centered_rect(70, 70, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("🔄 Replication Details  [j/k] scroll  [y] copy app  [Esc] close ", Theme::border_active());
+    let emoji = if app.config.show_emojis { "🔄 " } else { "" };
+    let title = format!("{emoji}Replication Details  [j/k] scroll  [y] copy app  [Esc] close");
+    let block = overlay_block(&title, Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -344,7 +350,9 @@ pub fn render_table_inspect(frame: &mut Frame, app: &App, area: Rect, key: &str)
     let popup = centered_rect(75, 75, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("📋 Table Details  [j/k] scroll  [y] copy name  [Esc] close ", Theme::border_active());
+    let emoji = if app.config.show_emojis { "📋 " } else { "" };
+    let title = format!("{emoji}Table Details  [j/k] scroll  [y] copy name  [Esc] close");
+    let block = overlay_block(&title, Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -532,7 +540,9 @@ pub fn render_blocking_inspect(frame: &mut Frame, app: &App, area: Rect, blocked
     let popup = centered_rect(80, 70, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("🔒 Lock Details  [j/k] scroll  [y] copy query  [Esc] close ", Theme::border_danger());
+    let emoji = if app.config.show_emojis { "🔒 " } else { "" };
+    let title = format!("{emoji}Lock Details  [j/k] scroll  [y] copy query  [Esc] close");
+    let block = overlay_block(&title, Theme::border_danger());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -618,7 +628,9 @@ pub fn render_vacuum_inspect(frame: &mut Frame, app: &App, area: Rect, pid: i32)
     let popup = centered_rect(70, 60, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("🧹 Vacuum Progress  [j/k] scroll  [y] copy table  [Esc] close ", Theme::border_active());
+    let emoji = if app.config.show_emojis { "🧹 " } else { "" };
+    let title = format!("{emoji}Vacuum Progress  [j/k] scroll  [y] copy table  [Esc] close");
+    let block = overlay_block(&title, Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -727,7 +739,9 @@ pub fn render_wraparound_inspect(frame: &mut Frame, app: &App, area: Rect, datna
     let popup = centered_rect(70, 65, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("⚠️ XID Details  [j/k] scroll  [y] copy db  [Esc] close ", Theme::border_active());
+    let emoji = if app.config.show_emojis { "⚠️ " } else { "" };
+    let title = format!("{emoji}XID Details  [j/k] scroll  [y] copy db  [Esc] close");
+    let block = overlay_block(&title, Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -842,7 +856,9 @@ pub fn render_statement_inspect(frame: &mut Frame, app: &App, area: Rect, queryi
     let popup = centered_rect(80, 80, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("📝 Statement Details  [j/k] scroll  [y] copy query  [Esc] close ", Theme::border_active());
+    let emoji = if app.config.show_emojis { "📝 " } else { "" };
+    let title = format!("{emoji}Statement Details  [j/k] scroll  [y] copy query  [Esc] close");
+    let block = overlay_block(&title, Theme::border_active());
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), popup);
@@ -1002,7 +1018,9 @@ pub fn render_settings_inspect(frame: &mut Frame, app: &App, area: Rect, name: &
     let popup_area = centered_rect(60, 70, area);
     frame.render_widget(Clear, popup_area);
 
-    let block = overlay_block("⚙️ Setting Details", Theme::border_active());
+    let emoji = if app.config.show_emojis { "⚙️ " } else { "" };
+    let title = format!("{emoji}Setting Details");
+    let block = overlay_block(&title, Theme::border_active());
 
     let Some(s) = app.server_info.settings.iter().find(|s| s.name == name) else {
         frame.render_widget(
@@ -1112,7 +1130,9 @@ pub fn render_extensions_inspect(frame: &mut Frame, app: &App, area: Rect, name:
     let popup_area = centered_rect(60, 55, area);
     frame.render_widget(Clear, popup_area);
 
-    let block = overlay_block("🧩 Extension Details  [j/k] scroll  [y] copy name  [Esc] close ", Theme::border_active());
+    let emoji = if app.config.show_emojis { "🧩 " } else { "" };
+    let title = format!("{emoji}Extension Details  [j/k] scroll  [y] copy name  [Esc] close");
+    let block = overlay_block(&title, Theme::border_active());
 
     let Some(ext) = app.server_info.extensions_list.iter().find(|e| e.name == name) else {
         frame.render_widget(

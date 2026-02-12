@@ -9,7 +9,7 @@ expression: buffer_to_string(&terminal)
                                                                                                     
                                                                                                     
                                                                                                     
-            ╭ 📑  Index Details  [j/k] scroll  [y] copy definition  [Esc] close  ──────╮             
+            ╭ 📑  Index Details  [j/k] scroll  [y] copy definition  [Esc] close ───────╮             
             │                                                                         │             
             │  Index Info ────────────────────────────────────────                    │             
             │  Schema:      public     Table: orders                                  │             

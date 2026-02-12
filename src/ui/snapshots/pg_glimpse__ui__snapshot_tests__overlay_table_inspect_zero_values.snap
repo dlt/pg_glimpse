@@ -9,7 +9,7 @@ expression: buffer_to_string(&terminal)
                                                                                                               
                                                                                                               
                                                                                                               
-             ╭ 📋  Table Details  [j/k] scroll  [y] copy name  [Esc] close  ────────────────────╮              
+             ╭ 📋  Table Details  [j/k] scroll  [y] copy name  [Esc] close ─────────────────────╮              
              │                                                                                 │              
              │  Table Info ────────────────────────────────────────                            │              
              │  Schema:        public     Table: empty_table                                   │              

@@ -15,7 +15,9 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(70, 75, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block("🔧 Configuration  [←→] change  [q/Esc] save & close", Theme::border_active());
+    let emoji = if app.config.show_emojis { "🔧 " } else { "" };
+    let title = format!("{emoji}Configuration  [←→] change  [q/Esc] save & close");
+    let block = overlay_block(&title, Theme::border_active());
 
     let logo_style = Style::default().fg(Theme::border_active());
     let mut lines = vec![
@@ -42,6 +44,7 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
         let value_str = match item {
             ConfigItem::GraphMarker => app.config.graph_marker.label().to_string(),
             ConfigItem::ColorTheme => app.config.color_theme.label().to_string(),
+            ConfigItem::ShowEmojis => if app.config.show_emojis { "On" } else { "Off" }.to_string(),
             ConfigItem::RefreshInterval => format!("{}s", app.config.refresh_interval_secs),
             ConfigItem::WarnDuration => format!("{:.1}s", app.config.warn_duration_secs),
             ConfigItem::DangerDuration => format!("{:.1}s", app.config.danger_duration_secs),
