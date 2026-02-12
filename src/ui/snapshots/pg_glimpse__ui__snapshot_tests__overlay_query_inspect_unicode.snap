@@ -8,7 +8,7 @@ expression: buffer_to_string(&terminal)
                                                                                                     
                                                                                                     
                                                                                                     
-               ╭  Query Details  [j/k] scroll  [y] copy query  [C] cancel  [K] kill ╮               
+               ╭ 🔍  Query Details  [j/k] scroll  [y] copy query  [C] cancel  [K] kil╮               
                │                                                                    │               
                │  Connection ────────────────────────────────────────               │               
                │  PID:       12345     User: 用 户      DB: デ ー タ ベ ー ス               │               

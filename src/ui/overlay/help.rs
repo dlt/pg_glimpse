@@ -13,7 +13,7 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(70, 80, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block(" Keybindings  [j/k] scroll  [Esc] close ", Theme::border_active());
+    let block = overlay_block("❓ Keybindings  [j/k] scroll  [Esc] close", Theme::border_active());
 
     let key_style = Style::default()
         .fg(Theme::border_active())

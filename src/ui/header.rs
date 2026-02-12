@@ -34,7 +34,7 @@ fn render_live(frame: &mut Frame, app: &App, area: Rect) {
     let label_style = Style::default().fg(Theme::fg_dim());
 
     let mut spans = vec![
-        Span::styled(" pg_glimpse ", brand_style),
+        Span::styled(" 🐘 pg_glimpse ", brand_style),
         Span::styled("  ", dim_style),
         Span::styled("◆ ", Style::default().fg(Theme::border_ok())),
         Span::styled(

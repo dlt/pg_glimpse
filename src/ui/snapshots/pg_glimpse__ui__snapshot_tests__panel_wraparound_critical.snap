@@ -2,7 +2,7 @@
 source: src/ui/snapshot_tests.rs
 expression: buffer_to_string(&terminal)
 ---
-╭ Transaction Wraparound ──────────────────────────────────────────────────────────────────────────╮
+╭ ⚠️  Wraparound ───────────────────────────────────────────────────────────────────────────────────╮
 │Database                                              XID Age          Remaining        % Used    │
 │critical                                              2.0B             147.0M           93.20%    │
 │                                                                                                  │

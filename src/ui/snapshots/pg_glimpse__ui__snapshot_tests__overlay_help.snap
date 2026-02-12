@@ -6,7 +6,7 @@ expression: buffer_to_string(&terminal)
                                                                                           
                                                                                           
                                                                                           
-              ╭  Keybindings  [j/k] scroll  [Esc] close  ───────────────────╮             
+              ╭ ❓  Keybindings  [j/k] scroll  [Esc] close ──────────────────╮             
               │                                                             │             
               │  Navigation ────────────────────────────────────────        │             
               │    q           Back to queries / quit                       │             

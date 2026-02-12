@@ -10,7 +10,7 @@ use crate::ui::util::{empty_state, styled_table};
 use super::panel_block;
 
 pub fn render_blocking(frame: &mut Frame, app: &mut App, area: Rect) {
-    let block = panel_block("Blocking Chains");
+    let block = panel_block("🔒 Blocking");
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), area);

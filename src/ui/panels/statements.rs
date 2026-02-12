@@ -25,11 +25,11 @@ pub fn render_statements(frame: &mut Frame, app: &mut App, area: Rect) {
             && app.bottom_panel == BottomPanel::Statements)
     {
         format!(
-            "pg_stat_statements [{}/{}] (filter: {})",
+            "📝 Statements [{}/{}] (filter: {})",
             filtered_count, total_count, app.filter.text
         )
     } else {
-        format!("pg_stat_statements [{total_count}]")
+        format!("📝 Statements [{total_count}]")
     };
 
     let block = panel_block(&title);

@@ -1,6 +1,5 @@
 ---
 source: src/ui/snapshot_tests.rs
-assertion_line: 474
 expression: buffer_to_string(&terminal)
 ---
- pg_glimpse   ◆ localhost:5432/production  as postgres  25/100 conns  ⟳ 1s  ⚠ connection refused              XX:XX:XX
+ 🐘  pg_glimpse   ◆ localhost:5432/production  as postgres  25/100 conns  ⟳ 1s  ⚠ connection refused            XX:XX:XX

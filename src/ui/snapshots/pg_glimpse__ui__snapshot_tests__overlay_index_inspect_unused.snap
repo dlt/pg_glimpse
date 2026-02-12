@@ -9,7 +9,7 @@ expression: buffer_to_string(&terminal)
                                                                                                     
                                                                                                     
                                                                                                     
-            ╭  Index Details  [j/k] scroll  [y] copy definition  [Esc] close  ────────╮             
+            ╭ 📑  Index Details  [j/k] scroll  [y] copy definition  [Esc] close  ──────╮             
             │Index no longer exists                                                   │             
             │                                                                         │             
             │                                                                         │             

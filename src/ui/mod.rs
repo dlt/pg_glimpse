@@ -30,7 +30,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     graph::render_line_chart(
         frame,
         areas.graph_tl,
-        "Connections",
+        "🔌 Connections",
         &conn_current.to_string(),
         &conn_data,
         Theme::graph_connections(),
@@ -47,7 +47,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     graph::render_ratio_chart(
         frame,
         areas.graph_bl,
-        "Cache Hit Ratio",
+        "💾 Cache Hit",
         &format!("{cache_pct:.1}%"),
         &cache_data,
         cache_color,
@@ -61,7 +61,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     graph::render_line_chart(
         frame,
         areas.graph_br,
-        "Avg Duration",
+        "⏱️ Avg Duration",
         &avg_label,
         &avg_data,
         Theme::graph_latency(),

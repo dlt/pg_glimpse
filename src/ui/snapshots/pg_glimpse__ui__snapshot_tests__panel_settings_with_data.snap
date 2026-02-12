@@ -2,7 +2,7 @@
 source: src/ui/snapshot_tests.rs
 expression: buffer_to_string(&terminal)
 ---
-╭ PostgreSQL Settings [4] ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+╭ ⚙️  Settings [4] ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │Name                                          Value                                         Unit     Source             Context           │
 │max_connections                               100                                           -        configuration file postmaster [restar│
 │shared_buffers                                128MB                                         8kB      configuration file postmaster [restar│

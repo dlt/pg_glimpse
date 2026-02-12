@@ -10,7 +10,7 @@ use crate::ui::util::{empty_state, format_compact, styled_table};
 use super::panel_block;
 
 pub fn render_wraparound(frame: &mut Frame, app: &mut App, area: Rect) {
-    let block = panel_block("Transaction Wraparound");
+    let block = panel_block("⚠️ Wraparound");
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), area);

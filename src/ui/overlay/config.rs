@@ -15,7 +15,7 @@ pub fn render_config(frame: &mut Frame, app: &App, area: Rect) {
     let popup = centered_rect(70, 75, area);
     frame.render_widget(Clear, popup);
 
-    let block = overlay_block(" Configuration  [←→] change  [q/Esc] save & close ", Theme::border_active());
+    let block = overlay_block("🔧 Configuration  [←→] change  [q/Esc] save & close", Theme::border_active());
 
     let logo_style = Style::default().fg(Theme::border_active());
     let mut lines = vec![

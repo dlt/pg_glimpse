@@ -12,7 +12,7 @@ use crate::ui::util::{format_byte_rate, format_bytes, format_compact, format_tim
 use super::panel_block;
 
 pub fn render_wal_io(frame: &mut Frame, app: &App, area: Rect) {
-    let block = panel_block("WAL & I/O");
+    let block = panel_block("💿 WAL & I/O");
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), area);

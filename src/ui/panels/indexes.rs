@@ -25,11 +25,11 @@ pub fn render_indexes(frame: &mut Frame, app: &mut App, area: Rect) {
             && app.bottom_panel == BottomPanel::Indexes)
     {
         format!(
-            "Indexes [{}/{}] (filter: {})",
+            "📑 Indexes [{}/{}] (filter: {})",
             filtered_count, total_count, app.filter.text
         )
     } else {
-        format!("Indexes [{total_count}]")
+        format!("📑 Indexes [{total_count}]")
     };
 
     let block = panel_block(&title);

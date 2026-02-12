@@ -8,7 +8,7 @@ expression: buffer_to_string(&terminal)
                                                                                                     
                                                                                                     
                                                                                                     
-                    ╭ Setting Details ─────────────────────────────────────────╮                    
+                    ╭ ⚙️  Setting Details ──────────────────────────────────────╮                    
                     │                                                          │                    
                     │  Setting ────────────────────────────────────────        │                    
                     │  Name:        max_connections                            │                    

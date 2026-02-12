@@ -2,7 +2,7 @@
 source: src/ui/snapshot_tests.rs
 expression: buffer_to_string(&terminal)
 ---
-╭ PostgreSQL Settings [2/3] (filter: max) ─────────────────────────────────────────────────────────────────────────────────────────────────╮
+╭ ⚙️  Settings [2/3] (filter: max) ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │Name                                          Value                                         Unit     Source             Context           │
 │max_connections                               100                                           -        configuration file postmaster [restar│
 │max_wal_senders                               10                                            -        default            postmaster        │

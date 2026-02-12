@@ -9,7 +9,7 @@ expression: buffer_to_string(&terminal)
                                                                                                     
                                                                                                     
                                                                                                     
-               ╭  Replication Details  [j/k] scroll  [y] copy app  [Esc] close  ────╮               
+               ╭ 🔄  Replication Details  [j/k] scroll  [y] copy app  [Esc] close  ──╮               
                │                                                                    │               
                │  Connection                                                        │               
                │  PID:             23456                                            │               

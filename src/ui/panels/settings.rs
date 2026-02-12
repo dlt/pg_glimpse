@@ -21,11 +21,11 @@ pub fn render_settings(frame: &mut Frame, app: &mut App, area: Rect) {
             && app.bottom_panel == BottomPanel::Settings)
     {
         format!(
-            "PostgreSQL Settings [{}/{}] (filter: {})",
+            "⚙️ Settings [{}/{}] (filter: {})",
             filtered_count, total_count, app.filter.text
         )
     } else {
-        format!("PostgreSQL Settings [{total_count}]")
+        format!("⚙️ Settings [{total_count}]")
     };
 
     let block = panel_block(&title);

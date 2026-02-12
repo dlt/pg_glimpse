@@ -11,7 +11,7 @@ use crate::ui::util::{empty_state, format_bytes, format_lag, truncate};
 use super::panel_block;
 
 pub fn render_replication(frame: &mut Frame, app: &mut App, area: Rect) {
-    let block = panel_block("Replication");
+    let block = panel_block("🔄 Replication");
 
     let Some(snap) = &app.snapshot else {
         frame.render_widget(Paragraph::new("No data").block(block), area);

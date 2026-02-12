@@ -9,7 +9,7 @@ expression: buffer_to_string(&terminal)
                                                                                                     
                                                                                                     
                                                                                                     
-               ╭  XID Details  [j/k] scroll  [y] copy db  [Esc] close  ─────────────╮               
+               ╭ ⚠️  XID Details  [j/k] scroll  [y] copy db  [Esc] close  ───────────╮               
                │                                                                    │               
                │  Database ────────────────────────────────────────                 │               
                │  Name:          critical_db     Status:  WARNING                   │               
