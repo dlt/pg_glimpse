@@ -48,6 +48,7 @@ pub fn render_line_chart(
     color: Color,
     border_color: Color,
     marker: Marker,
+    max_y: Option<u64>,
 ) {
     let block = make_block(title, current_label, color, border_color);
 
@@ -57,7 +58,7 @@ pub fn render_line_chart(
     }
 
     let max_val = data.iter().copied().max().unwrap_or(1).max(1) as f64;
-    let y_ceil = nice_ceil(max_val);
+    let y_ceil = max_y.map(|m| m as f64).unwrap_or_else(|| nice_ceil(max_val));
     let n = data.len();
     let x_max = (n - 1).max(1) as f64;
     let fill_color = dim(color);

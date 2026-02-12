@@ -40,6 +40,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         Theme::graph_connections(),
         Theme::graph_connections(),
         marker,
+        Some(app.server_info.max_connections as u64),
     );
 
     stats_panel::render(frame, app, areas.graph_tr);
@@ -75,6 +76,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         Theme::graph_latency(),
         Theme::graph_latency(),
         marker,
+        None,
     );
 
     // Bottom half: dispatch based on active panel
