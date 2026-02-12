@@ -578,6 +578,35 @@ fn inspect_scroll_and_exit() {
     }
 }
 
+#[test]
+fn query_inspect_kill_opens_confirm() {
+    let mut app = make_app();
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query(12345));
+
+    app.handle_key(key(KeyCode::Char('K')));
+    assert_eq!(app.view_mode, ViewMode::Confirm(ConfirmAction::Kill(12345)));
+}
+
+#[test]
+fn query_inspect_cancel_opens_confirm() {
+    let mut app = make_app();
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query(12345));
+
+    app.handle_key(key(KeyCode::Char('C')));
+    assert_eq!(app.view_mode, ViewMode::Confirm(ConfirmAction::Cancel(12345)));
+}
+
+#[test]
+fn query_inspect_kill_disabled_in_replay_mode() {
+    let mut app = make_app();
+    app.replay = Some(crate::app::ReplayState::new("test.jsonl".to_string(), 10));
+    app.view_mode = ViewMode::Inspect(InspectTarget::Query(12345));
+
+    app.handle_key(key(KeyCode::Char('K')));
+    // Should stay in inspect mode, not open confirm
+    assert!(matches!(app.view_mode, ViewMode::Inspect(InspectTarget::Query(12345))));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Panel-specific navigation
 // ─────────────────────────────────────────────────────────────────────────────

@@ -862,10 +862,14 @@ impl App {
     /// Unified handler for all inspect overlay key events.
     fn handle_inspect_overlay_key(&mut self, key: KeyEvent) {
         // Query inspect allows Enter to close (legacy behavior)
-        let is_query_inspect = matches!(self.view_mode, ViewMode::Inspect(InspectTarget::Query(_)));
+        let query_pid = match &self.view_mode {
+            ViewMode::Inspect(InspectTarget::Query(pid)) => Some(*pid),
+            _ => None,
+        };
+
         let close = match key.code {
             KeyCode::Esc | KeyCode::Char('q') => true,
-            KeyCode::Enter if is_query_inspect => true,
+            KeyCode::Enter if query_pid.is_some() => true,
             _ => false,
         };
 
@@ -880,6 +884,23 @@ impl App {
                 self.copy_to_clipboard(&text);
             }
             return;
+        }
+
+        // Kill/Cancel only available for query inspect in live mode
+        if let Some(pid) = query_pid {
+            if self.replay.is_none() {
+                match key.code {
+                    KeyCode::Char('K') => {
+                        self.view_mode = ViewMode::Confirm(ConfirmAction::Kill(pid));
+                        return;
+                    }
+                    KeyCode::Char('C') => {
+                        self.view_mode = ViewMode::Confirm(ConfirmAction::Cancel(pid));
+                        return;
+                    }
+                    _ => {}
+                }
+            }
         }
 
         self.handle_overlay_scroll(key);
