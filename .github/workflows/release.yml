@@ -42,6 +42,8 @@ jobs:
             os: macos-latest
           - target: aarch64-apple-darwin
             os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
 
     runs-on: ${{ matrix.os }}
 
@@ -71,7 +73,8 @@ jobs:
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Package
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           tag="${GITHUB_REF#refs/tags/}"
@@ -81,6 +84,18 @@ jobs:
           cp README.md LICENSE "$name/"
           tar czf "${name}.tar.gz" "$name"
           echo "ASSET=${name}.tar.gz" >> $GITHUB_ENV
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $name = "pg_glimpse-${tag}-${{ matrix.target }}"
+          New-Item -ItemType Directory -Path $name
+          Copy-Item "target/${{ matrix.target }}/release/pg_glimpse.exe" "$name/"
+          Copy-Item README.md, LICENSE "$name/"
+          Compress-Archive -Path "$name" -DestinationPath "${name}.zip"
+          echo "ASSET=${name}.zip" >> $env:GITHUB_ENV
 
       - uses: actions/upload-artifact@v4
         with:
@@ -103,7 +118,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="${GITHUB_REF#refs/tags/}"
-          files=$(find artifacts -name '*.tar.gz' -type f)
+          files=$(find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' \))
           gh release create "$tag" $files \
             --title "$tag" \
             --generate-notes
