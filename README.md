@@ -38,9 +38,15 @@ A blazing-fast TUI for PostgreSQL. Monitor active queries, connections, locks, c
 
 ## Install
 
-**Homebrew** (macOS):
+**Homebrew** (macOS/Linux):
 ```bash
 brew install dlt/tap/pg_glimpse
+```
+
+**Scoop** (Windows):
+```powershell
+scoop bucket add dlt https://github.com/dlt/scoop-bucket
+scoop install pg_glimpse
 ```
 
 **Cargo** (any platform with Rust 1.74+):
