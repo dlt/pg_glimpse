@@ -8,7 +8,8 @@ mod sql_highlight;
 pub use config::render_config;
 pub use confirm::{
     render_cancel_choice, render_confirm_cancel, render_confirm_cancel_batch,
-    render_confirm_kill, render_confirm_kill_batch, render_kill_choice,
+    render_confirm_kill, render_confirm_kill_batch, render_confirm_reset_statements,
+    render_kill_choice,
 };
 pub use help::render_help;
 pub use inspect::{

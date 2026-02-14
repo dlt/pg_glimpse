@@ -138,6 +138,9 @@ pub fn render(frame: &mut Frame, app: &mut App) {
                 ConfirmAction::DeleteRecording(ref path) => {
                     overlay::render_confirm_delete_recording(frame, path, area);
                 }
+                ConfirmAction::ResetStatStatements => {
+                    overlay::render_confirm_reset_statements(frame, area);
+                }
             }
         }
         ViewMode::Config | ViewMode::ConfigEditRecordingsDir => {

@@ -610,6 +610,9 @@ impl App {
                     }
                 ));
             }
+            KeyCode::Char('X') if self.replay.is_none() => {
+                self.view_mode = ViewMode::Confirm(ConfirmAction::ResetStatStatements);
+            }
             _ => {}
         }
     }
@@ -1214,6 +1217,13 @@ impl App {
                     ConfirmAction::DeleteRecording(ref path) => {
                         let path = path.clone();
                         self.handle_confirm_delete_recording_key(key, path);
+                    }
+                    ConfirmAction::ResetStatStatements => {
+                        self.handle_yes_no_confirm(
+                            key,
+                            AppAction::ResetStatStatements,
+                            "Reset aborted",
+                        );
                     }
                 }
                 return;

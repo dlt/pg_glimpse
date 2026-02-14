@@ -210,7 +210,7 @@ fn render_panel_keys<'a>(
                 spans.push(desc(" cancel/kill"));
             }
         }
-        BottomPanel::TableStats | BottomPanel::Indexes | BottomPanel::Statements => {
+        BottomPanel::TableStats | BottomPanel::Indexes => {
             spans.push(sep());
             spans.push(key("↑↓"));
             spans.push(desc(" nav"));
@@ -223,6 +223,28 @@ fn render_panel_keys<'a>(
             spans.push(dot());
             spans.push(key("/"));
             spans.push(desc(" filter"));
+            spans.push(dot());
+            spans.push(key("Esc"));
+            spans.push(desc(" back"));
+        }
+        BottomPanel::Statements => {
+            spans.push(sep());
+            spans.push(key("↑↓"));
+            spans.push(desc(" nav"));
+            spans.push(dot());
+            spans.push(key("⏎"));
+            spans.push(desc(" inspect"));
+            spans.push(dot());
+            spans.push(key("s"));
+            spans.push(desc(" sort"));
+            spans.push(dot());
+            spans.push(key("/"));
+            spans.push(desc(" filter"));
+            if !app.is_replay_mode() {
+                spans.push(dot());
+                spans.push(key("X"));
+                spans.push(desc(" reset"));
+            }
             spans.push(dot());
             spans.push(key("Esc"));
             spans.push(desc(" back"));

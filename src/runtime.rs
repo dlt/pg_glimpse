@@ -73,6 +73,7 @@ enum DbCommand {
     CancelQueries(Vec<i32>),
     TerminateBackends(Vec<i32>),
     RefreshBloat,
+    ResetStatStatements,
 }
 type BloatResult = (
     std::collections::HashMap<String, db::queries::TableBloat>,
@@ -86,6 +87,7 @@ enum DbResult {
     CancelQueries(Vec<(i32, bool)>),
     TerminateBackends(Vec<(i32, bool)>),
     BloatData(Result<BloatResult, String>),
+    ResetStatStatements(Result<(), String>),
 }
 
 
@@ -180,6 +182,13 @@ pub async fn run(cli: Cli) -> Result<()> {
                         (Ok(_), Err(e)) => DbResult::BloatData(Err(format!("Index bloat query failed: {e}"))),
                         (Err(e1), Err(_)) => DbResult::BloatData(Err(format!("Bloat queries failed: {e1}"))),
                     }
+                }
+                DbCommand::ResetStatStatements => {
+                    DbResult::ResetStatStatements(
+                        db::queries::reset_stat_statements(&db_client)
+                            .await
+                            .map_err(|e| e.to_string()),
+                    )
                 }
             };
             if result_tx.send(result).is_err() {
@@ -276,6 +285,13 @@ pub async fn run(cli: Cli) -> Result<()> {
                             app.feedback.bloat_loading = false;
                             app.feedback.status_message = Some(format!("Bloat estimation failed: {e}"));
                         }
+                        DbResult::ResetStatStatements(Ok(())) => {
+                            app.feedback.status_message = Some("Statement statistics reset".into());
+                            let _ = cmd_tx.try_send(DbCommand::FetchSnapshot);
+                        }
+                        DbResult::ResetStatStatements(Err(e)) => {
+                            app.feedback.status_message = Some(format!("Reset failed: {e}"));
+                        }
                     }
                 }
             }
@@ -320,6 +336,9 @@ pub async fn run(cli: Cli) -> Result<()> {
                         refresh_interval_secs = app.config.refresh_interval_secs;
                         tick_interval = tokio::time::interval(Duration::from_secs(refresh_interval_secs));
                     }
+                }
+                AppAction::ResetStatStatements => {
+                    let _ = cmd_tx.try_send(DbCommand::ResetStatStatements);
                 }
             }
         }

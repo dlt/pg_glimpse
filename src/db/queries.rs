@@ -1744,6 +1744,17 @@ pub async fn fetch_index_bloat(
     naive_index_bloat(client).await
 }
 
+pub async fn reset_stat_statements(client: &Client) -> DbResult<()> {
+    client
+        .execute("SELECT pg_stat_statements_reset()", &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "reset_stat_statements",
+            source: e,
+        })?;
+    Ok(())
+}
+
 pub async fn cancel_backend(client: &Client, pid: i32) -> DbResult<bool> {
     let row = client
         .query_one("SELECT pg_cancel_backend($1)", &[&pid])

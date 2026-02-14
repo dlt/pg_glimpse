@@ -11,4 +11,5 @@ pub enum AppAction {
     RefreshBloat,
     SaveConfig,
     RefreshIntervalChanged,
+    ResetStatStatements,
 }

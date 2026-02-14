@@ -71,6 +71,7 @@ pub enum ConfirmAction {
     CancelBatch(Vec<i32>),
     KillBatch(Vec<i32>),
     DeleteRecording(PathBuf),
+    ResetStatStatements,
 }
 
 /// Current view/interaction mode.

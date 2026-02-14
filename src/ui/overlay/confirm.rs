@@ -332,3 +332,51 @@ pub fn render_confirm_kill_batch(frame: &mut Frame, pids: &[i32], area: Rect) {
         .alignment(Alignment::Left);
     frame.render_widget(paragraph, popup);
 }
+
+pub fn render_confirm_reset_statements(frame: &mut Frame, area: Rect) {
+    let popup = centered_rect(55, 30, area);
+    frame.render_widget(Clear, popup);
+
+    let block = overlay_block(" Reset Statistics ", Theme::border_danger());
+
+    let lines = vec![
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  Reset pg_stat_statements?", Style::default().fg(Theme::fg())),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  This will clear ALL statement statistics.",
+            Style::default().fg(Theme::fg_dim()),
+        )),
+        Line::from(Span::styled(
+            "  Accumulated timing and execution data will be lost.",
+            Style::default().fg(Theme::fg_dim()),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  ⚠ This action cannot be undone.",
+            Style::default().fg(Theme::border_danger()),
+        )),
+        Line::from(""),
+        separator_line(),
+        Line::from(vec![
+            Span::styled("  ", Style::default()),
+            Span::styled(
+                " y ",
+                Style::default().fg(Theme::overlay_bg()).bg(Theme::border_danger()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" confirm    ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                " Esc ",
+                Style::default().fg(Theme::overlay_bg()).bg(Theme::border_dim()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" abort", Style::default().fg(Theme::fg_dim())),
+        ]),
+    ];
+
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .alignment(Alignment::Left);
+    frame.render_widget(paragraph, popup);
+}
