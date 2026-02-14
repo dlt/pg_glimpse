@@ -96,6 +96,7 @@ Server version, uptime, database size, connection usage, cache hit ratio, dead t
 - **SQL highlighting** — syntax-highlighted queries everywhere
 - **Themes** — Tokyo Night, Dracula, Nord, Solarized, Catppuccin
 - **Recordings browser** — press `L` to browse and replay past sessions
+- **Zen mode** — press `z` to collapse graphs and maximize panel space
 
 ## Usage
 
@@ -145,6 +146,7 @@ pg_glimpse -r 1 --history-length 240
 | `r` | Force refresh |
 | `?` | Help |
 | `,` | Configuration |
+| `z` | Zen mode (collapse graphs) |
 | `L` | Recordings browser |
 | `y` | Yank to clipboard |
 | `/` | Fuzzy filter |
@@ -158,6 +160,7 @@ pg_glimpse -r 1 --history-length 240
 | `Enter` | Inspect |
 | `s` | Cycle sort column |
 | `b` | Refresh bloat estimates |
+| `X` | Reset pg_stat_statements |
 | `C` | Cancel query (batch if filtered) |
 | `K` | Terminate backend (batch if filtered) |
 
