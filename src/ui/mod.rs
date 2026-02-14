@@ -19,65 +19,68 @@ use util::format_duration;
 mod snapshot_tests;
 
 pub fn render(frame: &mut Frame, app: &mut App) {
-    let areas = layout::compute_layout(frame.area());
-    let marker = app.config.graph_marker.to_marker();
+    let areas = layout::compute_layout(frame.area(), app.graphs_collapsed);
 
     header::render(frame, app, areas.header);
 
-    let show_emojis = app.config.show_emojis;
+    // Only render graphs if not collapsed
+    if !app.graphs_collapsed {
+        let marker = app.config.graph_marker.to_marker();
+        let show_emojis = app.config.show_emojis;
 
-    // Top half: 2x2 graph grid
-    let conn_data = app.metrics.connections.as_vec();
-    let conn_current = app.metrics.connections.last().unwrap_or(0);
-    let conn_emoji = if show_emojis { "🔌 " } else { "" };
-    let conn_title = format!("{conn_emoji}Connections");
-    graph::render_line_chart(
-        frame,
-        areas.graph_tl,
-        &conn_title,
-        &conn_current.to_string(),
-        &conn_data,
-        Theme::graph_connections(),
-        Theme::graph_connections(),
-        marker,
-        Some(app.server_info.max_connections as u64),
-    );
+        // Top half: 2x2 graph grid
+        let conn_data = app.metrics.connections.as_vec();
+        let conn_current = app.metrics.connections.last().unwrap_or(0);
+        let conn_emoji = if show_emojis { "🔌 " } else { "" };
+        let conn_title = format!("{conn_emoji}Connections");
+        graph::render_line_chart(
+            frame,
+            areas.graph_tl,
+            &conn_title,
+            &conn_current.to_string(),
+            &conn_data,
+            Theme::graph_connections(),
+            Theme::graph_connections(),
+            marker,
+            Some(app.server_info.max_connections as u64),
+        );
 
-    stats_panel::render(frame, app, areas.graph_tr);
+        stats_panel::render(frame, app, areas.graph_tr);
 
-    let cache_data = app.metrics.hit_ratio.as_vec();
-    let cache_current = app.metrics.hit_ratio.last().unwrap_or(0);
-    let cache_pct = cache_current as f64 / 10.0;
-    let cache_color = Theme::hit_ratio_color(cache_pct);
-    let cache_emoji = if show_emojis { "💾 " } else { "" };
-    let cache_title = format!("{cache_emoji}Cache Hit");
-    graph::render_ratio_chart(
-        frame,
-        areas.graph_bl,
-        &cache_title,
-        &format!("{cache_pct:.1}%"),
-        &cache_data,
-        cache_color,
-        Theme::graph_cache(),
-        marker,
-    );
+        let cache_data = app.metrics.hit_ratio.as_vec();
+        let cache_current = app.metrics.hit_ratio.last().unwrap_or(0);
+        let cache_pct = cache_current as f64 / 10.0;
+        let cache_color = Theme::hit_ratio_color(cache_pct);
+        let cache_emoji = if show_emojis { "💾 " } else { "" };
+        let cache_title = format!("{cache_emoji}Cache Hit");
+        graph::render_ratio_chart(
+            frame,
+            areas.graph_bl,
+            &cache_title,
+            &format!("{cache_pct:.1}%"),
+            &cache_data,
+            cache_color,
+            Theme::graph_cache(),
+            marker,
+        );
 
-    let avg_data = app.metrics.avg_query_time.as_vec();
-    let avg_current = app.metrics.avg_query_time.last().unwrap_or(0);
-    let avg_label = format_duration(avg_current as f64 / 1000.0);
-    let avg_emoji = if show_emojis { "⏱️ " } else { "" };
-    let avg_title = format!("{avg_emoji}Avg Duration");
-    graph::render_line_chart(
-        frame,
-        areas.graph_br,
-        &avg_title,
-        &avg_label,
-        &avg_data,
-        Theme::graph_latency(),
-        Theme::graph_latency(),
-        marker,
-        None,
-    );
+        let avg_data = app.metrics.avg_query_time.as_vec();
+        let avg_current = app.metrics.avg_query_time.last().unwrap_or(0);
+        let avg_label = format_duration(avg_current as f64 / 1000.0);
+        let avg_emoji = if show_emojis { "⏱️ " } else { "" };
+        let avg_title = format!("{avg_emoji}Avg Duration");
+        graph::render_line_chart(
+            frame,
+            areas.graph_br,
+            &avg_title,
+            &avg_label,
+            &avg_data,
+            Theme::graph_latency(),
+            Theme::graph_latency(),
+            marker,
+            None,
+        );
+    }
 
     // Bottom half: dispatch based on active panel
     let panel = app.bottom_panel;

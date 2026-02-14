@@ -97,6 +97,13 @@ fn render_live(frame: &mut Frame, app: &App, area: Rect) {
     line2.push(sep());
     line2.push(Span::styled("│", sep_style));
     line2.push(sep());
+    line2.push(key("z"));
+    if app.graphs_collapsed {
+        line2.push(desc(" expand"));
+    } else {
+        line2.push(desc(" zen"));
+    }
+    line2.push(dot());
     line2.push(key("L"));
     line2.push(desc(" replay"));
     line2.push(dot());
@@ -157,6 +164,13 @@ fn render_replay(frame: &mut Frame, app: &App, area: Rect) {
     line2.push(sep());
     line2.push(Span::styled("│", sep_style));
     line2.push(sep());
+    line2.push(key("z"));
+    if app.graphs_collapsed {
+        line2.push(desc(" expand"));
+    } else {
+        line2.push(desc(" zen"));
+    }
+    line2.push(dot());
     line2.push(key("q"));
     line2.push(desc(" quit"));
 

@@ -219,6 +219,24 @@ fn config_opens() {
     assert_eq!(app.view_mode, ViewMode::Config);
 }
 
+#[test]
+fn zen_mode_toggles() {
+    let mut app = make_app();
+    assert!(!app.graphs_collapsed);
+    app.handle_key(key(KeyCode::Char('z')));
+    assert!(app.graphs_collapsed);
+    app.handle_key(key(KeyCode::Char('z')));
+    assert!(!app.graphs_collapsed);
+}
+
+#[test]
+fn zen_mode_works_in_replay_mode() {
+    let mut app = make_replay_app();
+    assert!(!app.graphs_collapsed);
+    app.handle_key(key(KeyCode::Char('z')));
+    assert!(app.graphs_collapsed);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Panel switching
 // ─────────────────────────────────────────────────────────────────────────────

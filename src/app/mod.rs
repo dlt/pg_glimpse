@@ -57,6 +57,9 @@ pub struct App {
 
     // Recordings browser state
     pub recordings: RecordingsBrowser,
+
+    // Graph panel collapsed ("zen mode")
+    pub graphs_collapsed: bool,
 }
 
 impl App {
@@ -89,6 +92,7 @@ impl App {
             replay: None,
             overlay_scroll: 0,
             recordings: RecordingsBrowser::new(),
+            graphs_collapsed: false,
         }
     }
 
@@ -1100,6 +1104,10 @@ impl App {
                     crate::recorder::Recorder::list_recordings(self.config.recordings_dir.as_deref());
                 self.recordings.selected = 0;
                 self.view_mode = ViewMode::Recordings;
+                true
+            }
+            KeyCode::Char('z') => {
+                self.graphs_collapsed = !self.graphs_collapsed;
                 true
             }
             _ => false,
