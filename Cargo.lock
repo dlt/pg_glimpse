@@ -1581,7 +1581,7 @@ dependencies = [
 
 [[package]]
 name = "pg_glimpse"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "arboard",
  "chrono",
