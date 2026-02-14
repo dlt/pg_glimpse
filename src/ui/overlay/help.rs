@@ -46,6 +46,7 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
 
     lines.push(entry("?", "This help screen"));
     lines.push(entry(",", "Configuration"));
+    lines.push(entry("z", "Toggle zen mode (collapse graphs)"));
 
     if !app.is_replay_mode() {
         lines.push(entry("L", "Load recording (replay mode)"));

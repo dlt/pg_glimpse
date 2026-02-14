@@ -15,6 +15,7 @@ expression: buffer_to_string(&terminal)
               │    r           Force refresh now                            │             
               │    ?           This help screen                             │             
               │    ,           Configuration                                │             
+              │    z           Toggle zen mode (collapse graphs)            │             
               │    L           Load recording (replay mode)                 │             
               │                                                             │             
               │  Panels ────────────────────────────────────────            │             
@@ -32,5 +33,4 @@ expression: buffer_to_string(&terminal)
               │    E           Extensions                                   │             
               │                                                             │             
               │  Panel Controls ────────────────────────────────────────    │             
-              │    Esc         Back to queries (or quit)                    │             
               ╰─────────────────────────────────────────────────────────────╯
