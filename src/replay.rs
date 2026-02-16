@@ -40,62 +40,78 @@ pub struct ReplaySession {
     pub position: usize,
 }
 
-impl ReplaySession {
-    pub fn load(path: &Path) -> Result<Self> {
-        let file = File::open(path)?;
-        let reader = BufReader::new(file);
-        let mut lines = reader.lines();
-
-        // First line must be header
-        let header_line = lines
-            .next()
-            .ok_or_else(|| eyre!("Recording file is empty"))??;
-        let header: RecordLine = serde_json::from_str(&header_line)?;
-        let (host, port, dbname, user, server_info) = match header {
-            RecordLine::Header {
-                host,
-                port,
-                dbname,
-                user,
-                server_info,
-                ..
-            } => (host, port, dbname, user, server_info),
-            _ => return Err(eyre!("First line must be a header")),
-        };
-
-        // Remaining lines are snapshots
-        let mut snapshots = Vec::new();
-        for line in lines {
-            let line = line?;
-            if line.trim().is_empty() {
-                continue;
-            }
-            let record: RecordLine = serde_json::from_str(&line)?;
-            if let RecordLine::Snapshot { data } = record {
-                snapshots.push(data);
-            }
-        }
-
-        if snapshots.is_empty() {
-            return Err(eyre!("Recording contains no snapshots"));
-        }
-
-        Ok(Self {
-            server_info,
+/// Parse the header line from a recording file.
+fn parse_header(
+    lines: &mut std::io::Lines<BufReader<File>>,
+) -> Result<(String, u16, String, String, ServerInfo)> {
+    let header_line = lines
+        .next()
+        .ok_or_else(|| eyre!("Recording file is empty"))??;
+    let header: RecordLine = serde_json::from_str(&header_line)?;
+    match header {
+        RecordLine::Header {
             host,
             port,
             dbname,
             user,
-            snapshots,
-            position: 0,
-        })
+            server_info,
+        } => Ok((host, port, dbname, user, server_info)),
+        _ => Err(eyre!("First line must be a header")),
+    }
+}
+
+/// Load snapshots from recording file with optional progress callback.
+fn load_snapshots<F>(
+    lines: std::io::Lines<BufReader<File>>,
+    mut progress_callback: Option<F>,
+) -> Result<Vec<PgSnapshot>>
+where
+    F: FnMut(usize) -> bool,
+{
+    let mut snapshots = Vec::new();
+    for line in lines {
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let record: RecordLine = serde_json::from_str(&line)?;
+        if let RecordLine::Snapshot { data } = record {
+            snapshots.push(data);
+
+            // Call progress callback if provided
+            if let Some(ref mut cb) = progress_callback {
+                if (snapshots.len() % 100 == 0 || snapshots.len() == 1)
+                    && !cb(snapshots.len())
+                {
+                    return Err(eyre!("Loading cancelled by user"));
+                }
+            }
+        }
+    }
+
+    if snapshots.is_empty() {
+        return Err(eyre!("Recording contains no snapshots"));
+    }
+
+    // Final callback with total count
+    if let Some(mut cb) = progress_callback {
+        cb(snapshots.len());
+    }
+
+    Ok(snapshots)
+}
+
+impl ReplaySession {
+    /// Load a recording file without progress feedback.
+    pub fn load(path: &Path) -> Result<Self> {
+        Self::load_with_progress(path, |_| true)
     }
 
     /// Load recording with progress callback (for UI feedback during loading).
     /// Returns header info immediately, then calls callback for each snapshot loaded.
     pub fn load_with_progress<F>(
         path: &Path,
-        mut progress_callback: F,
+        progress_callback: F,
     ) -> Result<Self>
     where
         F: FnMut(usize) -> bool, // Returns false to cancel
@@ -104,48 +120,11 @@ impl ReplaySession {
         let reader = BufReader::new(file);
         let mut lines = reader.lines();
 
-        // First line must be header
-        let header_line = lines
-            .next()
-            .ok_or_else(|| eyre!("Recording file is empty"))??;
-        let header: RecordLine = serde_json::from_str(&header_line)?;
-        let (host, port, dbname, user, server_info) = match header {
-            RecordLine::Header {
-                host,
-                port,
-                dbname,
-                user,
-                server_info,
-                ..
-            } => (host, port, dbname, user, server_info),
-            _ => return Err(eyre!("First line must be a header")),
-        };
+        // Parse header from first line
+        let (host, port, dbname, user, server_info) = parse_header(&mut lines)?;
 
         // Load snapshots with progress feedback
-        let mut snapshots = Vec::new();
-        for line in lines {
-            let line = line?;
-            if line.trim().is_empty() {
-                continue;
-            }
-            let record: RecordLine = serde_json::from_str(&line)?;
-            if let RecordLine::Snapshot { data } = record {
-                snapshots.push(data);
-                // Call progress callback every 100 snapshots or on first snapshot
-                if (snapshots.len() % 100 == 0 || snapshots.len() == 1)
-                    && !progress_callback(snapshots.len())
-                {
-                    return Err(eyre!("Loading cancelled by user"));
-                }
-            }
-        }
-
-        if snapshots.is_empty() {
-            return Err(eyre!("Recording contains no snapshots"));
-        }
-
-        // Final callback with total count
-        progress_callback(snapshots.len());
+        let snapshots = load_snapshots(lines, Some(progress_callback))?;
 
         Ok(Self {
             server_info,
@@ -207,13 +186,62 @@ impl ReplaySession {
 // Replay Runtime
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Run the application in replay mode.
-pub async fn run_replay(path: &Path, config: AppConfig) -> Result<()> {
-    use crossterm::event::{poll, read, Event, KeyCode};
+/// Render the loading screen UI.
+fn render_loading_screen(
+    frame: &mut ratatui::Frame,
+    filename: &str,
+    count: Option<usize>,
+) {
     use ratatui::layout::{Alignment, Constraint, Direction, Layout};
     use ratatui::style::{Modifier, Style};
     use ratatui::text::{Line, Span};
     use ratatui::widgets::{Block, Borders, Paragraph};
+
+    let area = frame.area();
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage(40),
+            Constraint::Min(5),
+            Constraint::Percentage(40),
+        ])
+        .split(area);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" Loading Recording ");
+
+    let loading_text = if let Some(n) = count {
+        format!("Loading snapshots... {n}")
+    } else {
+        "Loading snapshots...".to_string()
+    };
+
+    let text = vec![
+        Line::from(""),
+        Line::from(Span::styled(
+            format!("File: {filename}"),
+            Style::default().add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from(loading_text),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Press ESC to cancel",
+            Style::default().add_modifier(Modifier::DIM),
+        )),
+    ];
+
+    let paragraph = Paragraph::new(text)
+        .block(block)
+        .alignment(Alignment::Center);
+
+    frame.render_widget(paragraph, chunks[1]);
+}
+
+/// Run the application in replay mode.
+pub async fn run_replay(path: &Path, config: AppConfig) -> Result<()> {
+    use crossterm::event::{poll, read, Event, KeyCode};
 
     let filename = path
         .file_name()
@@ -231,40 +259,7 @@ pub async fn run_replay(path: &Path, config: AppConfig) -> Result<()> {
     // Show loading screen and load recording with progress
     let session_result = {
         terminal.draw(|frame| {
-            let area = frame.area();
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Percentage(40),
-                    Constraint::Min(5),
-                    Constraint::Percentage(40),
-                ])
-                .split(area);
-
-            let block = Block::default()
-                .borders(Borders::ALL)
-                .title(" Loading Recording ");
-
-            let text = vec![
-                Line::from(""),
-                Line::from(Span::styled(
-                    format!("File: {filename}"),
-                    Style::default().add_modifier(Modifier::BOLD),
-                )),
-                Line::from(""),
-                Line::from("Loading snapshots..."),
-                Line::from(""),
-                Line::from(Span::styled(
-                    "Press ESC to cancel",
-                    Style::default().add_modifier(Modifier::DIM),
-                )),
-            ];
-
-            let paragraph = Paragraph::new(text)
-                .block(block)
-                .alignment(Alignment::Center);
-
-            frame.render_widget(paragraph, chunks[1]);
+            render_loading_screen(frame, &filename, None);
         })?;
 
         // Load with progress callback
@@ -274,40 +269,7 @@ pub async fn run_replay(path: &Path, config: AppConfig) -> Result<()> {
             // Update screen every 100 snapshots
             if count % 100 == 0 {
                 let _ = terminal.draw(|frame| {
-                    let area = frame.area();
-                    let chunks = Layout::default()
-                        .direction(Direction::Vertical)
-                        .constraints([
-                            Constraint::Percentage(40),
-                            Constraint::Min(5),
-                            Constraint::Percentage(40),
-                        ])
-                        .split(area);
-
-                    let block = Block::default()
-                        .borders(Borders::ALL)
-                        .title(" Loading Recording ");
-
-                    let text = vec![
-                        Line::from(""),
-                        Line::from(Span::styled(
-                            format!("File: {filename}"),
-                            Style::default().add_modifier(Modifier::BOLD),
-                        )),
-                        Line::from(""),
-                        Line::from(format!("Loading snapshots... {count}")),
-                        Line::from(""),
-                        Line::from(Span::styled(
-                            "Press ESC to cancel",
-                            Style::default().add_modifier(Modifier::DIM),
-                        )),
-                    ];
-
-                    let paragraph = Paragraph::new(text)
-                        .block(block)
-                        .alignment(Alignment::Center);
-
-                    frame.render_widget(paragraph, chunks[1]);
+                    render_loading_screen(frame, &filename, Some(count));
                 });
 
                 // Check for ESC key to cancel
