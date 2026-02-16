@@ -91,6 +91,73 @@ impl ReplaySession {
         })
     }
 
+    /// Load recording with progress callback (for UI feedback during loading).
+    /// Returns header info immediately, then calls callback for each snapshot loaded.
+    pub fn load_with_progress<F>(
+        path: &Path,
+        mut progress_callback: F,
+    ) -> Result<Self>
+    where
+        F: FnMut(usize) -> bool, // Returns false to cancel
+    {
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+        let mut lines = reader.lines();
+
+        // First line must be header
+        let header_line = lines
+            .next()
+            .ok_or_else(|| eyre!("Recording file is empty"))??;
+        let header: RecordLine = serde_json::from_str(&header_line)?;
+        let (host, port, dbname, user, server_info) = match header {
+            RecordLine::Header {
+                host,
+                port,
+                dbname,
+                user,
+                server_info,
+                ..
+            } => (host, port, dbname, user, server_info),
+            _ => return Err(eyre!("First line must be a header")),
+        };
+
+        // Load snapshots with progress feedback
+        let mut snapshots = Vec::new();
+        for line in lines {
+            let line = line?;
+            if line.trim().is_empty() {
+                continue;
+            }
+            let record: RecordLine = serde_json::from_str(&line)?;
+            if let RecordLine::Snapshot { data } = record {
+                snapshots.push(data);
+                // Call progress callback every 100 snapshots or on first snapshot
+                if snapshots.len() % 100 == 0 || snapshots.len() == 1 {
+                    if !progress_callback(snapshots.len()) {
+                        return Err(eyre!("Loading cancelled by user"));
+                    }
+                }
+            }
+        }
+
+        if snapshots.is_empty() {
+            return Err(eyre!("Recording contains no snapshots"));
+        }
+
+        // Final callback with total count
+        progress_callback(snapshots.len());
+
+        Ok(Self {
+            server_info,
+            host,
+            port,
+            dbname,
+            user,
+            snapshots,
+            position: 0,
+        })
+    }
+
     pub fn current(&self) -> Option<&PgSnapshot> {
         self.snapshots.get(self.position)
     }
@@ -142,13 +209,128 @@ impl ReplaySession {
 
 /// Run the application in replay mode.
 pub async fn run_replay(path: &Path, config: AppConfig) -> Result<()> {
-    let mut session = ReplaySession::load(path)?;
+    use crossterm::event::{poll, read, Event, KeyCode};
+    use ratatui::layout::{Alignment, Constraint, Direction, Layout};
+    use ratatui::style::{Modifier, Style};
+    use ratatui::text::{Line, Span};
+    use ratatui::widgets::{Block, Borders, Paragraph};
 
     let filename = path
         .file_name()
         .and_then(|f| f.to_str())
         .unwrap_or("unknown")
         .to_string();
+
+    // Initialize terminal FIRST so we can show loading progress
+    let mut terminal = ratatui::init();
+
+    // Loading state
+    let mut loading_snapshots = 0usize;
+    let mut cancelled = false;
+
+    // Show loading screen and load recording with progress
+    let session_result = {
+        terminal.draw(|frame| {
+            let area = frame.area();
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Percentage(40),
+                    Constraint::Min(5),
+                    Constraint::Percentage(40),
+                ])
+                .split(area);
+
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .title(" Loading Recording ");
+
+            let text = vec![
+                Line::from(""),
+                Line::from(Span::styled(
+                    format!("File: {filename}"),
+                    Style::default().add_modifier(Modifier::BOLD),
+                )),
+                Line::from(""),
+                Line::from("Loading snapshots..."),
+                Line::from(""),
+                Line::from(Span::styled(
+                    "Press ESC to cancel",
+                    Style::default().add_modifier(Modifier::DIM),
+                )),
+            ];
+
+            let paragraph = Paragraph::new(text)
+                .block(block)
+                .alignment(Alignment::Center);
+
+            frame.render_widget(paragraph, chunks[1]);
+        })?;
+
+        // Load with progress callback
+        ReplaySession::load_with_progress(path, |count| {
+            loading_snapshots = count;
+
+            // Update screen every 100 snapshots
+            if count % 100 == 0 {
+                let _ = terminal.draw(|frame| {
+                    let area = frame.area();
+                    let chunks = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints([
+                            Constraint::Percentage(40),
+                            Constraint::Min(5),
+                            Constraint::Percentage(40),
+                        ])
+                        .split(area);
+
+                    let block = Block::default()
+                        .borders(Borders::ALL)
+                        .title(" Loading Recording ");
+
+                    let text = vec![
+                        Line::from(""),
+                        Line::from(Span::styled(
+                            format!("File: {filename}"),
+                            Style::default().add_modifier(Modifier::BOLD),
+                        )),
+                        Line::from(""),
+                        Line::from(format!("Loading snapshots... {count}")),
+                        Line::from(""),
+                        Line::from(Span::styled(
+                            "Press ESC to cancel",
+                            Style::default().add_modifier(Modifier::DIM),
+                        )),
+                    ];
+
+                    let paragraph = Paragraph::new(text)
+                        .block(block)
+                        .alignment(Alignment::Center);
+
+                    frame.render_widget(paragraph, chunks[1]);
+                });
+
+                // Check for ESC key to cancel
+                if poll(Duration::from_millis(0)).unwrap_or(false) {
+                    if let Ok(Event::Key(key)) = read() {
+                        if matches!(key.code, KeyCode::Esc) {
+                            cancelled = true;
+                            return false; // Cancel loading
+                        }
+                    }
+                }
+            }
+
+            true // Continue loading
+        })
+    };
+
+    if cancelled {
+        ratatui::restore();
+        return Ok(()); // User cancelled, exit gracefully
+    }
+
+    let mut session = session_result?;
 
     let mut app = App::new_replay(
         session.host.clone(),
@@ -171,7 +353,6 @@ pub async fn run_replay(path: &Path, config: AppConfig) -> Result<()> {
         }
     }
 
-    let mut terminal = ratatui::init();
     let mut events = event::EventHandler::new(Duration::from_millis(10));
 
     let mut last_advance = Instant::now();
@@ -634,6 +815,82 @@ mod tests {
 
         assert!(session.at_end()); // Single snapshot, always at end
         assert_eq!(session.len(), 1);
+    }
+
+    #[test]
+    fn load_with_progress_callback() {
+        let header = make_header_json("localhost", 5432, "testdb", "testuser");
+        let snap1 = make_snapshot_json(10);
+        let snap2 = make_snapshot_json(20);
+        let snap3 = make_snapshot_json(30);
+
+        let file = create_recording_file(&[&header, &snap1, &snap2, &snap3]);
+
+        let mut progress_calls = Vec::new();
+        let session = ReplaySession::load_with_progress(file.path(), |count| {
+            progress_calls.push(count);
+            true // Continue
+        })
+        .unwrap();
+
+        assert_eq!(session.len(), 3);
+        // Should have been called at: 1 (first), 3 (final)
+        assert!(progress_calls.contains(&1));
+        assert!(progress_calls.contains(&3));
+    }
+
+    #[test]
+    fn load_with_progress_many_snapshots() {
+        use std::io::Write;
+
+        let header = make_header_json("localhost", 5432, "testdb", "testuser");
+        let mut file = NamedTempFile::new().unwrap();
+        writeln!(file, "{header}").unwrap();
+
+        // Write 250 snapshots
+        for i in 0..250 {
+            let snap = make_snapshot_json(i);
+            writeln!(file, "{snap}").unwrap();
+        }
+        file.flush().unwrap();
+
+        let mut progress_calls = Vec::new();
+        let session = ReplaySession::load_with_progress(file.path(), |count| {
+            progress_calls.push(count);
+            true // Continue
+        })
+        .unwrap();
+
+        assert_eq!(session.len(), 250);
+        // Should have been called at: 1, 100, 200, 250 (final)
+        assert!(progress_calls.contains(&1));
+        assert!(progress_calls.contains(&100));
+        assert!(progress_calls.contains(&200));
+        assert_eq!(*progress_calls.last().unwrap(), 250);
+    }
+
+    #[test]
+    fn load_with_progress_can_cancel() {
+        use std::io::Write;
+
+        let header = make_header_json("localhost", 5432, "testdb", "testuser");
+        let mut file = NamedTempFile::new().unwrap();
+        writeln!(file, "{header}").unwrap();
+
+        // Write 300 snapshots
+        for i in 0..300 {
+            let snap = make_snapshot_json(i);
+            writeln!(file, "{snap}").unwrap();
+        }
+        file.flush().unwrap();
+
+        let result = ReplaySession::load_with_progress(file.path(), |count| {
+            // Cancel after 150 snapshots
+            count < 150
+        });
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("cancelled"));
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
