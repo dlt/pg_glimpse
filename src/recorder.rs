@@ -391,6 +391,8 @@ mod tests {
             archiver_stats: None,
             bgwriter_stats: None,
             db_stats: None,
+            table_schemas: vec![],
+            foreign_keys: vec![],
         }
     }
 
@@ -891,6 +893,8 @@ mod tests {
                 xact_rollback: 100,
                 blks_read: 10000,
             }),
+            table_schemas: vec![],
+            foreign_keys: vec![],
         };
 
         // Record the session

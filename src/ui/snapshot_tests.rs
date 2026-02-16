@@ -325,6 +325,8 @@ fn make_snapshot() -> PgSnapshot {
             xact_rollback: 50,
             blks_read: 5000,
         }),
+        table_schemas: vec![],
+        foreign_keys: vec![],
     }
 }
 
@@ -364,6 +366,8 @@ fn make_empty_snapshot() -> PgSnapshot {
         archiver_stats: None,
         bgwriter_stats: None,
         db_stats: None,
+        table_schemas: vec![],
+        foreign_keys: vec![],
     }
 }
 
@@ -1958,6 +1962,8 @@ fn make_extreme_snapshot() -> PgSnapshot {
         archiver_stats: None,
         bgwriter_stats: None,
         db_stats: None,
+        table_schemas: vec![],
+        foreign_keys: vec![],
     }
 }
 
@@ -2518,6 +2524,8 @@ fn make_zero_values_snapshot() -> PgSnapshot {
             xact_rollback: 0,
             blks_read: 0,
         }),
+        table_schemas: vec![],
+        foreign_keys: vec![],
     }
 }
 

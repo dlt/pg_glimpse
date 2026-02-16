@@ -17,13 +17,14 @@ pub enum BottomPanel {
     WalIo,
     Settings,
     Extensions,
+    SchemaERD,
 }
 
 impl BottomPanel {
     pub const fn supports_filter(self) -> bool {
         matches!(
             self,
-            Self::Queries | Self::Indexes | Self::Statements | Self::TableStats | Self::Settings | Self::Extensions
+            Self::Queries | Self::Indexes | Self::Statements | Self::TableStats | Self::Settings | Self::Extensions | Self::SchemaERD
         )
     }
 
@@ -42,6 +43,7 @@ impl BottomPanel {
             Self::WalIo => "WAL & I/O",
             Self::Settings => "Settings",
             Self::Extensions => "Extensions",
+            Self::SchemaERD => "Schema ERD",
         }
     }
 }
@@ -59,6 +61,7 @@ pub enum InspectTarget {
     Wraparound(String),   // datname
     Settings(String),     // setting name
     Extensions(String),   // extension name
+    SchemaERD(String),    // schema.table_name
 }
 
 /// Confirmation action types

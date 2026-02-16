@@ -421,6 +421,14 @@ impl App {
         self.filtered_indices(&self.server_info.extensions_list, BottomPanel::Extensions)
     }
 
+    pub fn sorted_schema_erd_indices(&self) -> Vec<usize> {
+        let Some(ref snap) = self.snapshot else {
+            return vec![];
+        };
+        // Tables are already sorted by schema, name from the query
+        self.filtered_indices(&snap.table_schemas, BottomPanel::SchemaERD)
+    }
+
     fn copy_to_clipboard(&mut self, text: &str) {
         match arboard::Clipboard::new().and_then(|mut cb| cb.set_text(text)) {
             Ok(()) => {
@@ -717,6 +725,25 @@ impl App {
         }
     }
 
+    fn handle_schema_erd_key(&mut self, key: KeyEvent) {
+        let indices = self.sorted_schema_erd_indices();
+        let len = indices.len();
+        if PanelStates::simple_nav(&mut self.panels.schema_erd, key.code, len) {
+            let Some(ref snap) = self.snapshot else {
+                return;
+            };
+            if let Some(idx) = self.panels.schema_erd.selected() {
+                if let Some(&real_idx) = indices.get(idx) {
+                    if let Some(table_schema) = snap.table_schemas.get(real_idx) {
+                        let key = format!("{}.{}", table_schema.schema_name, table_schema.table_name);
+                        self.overlay_scroll = 0;
+                        self.view_mode = ViewMode::Inspect(InspectTarget::SchemaERD(key));
+                    }
+                }
+            }
+        }
+    }
+
     fn handle_panel_key(&mut self, key: KeyEvent) {
         match self.bottom_panel {
             BottomPanel::Queries => self.handle_queries_key(key),
@@ -729,6 +756,7 @@ impl App {
             BottomPanel::Wraparound => self.handle_wraparound_key(key),
             BottomPanel::Settings => self.handle_settings_key(key),
             BottomPanel::Extensions => self.handle_extensions_key(key),
+            BottomPanel::SchemaERD => self.handle_schema_erd_key(key),
             BottomPanel::WalIo | BottomPanel::WaitEvents => {}
         }
     }
@@ -862,6 +890,9 @@ impl App {
             }
             InspectTarget::Extensions(name) => {
                 Some(name.clone())
+            }
+            InspectTarget::SchemaERD(key) => {
+                Some(key.clone())
             }
         }
     }
@@ -1165,6 +1196,10 @@ impl App {
             }
             KeyCode::Char('E') => {
                 self.switch_panel(BottomPanel::Extensions);
+                true
+            }
+            KeyCode::Char('D') => {
+                self.switch_panel(BottomPanel::SchemaERD);
                 true
             }
             KeyCode::Char('/') => {

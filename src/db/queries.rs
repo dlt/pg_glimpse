@@ -5,10 +5,10 @@ use tokio_postgres::Client;
 use super::error::{DbError, Result as DbResult};
 use super::models::{
     ActiveQuery, ActivitySummary, ArchiverStats, BgwriterStats, BlockingInfo, BloatSource,
-    BufferCacheStats, CheckpointStats, DatabaseStats, DetectedExtensions, IndexInfo,
-    PgExtension, PgSetting, PgSnapshot, ReplicationInfo, ReplicationSlot, ServerInfo,
-    StatStatement, Subscription, TableStat, VacuumProgress, WaitEventCount, WalStats,
-    WraparoundInfo,
+    BufferCacheStats, CheckpointStats, ColumnInfo, DatabaseStats, DetectedExtensions,
+    ForeignKeyConstraint, IndexInfo, PgExtension, PgSetting, PgSnapshot, ReplicationInfo,
+    ReplicationSlot, ServerInfo, StatStatement, Subscription, TableSchema, TableStat,
+    VacuumProgress, WaitEventCount, WalStats, WraparoundInfo,
 };
 
 /// Limit: 100 active queries
@@ -701,6 +701,32 @@ SELECT
     COALESCE(blks_read, 0) AS blks_read
 FROM pg_stat_database
 WHERE datname = current_database()
+";
+
+/// Foreign key constraints query
+const FOREIGN_KEYS_SQL: &str = "
+SELECT
+    tc.constraint_name,
+    tc.table_schema,
+    tc.table_name,
+    kcu.column_name,
+    ccu.table_schema AS foreign_table_schema,
+    ccu.table_name AS foreign_table_name,
+    ccu.column_name AS foreign_column_name,
+    rc.delete_rule,
+    rc.update_rule
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu
+    ON tc.constraint_name = kcu.constraint_name
+    AND tc.table_schema = kcu.table_schema
+JOIN information_schema.constraint_column_usage ccu
+    ON ccu.constraint_name = tc.constraint_name
+    AND ccu.table_schema = tc.table_schema
+JOIN information_schema.referential_constraints rc
+    ON rc.constraint_name = tc.constraint_name
+    AND rc.constraint_schema = tc.table_schema
+WHERE tc.constraint_type = 'FOREIGN KEY'
+ORDER BY tc.table_schema, tc.table_name, kcu.ordinal_position
 ";
 
 /// Table bloat estimation using pgstattuple_approx (most accurate)
@@ -1797,13 +1823,166 @@ pub async fn terminate_backends(client: &Client, pids: &[i32]) -> Vec<(i32, bool
     results
 }
 
+pub async fn fetch_foreign_keys(client: &Client) -> DbResult<Vec<ForeignKeyConstraint>> {
+    let rows = client
+        .query(FOREIGN_KEYS_SQL, &[])
+        .await
+        .map_err(|e| DbError::Query {
+            context: "fetch_foreign_keys",
+            source: e,
+        })?;
+    let mut results = Vec::with_capacity(rows.len());
+    for row in rows {
+        results.push(ForeignKeyConstraint {
+            constraint_name: row.get("constraint_name"),
+            table_schema: row.get("table_schema"),
+            table_name: row.get("table_name"),
+            column_name: row.get("column_name"),
+            foreign_table_schema: row.get("foreign_table_schema"),
+            foreign_table_name: row.get("foreign_table_name"),
+            foreign_column_name: row.get("foreign_column_name"),
+            delete_rule: row.get("delete_rule"),
+            update_rule: row.get("update_rule"),
+        });
+    }
+    Ok(results)
+}
+
+pub async fn fetch_table_schemas(client: &Client) -> DbResult<Vec<TableSchema>> {
+    // First, fetch all foreign keys
+    let foreign_keys = fetch_foreign_keys(client).await?;
+
+    // Fetch primary keys
+    let pk_sql = "
+        SELECT
+            kcu.table_schema,
+            kcu.table_name,
+            kcu.column_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+            ON tc.constraint_name = kcu.constraint_name
+            AND tc.table_schema = kcu.table_schema
+        WHERE tc.constraint_type = 'PRIMARY KEY'
+            AND kcu.table_schema NOT IN ('pg_catalog', 'information_schema')
+        ORDER BY kcu.table_schema, kcu.table_name, kcu.ordinal_position
+    ";
+    let pk_rows = client.query(pk_sql, &[]).await.map_err(|e| DbError::Query {
+        context: "fetch_primary_keys",
+        source: e,
+    })?;
+
+    // Group primary keys by table
+    let mut primary_keys_map: std::collections::HashMap<(String, String), Vec<String>> =
+        std::collections::HashMap::new();
+    for row in pk_rows {
+        let schema: String = row.get("table_schema");
+        let table: String = row.get("table_name");
+        let column: String = row.get("column_name");
+        primary_keys_map
+            .entry((schema, table))
+            .or_default()
+            .push(column);
+    }
+
+    // Fetch columns
+    let col_sql = "
+        SELECT
+            c.table_schema,
+            c.table_name,
+            c.column_name,
+            c.data_type,
+            c.is_nullable
+        FROM information_schema.columns c
+        JOIN information_schema.tables t
+            ON c.table_schema = t.table_schema
+            AND c.table_name = t.table_name
+        WHERE t.table_type = 'BASE TABLE'
+            AND c.table_schema NOT IN ('pg_catalog', 'information_schema')
+        ORDER BY c.table_schema, c.table_name, c.ordinal_position
+    ";
+    let col_rows = client.query(col_sql, &[]).await.map_err(|e| DbError::Query {
+        context: "fetch_columns",
+        source: e,
+    })?;
+
+    // Group columns by table
+    let mut tables_map: std::collections::HashMap<(String, String), Vec<ColumnInfo>> =
+        std::collections::HashMap::new();
+    for row in col_rows {
+        let schema: String = row.get("table_schema");
+        let table: String = row.get("table_name");
+        let column: String = row.get("column_name");
+        let data_type: String = row.get("data_type");
+        let is_nullable: String = row.get("is_nullable");
+
+        let pks = primary_keys_map
+            .get(&(schema.clone(), table.clone()))
+            .map_or(vec![], |v| v.clone());
+        let is_pk = pks.contains(&column);
+
+        // Check if this column is a foreign key
+        let is_fk = foreign_keys.iter().any(|fk| {
+            fk.table_schema == schema && fk.table_name == table && fk.column_name == column
+        });
+
+        tables_map
+            .entry((schema, table))
+            .or_default()
+            .push(ColumnInfo {
+                column_name: column,
+                data_type,
+                is_nullable: is_nullable == "YES",
+                is_primary_key: is_pk,
+                is_foreign_key: is_fk,
+            });
+    }
+
+    // Build TableSchema structs
+    let mut results = Vec::new();
+    for ((schema, table), columns) in tables_map {
+        let pks = primary_keys_map
+            .get(&(schema.clone(), table.clone()))
+            .map_or(vec![], |v| v.clone());
+
+        let fks_out: Vec<ForeignKeyConstraint> = foreign_keys
+            .iter()
+            .filter(|fk| fk.table_schema == schema && fk.table_name == table)
+            .cloned()
+            .collect();
+
+        let fks_in: Vec<ForeignKeyConstraint> = foreign_keys
+            .iter()
+            .filter(|fk| fk.foreign_table_schema == schema && fk.foreign_table_name == table)
+            .cloned()
+            .collect();
+
+        results.push(TableSchema {
+            schema_name: schema,
+            table_name: table,
+            columns,
+            primary_keys: pks,
+            foreign_keys_out: fks_out,
+            foreign_keys_in: fks_in,
+        });
+    }
+
+    // Sort by schema, then table name
+    results.sort_by(|a, b| {
+        a.schema_name
+            .cmp(&b.schema_name)
+            .then(a.table_name.cmp(&b.table_name))
+    });
+
+    Ok(results)
+}
+
 pub async fn fetch_snapshot(
     client: &Client,
     extensions: &DetectedExtensions,
     version: u32,
 ) -> Result<PgSnapshot> {
     let ext = extensions.clone();
-    let (active, waits, blocks, cache, summary, tables, repl, repl_slots, subs, vacuum, wrap, indexes, ss, db_size, chkpt, wal, archiver, bgwriter, db_stats) =
+    let (active, waits, blocks, cache, summary, tables, repl, repl_slots, subs, vacuum, wrap, indexes, ss, db_size, chkpt, wal, archiver, bgwriter, db_stats, table_schemas, foreign_keys) =
         tokio::try_join!(
             async { fetch_active_queries(client).await.map_err(color_eyre::Report::from) },
             async { fetch_wait_events(client).await.map_err(color_eyre::Report::from) },
@@ -1833,6 +2012,9 @@ pub async fn fetch_snapshot(
             async { Ok(fetch_archiver_stats(client).await.ok()) },
             async { Ok(fetch_bgwriter_stats(client).await.ok()) },
             async { Ok(fetch_database_stats(client).await.ok()) },
+            // Schema/FK data can fail if tables are dropped during query - return empty on error
+            async { Ok::<_, color_eyre::Report>(fetch_table_schemas(client).await.unwrap_or_default()) },
+            async { Ok::<_, color_eyre::Report>(fetch_foreign_keys(client).await.unwrap_or_default()) },
         )?;
     let (stat_statements, stat_statements_error) = ss;
     Ok(PgSnapshot {
@@ -1858,5 +2040,7 @@ pub async fn fetch_snapshot(
         archiver_stats: archiver,
         bgwriter_stats: bgwriter,
         db_stats,
+        table_schemas,
+        foreign_keys,
     })
 }

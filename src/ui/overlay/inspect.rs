@@ -1220,3 +1220,174 @@ pub fn render_extensions_inspect(frame: &mut Frame, app: &App, area: Rect, name:
 
     frame.render_widget(paragraph, popup_area);
 }
+
+pub fn render_schema_erd_inspect(frame: &mut Frame, app: &App, area: Rect, key: &str) {
+    let popup_area = centered_rect(70, 70, area);
+    frame.render_widget(Clear, popup_area);
+
+    let emoji = if app.config.show_emojis { "📊 " } else { "" };
+    let title = format!("{emoji}Table Schema  [j/k] scroll  [y] copy  [Esc] close");
+    let block = overlay_block(&title, Theme::border_active());
+
+    let Some(ref snap) = app.snapshot else {
+        frame.render_widget(Paragraph::new("No data").block(block), popup_area);
+        return;
+    };
+
+    // Parse schema.table from key
+    let parts: Vec<&str> = key.split('.').collect();
+    if parts.len() != 2 {
+        frame.render_widget(
+            Paragraph::new("Invalid table key").block(block),
+            popup_area,
+        );
+        return;
+    }
+    let (schema, table) = (parts[0], parts[1]);
+
+    let Some(table_schema) = snap.table_schemas.iter().find(|t| {
+        t.schema_name == schema && t.table_name == table
+    }) else {
+        frame.render_widget(
+            Paragraph::new("Table not found").block(block),
+            popup_area,
+        );
+        return;
+    };
+
+    let mut lines = vec![
+        Line::from(""),
+        section_header("Table"),
+        Line::from(vec![
+            Span::styled("  Schema:      ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                &table_schema.schema_name,
+                Style::default().fg(Theme::fg()),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("  Table:       ", Style::default().fg(Theme::fg_dim())),
+            Span::styled(
+                &table_schema.table_name,
+                Style::default()
+                    .fg(Theme::border_active())
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(""),
+    ];
+
+    // Columns section
+    if !table_schema.columns.is_empty() {
+        lines.push(section_header(&format!("Columns ({})", table_schema.columns.len())));
+        for col in &table_schema.columns {
+            let mut badges = Vec::new();
+            if col.is_primary_key {
+                badges.push(Span::styled(" PK", Style::default().fg(Theme::border_ok())));
+            }
+            if col.is_foreign_key {
+                badges.push(Span::styled(" FK", Style::default().fg(Theme::border_warn())));
+            }
+            if !col.is_nullable {
+                badges.push(Span::styled(" NOT NULL", Style::default().fg(Theme::fg_dim())));
+            }
+
+            let mut spans = vec![
+                Span::styled("  • ", Style::default().fg(Theme::border_active())),
+                Span::styled(&col.column_name, Style::default().fg(Theme::fg())),
+                Span::styled(
+                    format!(" {}", col.data_type),
+                    Style::default().fg(Theme::fg_dim()),
+                ),
+            ];
+            spans.extend(badges);
+            lines.push(Line::from(spans));
+        }
+        lines.push(Line::from(""));
+    }
+
+    // Primary keys section
+    if !table_schema.primary_keys.is_empty() {
+        lines.push(section_header(&format!(
+            "Primary Keys ({})",
+            table_schema.primary_keys.len()
+        )));
+        for pk in &table_schema.primary_keys {
+            lines.push(Line::from(vec![
+                Span::styled("  • ", Style::default().fg(Theme::border_ok())),
+                Span::styled(pk, Style::default().fg(Theme::fg())),
+            ]));
+        }
+        lines.push(Line::from(""));
+    }
+
+    // Foreign keys OUT
+    if !table_schema.foreign_keys_out.is_empty() {
+        lines.push(section_header(&format!(
+            "References ({})",
+            table_schema.foreign_keys_out.len()
+        )));
+        for fk in &table_schema.foreign_keys_out {
+            lines.push(Line::from(vec![
+                Span::styled("  • ", Style::default().fg(Theme::border_warn())),
+                Span::styled(&fk.column_name, Style::default().fg(Theme::fg())),
+                Span::styled(" → ", Style::default().fg(Theme::fg_dim())),
+                Span::styled(
+                    format!("{}.{}", fk.foreign_table_schema, fk.foreign_table_name),
+                    Style::default().fg(Theme::border_active()),
+                ),
+                Span::styled(
+                    format!("({})", fk.foreign_column_name),
+                    Style::default().fg(Theme::fg_dim())),
+            ]));
+            lines.push(Line::from(vec![
+                Span::styled("    ON DELETE ", Style::default().fg(Theme::fg_dim())),
+                Span::styled(&fk.delete_rule, Style::default().fg(Theme::fg())),
+                Span::styled(", ON UPDATE ", Style::default().fg(Theme::fg_dim())),
+                Span::styled(&fk.update_rule, Style::default().fg(Theme::fg())),
+            ]));
+        }
+        lines.push(Line::from(""));
+    }
+
+    // Foreign keys IN
+    if !table_schema.foreign_keys_in.is_empty() {
+        lines.push(section_header(&format!(
+            "Referenced By ({})",
+            table_schema.foreign_keys_in.len()
+        )));
+        for fk in &table_schema.foreign_keys_in {
+            lines.push(Line::from(vec![
+                Span::styled("  • ", Style::default().fg(Theme::border_ok())),
+                Span::styled(
+                    format!("{}.{}", fk.table_schema, fk.table_name),
+                    Style::default().fg(Theme::border_active()),
+                ),
+                Span::styled(
+                    format!("({})", fk.column_name),
+                    Style::default().fg(Theme::fg_dim())),
+                Span::styled(" → ", Style::default().fg(Theme::fg_dim())),
+                Span::styled(&fk.foreign_column_name, Style::default().fg(Theme::fg())),
+            ]));
+        }
+        lines.push(Line::from(""));
+    }
+
+    if table_schema.primary_keys.is_empty()
+        && table_schema.foreign_keys_out.is_empty()
+        && table_schema.foreign_keys_in.is_empty()
+    {
+        lines.push(Line::from(vec![Span::styled(
+            "  No primary keys or foreign key relationships",
+            Style::default().fg(Theme::fg_dim()),
+        )]));
+        lines.push(Line::from(""));
+    }
+
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false })
+        .scroll((app.overlay_scroll, 0));
+
+    frame.render_widget(paragraph, popup_area);
+}

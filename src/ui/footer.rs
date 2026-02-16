@@ -178,6 +178,7 @@ fn panel_name(panel: BottomPanel) -> &'static str {
         BottomPanel::WalIo => "WAL",
         BottomPanel::Settings => "Settings",
         BottomPanel::Extensions => "Extensions",
+        BottomPanel::SchemaERD => "ERD",
     }
 }
 
@@ -286,6 +287,20 @@ fn render_panel_keys(spans: &mut Vec<Span<'static>>, app: &App, styles: &FooterS
             spans.push(styles.desc(" back"));
         }
         BottomPanel::Settings | BottomPanel::Extensions => {
+            spans.push(styles.sep());
+            spans.push(styles.key("↑↓"));
+            spans.push(styles.desc(" nav"));
+            spans.push(styles.dot());
+            spans.push(styles.key("⏎"));
+            spans.push(styles.desc(" inspect"));
+            spans.push(styles.dot());
+            spans.push(styles.key("/"));
+            spans.push(styles.desc(" filter"));
+            spans.push(styles.dot());
+            spans.push(styles.key("Esc"));
+            spans.push(styles.desc(" back"));
+        }
+        BottomPanel::SchemaERD => {
             spans.push(styles.sep());
             spans.push(styles.key("↑↓"));
             spans.push(styles.desc(" nav"));

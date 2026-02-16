@@ -31,6 +31,6 @@ expression: buffer_to_string(&terminal)
               │    A           WAL & I/O stats                              │             
               │    P           PostgreSQL settings                          │             
               │    E           Extensions                                   │             
+              │    D           Schema ERD (relationships)                   │             
               │                                                             │             
-              │  Panel Controls ────────────────────────────────────────    │             
               ╰─────────────────────────────────────────────────────────────╯

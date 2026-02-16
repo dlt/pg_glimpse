@@ -71,6 +71,7 @@ pub struct PanelStates {
     pub wraparound: TableState,
     pub settings: TableState,
     pub extensions: TableState,
+    pub schema_erd: TableState,
 }
 
 impl PanelStates {
@@ -86,6 +87,7 @@ impl PanelStates {
             wraparound: TableState::default(),
             settings: TableState::default(),
             extensions: TableState::default(),
+            schema_erd: TableState::default(),
         }
     }
 
@@ -102,6 +104,7 @@ impl PanelStates {
             BottomPanel::Wraparound => self.wraparound.select(Some(0)),
             BottomPanel::Settings => self.settings.select(Some(0)),
             BottomPanel::Extensions => self.extensions.select(Some(0)),
+            BottomPanel::SchemaERD => self.schema_erd.select(Some(0)),
             BottomPanel::WaitEvents | BottomPanel::WalIo => {}
         }
     }

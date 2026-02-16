@@ -97,6 +97,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         BottomPanel::WalIo => panels::render_wal_io(frame, app, areas.queries),
         BottomPanel::Settings => panels::render_settings(frame, app, areas.queries),
         BottomPanel::Extensions => panels::render_extensions(frame, app, areas.queries),
+        BottomPanel::SchemaERD => panels::render_schema_erd(frame, app, areas.queries),
     }
 
     footer::render(frame, app, areas.footer);
@@ -116,6 +117,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
                 InspectTarget::Wraparound(datname) => overlay::render_wraparound_inspect(frame, app, area, datname),
                 InspectTarget::Settings(name) => overlay::render_settings_inspect(frame, app, area, name),
                 InspectTarget::Extensions(name) => overlay::render_extensions_inspect(frame, app, area, name),
+                InspectTarget::SchemaERD(key) => overlay::render_schema_erd_inspect(frame, app, area, key),
             }
         }
         ViewMode::Confirm(action) => {

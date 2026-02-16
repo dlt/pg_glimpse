@@ -320,6 +320,38 @@ pub struct StatStatement {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForeignKeyConstraint {
+    pub constraint_name: String,
+    pub table_schema: String,
+    pub table_name: String,
+    pub column_name: String,
+    pub foreign_table_schema: String,
+    pub foreign_table_name: String,
+    pub foreign_column_name: String,
+    pub delete_rule: String,
+    pub update_rule: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ColumnInfo {
+    pub column_name: String,
+    pub data_type: String,
+    pub is_nullable: bool,
+    pub is_primary_key: bool,
+    pub is_foreign_key: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TableSchema {
+    pub schema_name: String,
+    pub table_name: String,
+    pub columns: Vec<ColumnInfo>,
+    pub primary_keys: Vec<String>,
+    pub foreign_keys_out: Vec<ForeignKeyConstraint>,
+    pub foreign_keys_in: Vec<ForeignKeyConstraint>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PgSnapshot {
     pub timestamp: DateTime<Utc>,
     pub active_queries: Vec<ActiveQuery>,
@@ -343,6 +375,10 @@ pub struct PgSnapshot {
     pub archiver_stats: Option<ArchiverStats>,
     pub bgwriter_stats: Option<BgwriterStats>,
     pub db_stats: Option<DatabaseStats>,
+    #[serde(default)]
+    pub table_schemas: Vec<TableSchema>,
+    #[serde(default)]
+    pub foreign_keys: Vec<ForeignKeyConstraint>,
 }
 
 #[cfg(test)]

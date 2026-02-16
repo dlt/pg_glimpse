@@ -1,6 +1,8 @@
 //! Sorting and filtering logic for table views.
 
-use crate::db::models::{ActiveQuery, IndexInfo, PgExtension, PgSetting, StatStatement, TableStat};
+use crate::db::models::{
+    ActiveQuery, IndexInfo, PgExtension, PgSetting, StatStatement, TableSchema, TableStat,
+};
 
 /// Trait for types that can be filtered with fuzzy matching.
 pub trait Filterable {
@@ -56,6 +58,12 @@ impl Filterable for PgExtension {
             self.schema,
             self.description.as_deref().unwrap_or("")
         )
+    }
+}
+
+impl Filterable for TableSchema {
+    fn filter_string(&self) -> String {
+        format!("{} {}", self.schema_name, self.table_name)
     }
 }
 

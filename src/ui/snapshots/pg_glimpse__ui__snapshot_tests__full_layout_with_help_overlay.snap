@@ -32,6 +32,7 @@ expression: buffer_to_string(&terminal)
 │                    │    A           WAL & I/O stats                                                                 │                    │
 │                    │    P           PostgreSQL settings                                                             │                    │
 │                    │    E           Extensions                                                                      │                    │
+│                    │    D           Schema ERD (relationships)                                                      │                    │
 │                    │                                                                                                │                    │
 │                    │  Panel Controls ────────────────────────────────────────                                       │                    │
 │                    │    Esc         Back to queries (or quit)                                                       │                    │
@@ -45,7 +46,6 @@ expression: buffer_to_string(&terminal)
 │                    │    C           Cancel query (batch if filtered)                                                │                    │
 │                    │    K           Terminate backend (batch if filtered)                                           │                    │
 │                    │    y           Copy query to clipboard                                                         │                    │
-│                    │                                                                                                │                    │
 │                    ╰────────────────────────────────────────────────────────────────────────────────────────────────╯                    │
 │                                                                                                                                          │
 │                                                                                                                                          │

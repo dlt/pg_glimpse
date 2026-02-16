@@ -65,6 +65,8 @@ fn make_snapshot() -> PgSnapshot {
         archiver_stats: None,
         bgwriter_stats: None,
         db_stats: None,
+        table_schemas: vec![],
+        foreign_keys: vec![],
     }
 }
 
