@@ -132,10 +132,10 @@ impl ReplaySession {
             if let RecordLine::Snapshot { data } = record {
                 snapshots.push(data);
                 // Call progress callback every 100 snapshots or on first snapshot
-                if snapshots.len() % 100 == 0 || snapshots.len() == 1 {
-                    if !progress_callback(snapshots.len()) {
-                        return Err(eyre!("Loading cancelled by user"));
-                    }
+                if (snapshots.len() % 100 == 0 || snapshots.len() == 1)
+                    && !progress_callback(snapshots.len())
+                {
+                    return Err(eyre!("Loading cancelled by user"));
                 }
             }
         }
