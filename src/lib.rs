@@ -10,6 +10,7 @@ pub mod history;
 pub mod recorder;
 pub mod replay;
 pub mod runtime;
+pub mod ssl;
 pub mod ui;
 
 use clap::Parser;

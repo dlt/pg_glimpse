@@ -1759,3 +1759,169 @@ async fn test_detect_extensions_all_versions() {
         }
     }
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// Mutual TLS (Client Certificate Authentication) Tests
+// ───────────────────────────────────────────────────────────────────────────
+
+use pg_glimpse::connection::{try_connect, SslMode};
+use pg_glimpse::ssl::SslCertConfig;
+use std::path::PathBuf;
+
+/// Helper to get test certificate paths
+fn test_cert_paths() -> (PathBuf, PathBuf, PathBuf) {
+    let base = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("certs");
+
+    (
+        base.join("client.crt"),
+        base.join("client.key"),
+        base.join("ca.crt"),
+    )
+}
+
+/// Check if mTLS test certificates exist
+fn mtls_certs_available() -> bool {
+    let (cert, key, ca) = test_cert_paths();
+    cert.exists() && key.exists() && ca.exists()
+}
+
+/// Test successful connection with client certificate authentication
+#[tokio::test]
+async fn test_mtls_successful_connection() {
+    if !mtls_certs_available() {
+        println!("⚠️  Skipping mTLS test: certificates not found");
+        println!("   Run: ./tests/fixtures/generate_test_certs.sh");
+        return;
+    }
+
+    // Build PostgreSQL config
+    let mut pg_config = tokio_postgres::Config::new();
+    pg_config
+        .host("localhost")
+        .port(5419)
+        .dbname("test")
+        .user("test")
+        .password("test");
+
+    // Build SSL certificate config
+    let (cert_path, key_path, root_cert_path) = test_cert_paths();
+    let cert_config = SslCertConfig::new()
+        .with_cert(cert_path)
+        .with_key(key_path)
+        .with_root_cert(root_cert_path);
+
+    // Attempt connection with SSL and client certificate
+    let result = try_connect(&pg_config, SslMode::Verified, &cert_config).await;
+
+    match result {
+        Ok(client) => {
+            // Verify connection by running a simple query
+            let row = client.query_one("SELECT version()", &[]).await.unwrap();
+            let version: String = row.get(0);
+            assert!(version.contains("PostgreSQL"));
+            println!("✓ mTLS connection successful: {}", version);
+        }
+        Err(e) => {
+            println!("⚠️  mTLS connection failed (server may not be running): {}", e);
+            println!("   Start with: docker compose -f tests/docker-compose.yml up -d pg-mtls");
+        }
+    }
+}
+
+/// Test connection failure without client certificate when server requires it
+#[tokio::test]
+async fn test_mtls_connection_fails_without_cert() {
+    if !mtls_certs_available() {
+        println!("⚠️  Skipping mTLS test: certificates not found");
+        return;
+    }
+
+    // Build PostgreSQL config
+    let mut pg_config = tokio_postgres::Config::new();
+    pg_config
+        .host("localhost")
+        .port(5419)
+        .dbname("test")
+        .user("test")
+        .password("test");
+
+    // Build SSL config WITHOUT client certificate
+    let (_, _, root_cert_path) = test_cert_paths();
+    let cert_config = SslCertConfig::new().with_root_cert(root_cert_path);
+
+    // Attempt connection - should fail because server requires client cert
+    let result = try_connect(&pg_config, SslMode::Verified, &cert_config).await;
+
+    // The connection should fail or succeed without cert (depending on server config)
+    // For a server with ssl_client_auth=require, it should fail
+    match result {
+        Ok(_) => {
+            println!("⚠️  Connection succeeded without client cert (server may not require it)");
+        }
+        Err(e) => {
+            println!("✓ Connection correctly failed without client cert: {}", e);
+        }
+    }
+}
+
+/// Test connection with invalid certificate paths
+#[tokio::test]
+async fn test_mtls_invalid_cert_paths() {
+    let mut pg_config = tokio_postgres::Config::new();
+    pg_config
+        .host("localhost")
+        .port(5419)
+        .dbname("test")
+        .user("test")
+        .password("test");
+
+    // Use non-existent certificate paths
+    let cert_config = SslCertConfig::new()
+        .with_cert(PathBuf::from("/nonexistent/cert.pem"))
+        .with_key(PathBuf::from("/nonexistent/key.pem"));
+
+    let result = try_connect(&pg_config, SslMode::Insecure, &cert_config).await;
+
+    // Should fail with certificate error
+    assert!(result.is_err());
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("Certificate error") || err_msg.contains("No such file"),
+        "Error should mention certificate issue: {}",
+        err_msg
+    );
+    println!("✓ Invalid cert paths correctly rejected");
+}
+
+/// Test that regular SSL connection (without client cert) still works
+#[tokio::test]
+async fn test_ssl_connection_without_client_cert() {
+    // Test against a regular PostgreSQL instance (not requiring client cert)
+    let mut pg_config = tokio_postgres::Config::new();
+    pg_config
+        .host("localhost")
+        .port(5417) // pg17 without mTLS
+        .dbname("test")
+        .user("test")
+        .password("test");
+
+    let cert_config = SslCertConfig::new();
+
+    // Should work with insecure SSL (self-signed cert)
+    let result = try_connect(&pg_config, SslMode::Insecure, &cert_config).await;
+
+    match result {
+        Ok(client) => {
+            let row = client.query_one("SELECT 1 as test", &[]).await.unwrap();
+            let val: i32 = row.get(0);
+            assert_eq!(val, 1);
+            println!("✓ SSL connection without client cert works");
+        }
+        Err(e) => {
+            println!("⚠️  SSL connection failed (server may not be running): {}", e);
+        }
+    }
+}

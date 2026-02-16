@@ -132,11 +132,14 @@ pg_glimpse -r 1 --history-length 240
 | `--history-length` | Sparkline data points | `120` |
 | `--ssl` | Enable SSL/TLS connection | — |
 | `--ssl-insecure` | SSL without cert verification (RDS/Aurora) | — |
+| `--ssl-cert` | Client certificate file for mutual TLS | — |
+| `--ssl-key` | Client private key file for mutual TLS | — |
+| `--ssl-root-cert` | CA root certificate for server verification | — |
 | `--replay` | Replay a recorded session | — |
 
 ### Environment Variables
 
-`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, `PGSERVICE`, `PG_GLIMPSE_CONNECTION`
+`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, `PGSERVICE`, `PG_GLIMPSE_CONNECTION`, `PGSSLCERT`, `PGSSLKEY`, `PGSSLROOTCERT`
 
 ### PostgreSQL Service File
 
@@ -164,6 +167,48 @@ pg_glimpse --service=production
 ```
 
 Individual CLI parameters override service file values if both are provided.
+
+### Client Certificate Authentication (Mutual TLS)
+
+PostgreSQL supports client certificate authentication for enhanced security. To use mutual TLS:
+
+```bash
+# Specify certificate files explicitly
+pg_glimpse -H myserver.example.com -d mydb -U user -W password \
+  --ssl \
+  --ssl-cert ~/.postgresql/postgresql.crt \
+  --ssl-key ~/.postgresql/postgresql.key \
+  --ssl-root-cert ~/.postgresql/root.crt
+
+# Or use environment variables
+export PGSSLCERT=~/.postgresql/postgresql.crt
+export PGSSLKEY=~/.postgresql/postgresql.key
+export PGSSLROOTCERT=~/.postgresql/root.crt
+pg_glimpse --ssl -H myserver.example.com -d mydb -U user -W password
+```
+
+**Service file with certificates:**
+```ini
+[secure-prod]
+host=prod.db.example.com
+port=5432
+dbname=myapp
+user=app_user
+password=secretpassword
+sslcert=/path/to/client.crt
+sslkey=/path/to/client.key
+sslrootcert=/path/to/ca.crt
+```
+
+**Default paths:** If certificates exist in `~/.postgresql/` directory, they'll be auto-detected:
+- `~/.postgresql/postgresql.crt` (client certificate)
+- `~/.postgresql/postgresql.key` (client private key)
+- `~/.postgresql/root.crt` (CA certificate)
+
+**Important notes:**
+- Client certificate authentication requires both password AND certificate
+- Private key files should have mode `0600` (readable only by owner)
+- Use `--ssl` for verified TLS or `--ssl-insecure` for self-signed server certificates
 
 ## Keyboard Reference
 

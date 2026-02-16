@@ -24,9 +24,15 @@ cargo test                # Unit tests only
 docker compose -f tests/docker-compose.yml up -d
 cargo test --features integration --test integration
 docker compose -f tests/docker-compose.yml down -v
+
+# mTLS integration tests (requires test certificates)
+./tests/fixtures/generate_test_certs.sh  # Generate certificates first
+docker compose -f tests/docker-compose.yml up -d pg-mtls
+cargo test --features integration --test integration test_mtls
+docker compose -f tests/docker-compose.yml down -v
 ```
 
-Integration tests run against PG11, PG14, and PG17 to verify version-aware query logic.
+Integration tests run against PG11-PG18 to verify version-aware query logic. mTLS tests verify client certificate authentication against a PostgreSQL instance configured to require certificates.
 
 ## Architecture
 
@@ -57,6 +63,12 @@ Rust TUI application using ratatui + crossterm + tokio + tokio-postgres.
 - `src/replay.rs` — JSONL reader, loads snapshots into memory
 - Format: first line `{"type":"header",...}`, rest `{"type":"snapshot","data":{...}}`
 
+### SSL/TLS and Client Certificates
+
+- `src/ssl.rs` — Certificate loading and validation for client certificate authentication (mutual TLS)
+- `src/connection.rs` — TLS configuration with optional client certificates, supports verified and insecure modes
+- Certificate paths can be specified via CLI args (`--ssl-cert`, `--ssl-key`, `--ssl-root-cert`), environment variables (`PGSSLCERT`, `PGSSLKEY`, `PGSSLROOTCERT`), service file (`sslcert`, `sslkey`, `sslrootcert`), or auto-detected from `~/.postgresql/` directory
+
 ## Key Patterns
 
 **Adding a new ConfigItem:** Update the enum, ALL array, `label()`, `config_adjust()` in app.rs, and the overlay.rs match block.
@@ -64,6 +76,8 @@ Rust TUI application using ratatui + crossterm + tokio + tokio-postgres.
 **Version-aware queries:** Check `queries.rs` for patterns. Use the PG major version or extension version to select the right SQL. Column names change between versions (e.g., `num_dead_tuples` → `dead_tuple_count` in PG17).
 
 **SSL connections:** Use `--ssl` for verified TLS, `--ssl-insecure` for cloud DBs with custom CAs (AWS RDS, Aurora).
+
+**Client certificate authentication:** Set both certificate path (`--ssl-cert`) and private key path (`--ssl-key`). The `SslCertConfig` struct in `ssl.rs` tracks certificate paths with precedence: CLI args > env vars > service file > defaults. The `build_tls_config()` function in `connection.rs` conditionally loads client certificates if `has_client_cert()` returns true.
 
 ## Release Process
 

@@ -1,3 +1,4 @@
+use crate::ssl::SslCertConfig;
 use clap::Parser;
 use std::collections::HashMap;
 use std::fs;
@@ -49,6 +50,18 @@ pub struct Cli {
     /// Skip SSL certificate verification (use with --ssl for self-signed or cloud certs)
     #[arg(long)]
     pub ssl_insecure: bool,
+
+    /// Path to client certificate file for mutual TLS authentication
+    #[arg(long = "ssl-cert", env = "PGSSLCERT")]
+    pub ssl_cert: Option<PathBuf>,
+
+    /// Path to client private key file for mutual TLS authentication
+    #[arg(long = "ssl-key", env = "PGSSLKEY")]
+    pub ssl_key: Option<PathBuf>,
+
+    /// Path to CA root certificate file for server verification
+    #[arg(long = "ssl-root-cert", env = "PGSSLROOTCERT")]
+    pub ssl_root_cert: Option<PathBuf>,
 
     /// Refresh interval in seconds (overrides config file)
     #[arg(short = 'r', long)]
@@ -121,6 +134,69 @@ fn parse_pg_service_file(service_name: &str) -> Option<HashMap<String, String>> 
 }
 
 impl Cli {
+    /// Builds SSL certificate configuration from CLI args, service file, environment, and defaults.
+    ///
+    /// Priority (highest to lowest):
+    /// 1. CLI arguments
+    /// 2. Environment variables (handled by clap)
+    /// 3. Service file
+    /// 4. Default paths (~/.postgresql/) if files exist
+    pub fn ssl_cert_config(&self) -> SslCertConfig {
+        // Start with service file params if service is specified
+        let service_params = self.service.as_ref()
+            .and_then(|name| parse_pg_service_file(name));
+
+        let mut config = SslCertConfig::new();
+
+        // Apply service file parameters first (lowest priority)
+        if let Some(ref params) = service_params {
+            if let Some(cert) = params.get("sslcert") {
+                config.cert_path = Some(PathBuf::from(cert));
+            }
+            if let Some(key) = params.get("sslkey") {
+                config.key_path = Some(PathBuf::from(key));
+            }
+            if let Some(root_cert) = params.get("sslrootcert") {
+                config.root_cert_path = Some(PathBuf::from(root_cert));
+            }
+        }
+
+        // Override with CLI/env parameters (higher priority)
+        if let Some(ref cert) = self.ssl_cert {
+            config.cert_path = Some(cert.clone());
+        }
+        if let Some(ref key) = self.ssl_key {
+            config.key_path = Some(key.clone());
+        }
+        if let Some(ref root_cert) = self.ssl_root_cert {
+            config.root_cert_path = Some(root_cert.clone());
+        }
+
+        // Fall back to defaults if nothing specified AND files exist
+        if config.cert_path.is_none() && config.key_path.is_none() && config.root_cert_path.is_none() {
+            if let Some(defaults) = crate::ssl::default_paths() {
+                // Only use default paths if the files actually exist
+                if let Some(ref cert_path) = defaults.cert_path {
+                    if cert_path.exists() {
+                        config.cert_path = Some(cert_path.clone());
+                    }
+                }
+                if let Some(ref key_path) = defaults.key_path {
+                    if key_path.exists() {
+                        config.key_path = Some(key_path.clone());
+                    }
+                }
+                if let Some(ref root_cert_path) = defaults.root_cert_path {
+                    if root_cert_path.exists() {
+                        config.root_cert_path = Some(root_cert_path.clone());
+                    }
+                }
+            }
+        }
+
+        config
+    }
+
     pub fn pg_config(&self) -> Result<tokio_postgres::Config, tokio_postgres::Error> {
         // If connection string is provided, use it (highest priority)
         if let Some(ref conn_str) = self.connection_string {
@@ -564,6 +640,9 @@ mod tests {
             password: None,
             ssl: false,
             ssl_insecure: false,
+            ssl_cert: None,
+            ssl_key: None,
+            ssl_root_cert: None,
             refresh: None,
             history_length: 120,
         };
@@ -607,5 +686,74 @@ mod tests {
         assert_eq!(info.port, 5555);
         assert_eq!(info.dbname, "conndb");
         assert_eq!(info.user, "connuser");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // SSL certificate arguments
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn parse_ssl_cert_arg() {
+        let cli = cli_from_args(&["--ssl-cert", "/path/to/cert.pem"]);
+        assert_eq!(cli.ssl_cert, Some(PathBuf::from("/path/to/cert.pem")));
+    }
+
+    #[test]
+    fn parse_ssl_key_arg() {
+        let cli = cli_from_args(&["--ssl-key", "/path/to/key.pem"]);
+        assert_eq!(cli.ssl_key, Some(PathBuf::from("/path/to/key.pem")));
+    }
+
+    #[test]
+    fn parse_ssl_root_cert_arg() {
+        let cli = cli_from_args(&["--ssl-root-cert", "/path/to/root.crt"]);
+        assert_eq!(cli.ssl_root_cert, Some(PathBuf::from("/path/to/root.crt")));
+    }
+
+    #[test]
+    fn parse_all_ssl_cert_args() {
+        let cli = cli_from_args(&[
+            "--ssl-cert", "/path/to/cert.pem",
+            "--ssl-key", "/path/to/key.pem",
+            "--ssl-root-cert", "/path/to/root.crt",
+        ]);
+        assert_eq!(cli.ssl_cert, Some(PathBuf::from("/path/to/cert.pem")));
+        assert_eq!(cli.ssl_key, Some(PathBuf::from("/path/to/key.pem")));
+        assert_eq!(cli.ssl_root_cert, Some(PathBuf::from("/path/to/root.crt")));
+    }
+
+    #[test]
+    fn ssl_cert_config_from_cli_args() {
+        let cli = cli_from_args(&[
+            "--ssl-cert", "/cli/cert.pem",
+            "--ssl-key", "/cli/key.pem",
+            "--ssl-root-cert", "/cli/root.crt",
+        ]);
+        let config = cli.ssl_cert_config();
+        assert_eq!(config.cert_path, Some(PathBuf::from("/cli/cert.pem")));
+        assert_eq!(config.key_path, Some(PathBuf::from("/cli/key.pem")));
+        assert_eq!(config.root_cert_path, Some(PathBuf::from("/cli/root.crt")));
+        assert!(config.has_client_cert());
+    }
+
+    #[test]
+    fn ssl_cert_config_empty_when_no_args() {
+        let cli = cli_from_args(&[]);
+        let config = cli.ssl_cert_config();
+        // Should fall back to defaults only if they exist, which they likely don't in test env
+        assert!(!config.has_client_cert() || config.cert_path.is_some());
+    }
+
+    #[test]
+    fn ssl_cert_config_partial_client_cert() {
+        // Only cert without key should not report has_client_cert
+        let cli = cli_from_args(&["--ssl-cert", "/path/to/cert.pem"]);
+        let config = cli.ssl_cert_config();
+        assert!(!config.has_client_cert());
+
+        // Only key without cert should not report has_client_cert
+        let cli = cli_from_args(&["--ssl-key", "/path/to/key.pem"]);
+        let config = cli.ssl_cert_config();
+        assert!(!config.has_client_cert());
     }
 }

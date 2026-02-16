@@ -22,6 +22,8 @@ async fn establish_connection(
     pg_config: &tokio_postgres::Config,
     conn_info: &ConnectionInfo,
 ) -> Result<(tokio_postgres::Client, SslMode)> {
+    let cert_config = cli.ssl_cert_config();
+
     if cli.ssl || cli.ssl_insecure {
         // User explicitly specified SSL mode - use it directly
         let mode = if cli.ssl_insecure {
@@ -29,7 +31,7 @@ async fn establish_connection(
         } else {
             SslMode::Verified
         };
-        let client = try_connect(pg_config, mode).await.with_context(|| {
+        let client = try_connect(pg_config, mode, &cert_config).await.with_context(|| {
             format!(
                 "could not connect to PostgreSQL ({})\n\nConnection: {}:{}/{}\n\nTry: pg_glimpse -H localhost -p 5432 -d mydb -U postgres -W mypassword\nSee: pg_glimpse --help",
                 mode.label(),
@@ -45,7 +47,7 @@ async fn establish_connection(
         let mut last_error = None;
 
         for mode in modes {
-            match try_connect(pg_config, mode).await {
+            match try_connect(pg_config, mode, &cert_config).await {
                 Ok(client) => {
                     return Ok((client, mode));
                 }
