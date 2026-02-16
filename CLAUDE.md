@@ -27,9 +27,9 @@ docker compose -f tests/docker-compose.yml down -v
 
 # mTLS integration tests (requires test certificates)
 ./tests/fixtures/generate_test_certs.sh  # Generate certificates first
-docker compose -f tests/docker-compose.yml up -d pg-mtls
+docker compose -f tests/docker-compose.yml --profile mtls up -d
 cargo test --features integration --test integration test_mtls
-docker compose -f tests/docker-compose.yml down -v
+docker compose -f tests/docker-compose.yml --profile mtls down -v
 ```
 
 Integration tests run against PG11-PG18 to verify version-aware query logic. mTLS tests verify client certificate authentication against a PostgreSQL instance configured to require certificates.
