@@ -176,54 +176,29 @@ mod tests {
     use std::io::Write;
     use tempfile::TempDir;
 
-    const TEST_CERT_PEM: &str = r#"-----BEGIN CERTIFICATE-----
-MIIC/zCCAeegAwIBAgIUVB18SrzqagkNTjv+yCGkG2EMGU8wDQYJKoZIhvcNAQEL
-BQAwDzENMAsGA1UEAwwEdGVzdDAeFw0yNjAyMTYxNzM5MjVaFw0yNzAyMTYxNzM5
-MjVaMA8xDTALBgNVBAMMBHRlc3QwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEK
-AoIBAQDSblGewWDEE/zue2M6VTulPikgH7NyjIiHdWxsyoI9AoTicOfVpiDB6BXg
-H6+kUwo4vyltJ/tqWHHILy3NwNeb+wpO/ekjzcT3sbgo4tWQu5h5m23FrBv5CDp0
-anf7Ul9seOTveprFe2A5stF6lEObx65gmppoBB1h7WDOpnKsk8DyKOhQPM8kPVmL
-R7AVfqxXt1puLs0gaUh0jopZLuT0KTwNwYhGknYCF92HBrR5AZCGh62PEdIEXCEk
-sC2brakzfjYx/xbhUjYJG2vwbUn+M98zCWtG8BrkyP9hCEaZZaE97/BN5jj+xHZj
-Uj+w7yzDFgm4B0CPa3J2W9rFRoyvAgMBAAGjUzBRMB0GA1UdDgQWBBRRJImXIF98
-c7AafXvTic/+6zzSWzAfBgNVHSMEGDAWgBRRJImXIF98c7AafXvTic/+6zzSWzAP
-BgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBAQC995tLC0XSgXl0T9US
-+L7nPxtW5Afcx63AeeTvYkE9PAKPzIsppVO1DFqGsOzAmljmunF7oMmBzkxB7YTC
-eEFNyucxZiaPTk5iqlv1YQqIXBWIAex0WCdNSW8dksiopbdLS3CJYp7nBKqXfmE4
-XJoYxDIZtwQ5fV3rH4pChm+USchrOVcc0eBLROu3N8BFbVoazsKQJayznuezZfCA
-O0qHTkIaWi/ijPXLle5qEXg4b6mZ1sU2UfHZPxtDA2Geoy6269+/OE4qUW/Rlua+
-MZ+FZ3+g8qcgpAqOJk2gMPney5Nkr8r3LlSsR8ayt3LbNBZYIejLFAw85G2PxZsf
-PeXb
------END CERTIFICATE-----"#;
+    /// Generate a test certificate and key pair using OpenSSL.
+    /// Returns (cert_path, key_path).
+    fn generate_test_cert(dir: &Path) -> (PathBuf, PathBuf) {
+        use std::process::Command;
 
-    const TEST_KEY_PEM: &str = r#"-----BEGIN PRIVATE KEY-----
-MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDSblGewWDEE/zu
-e2M6VTulPikgH7NyjIiHdWxsyoI9AoTicOfVpiDB6BXgH6+kUwo4vyltJ/tqWHHI
-Ly3NwNeb+wpO/ekjzcT3sbgo4tWQu5h5m23FrBv5CDp0anf7Ul9seOTveprFe2A5
-stF6lEObx65gmppoBB1h7WDOpnKsk8DyKOhQPM8kPVmLR7AVfqxXt1puLs0gaUh0
-jopZLuT0KTwNwYhGknYCF92HBrR5AZCGh62PEdIEXCEksC2brakzfjYx/xbhUjYJ
-G2vwbUn+M98zCWtG8BrkyP9hCEaZZaE97/BN5jj+xHZjUj+w7yzDFgm4B0CPa3J2
-W9rFRoyvAgMBAAECggEAHEuXOrNNUVr6sg/x/3Wsh9im6683kESTVduVO7+zPtmS
-3WafKzGjyqRsJJnozT4ZQW4lojbebftR5BVr9vRiSZK6XSAenvYxRmPQRox8eRyw
-hlGUXiB5a8Vjzs7uLo4cpKz7jl68ZvzjAH8p/xiRSrt77XjRywDFTqtTpBXqP4gp
-QP4OPxjBOp3gfoYYvAFvWf9DaDYpbX6IDxqHCilwMeYggt4fwfire3ngSZXE5P3T
-0MuADC/3MyRAYda5orKH/bzphw58zT7ZofGN5/Kc9OB+D/o2ko83SFT5G8pYWZVG
-Xz4mASwRVjAbXFvyN/H8G3lrhzHySFsp4hfO63BFmQKBgQD/KhY9XYbcFZR5aQpD
-fwLIHIe17qxLQAog/1TPz9fir0K1zn6cN3pWdUvXjaUAYHRzX9aD2o0IPYbfzYrl
-AtgoF8CvG+FHdKRVClD6tTOf7frsuOHF9A7ItfxAO0BHnLEV21DEzdZpe/Y+A+Zl
-/gA2EckTzf5LMiJnC+DJFndREwKBgQDTHrr3zQDoqnZkiuZ6p6NU0TPrqr1EWTPL
-kDmjKPxhmiJTq77VAnvUZw9eWc6qoesWUOIUDW5ohfDvPe/HWaAoaQk5iurK5AmG
-ryilkyyVtsiBXIZ9By52rF3eX6y+LaCCxXbmL9UsKfn+Gperm/Bsn381KutaI/JX
-mPNdlXZldQKBgQCBQSKO50efSNczQUBPvJD+KWWdhU+FtuTqniyqMFDdpYYXboi4
-PWodTcGjaT8CF9olb5DMrfLvD6u4xvfq1iwE8zNKAMd3WOC9q0ImHZAPHZAURfso
-OV8b0QP8zYbcP8V8muIpL1PDj2XHOFaHp8kXmp7PB3QfR0AiDuRJOLYsPQKBgHnr
-ej/WlNrIbly71kQpAWre8aP8UxbgiMfa/14ZMj7PO1mkii0LJSXRao+rP21M2q1l
-glngM82K5EvVMd6nBJWxqtEfR15p+JJeHxQXfRzslLgYDdawSgXgnsjn6aNeSB6d
-GH/wSaQajbNP+hzxjhO8vEKhCY9hyPcLbieyQ9BtAoGBAPXrCXtXtbieLAF45l30
-S2ml35ntv1jy+p1SW+Q30nYBploay7Xjwp6Jc6AlGPzGgcVggXdVl2/rNvXceBfz
-SafSWJU/hAgYCWdwseKe8g7sVEaAoFT2hI5bj5FC0dzc9ODVgXb2/vdpJBaROQ2y
-wsTNKrqMPDgSZdAoJaRCiXWW
------END PRIVATE KEY-----"#;
+        let cert_path = dir.join("test.crt");
+        let key_path = dir.join("test.key");
+
+        // Generate self-signed certificate with OpenSSL
+        let output = Command::new("openssl")
+            .args([
+                "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+                "-keyout", key_path.to_str().unwrap(),
+                "-out", cert_path.to_str().unwrap(),
+                "-days", "1",
+                "-subj", "/CN=test",
+            ])
+            .output()
+            .expect("Failed to generate test certificate (openssl not found?)");
+
+        assert!(output.status.success(), "OpenSSL failed: {}", String::from_utf8_lossy(&output.stderr));
+        (cert_path, key_path)
+    }
 
     fn create_test_file(dir: &Path, name: &str, content: &str) -> PathBuf {
         let path = dir.join(name);
@@ -235,7 +210,7 @@ wsTNKrqMPDgSZdAoJaRCiXWW
     #[test]
     fn test_load_certs_valid() {
         let tmp_dir = TempDir::new().unwrap();
-        let cert_path = create_test_file(tmp_dir.path(), "test.crt", TEST_CERT_PEM);
+        let (cert_path, _key_path) = generate_test_cert(tmp_dir.path());
 
         let certs = load_certs(&cert_path).unwrap();
         assert_eq!(certs.len(), 1);
@@ -259,7 +234,7 @@ wsTNKrqMPDgSZdAoJaRCiXWW
     #[test]
     fn test_load_private_key_valid() {
         let tmp_dir = TempDir::new().unwrap();
-        let key_path = create_test_file(tmp_dir.path(), "test.key", TEST_KEY_PEM);
+        let (_cert_path, key_path) = generate_test_cert(tmp_dir.path());
 
         let key = load_private_key(&key_path);
         assert!(key.is_ok());

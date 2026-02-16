@@ -1,3 +1,8 @@
 /target
 debug.log
 error.log
+
+# Test certificates (generated on demand, never commit private keys)
+tests/fixtures/certs/*.key
+*.key
+*.pem
