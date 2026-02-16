@@ -110,6 +110,9 @@ pg_glimpse -c "host=localhost port=5432 dbname=mydb user=postgres"
 # PostgreSQL URI
 pg_glimpse -c "postgresql://user:pass@host:5432/dbname"
 
+# Use service file (~/.pg_service.conf)
+pg_glimpse --service=production
+
 # Custom refresh interval
 pg_glimpse -r 1 --history-length 240
 ```
@@ -118,7 +121,8 @@ pg_glimpse -r 1 --history-length 240
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `-c`, `--connection` | Connection string | — |
+| `--service` | PostgreSQL service name from `~/.pg_service.conf` | — |
+| `-c`, `--connection` | Connection string (overrides service) | — |
 | `-H`, `--host` | PostgreSQL host | `localhost` |
 | `-p`, `--port` | PostgreSQL port | `5432` |
 | `-d`, `--dbname` | Database name | `postgres` |
@@ -132,7 +136,34 @@ pg_glimpse -r 1 --history-length 240
 
 ### Environment Variables
 
-`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, `PG_GLIMPSE_CONNECTION`
+`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, `PGSERVICE`, `PG_GLIMPSE_CONNECTION`
+
+### PostgreSQL Service File
+
+Store connection parameters in `~/.pg_service.conf` to avoid passing credentials on the command line:
+
+```ini
+[production]
+host=prod.db.example.com
+port=5432
+dbname=myapp
+user=readonly
+password=secretpassword
+
+[staging]
+host=staging.db.example.com
+port=5432
+dbname=myapp
+user=app_user
+password=another_secret
+```
+
+Then connect with:
+```bash
+pg_glimpse --service=production
+```
+
+Individual CLI parameters override service file values if both are provided.
 
 ## Keyboard Reference
 

@@ -1,4 +1,6 @@
 use clap::Parser;
+use std::collections::HashMap;
+use std::fs;
 use std::path::PathBuf;
 
 /// `pg_glimpse` - A terminal-based `PostgreSQL` monitoring tool
@@ -9,7 +11,12 @@ pub struct Cli {
     #[arg(long)]
     pub replay: Option<PathBuf>,
 
-    /// `PostgreSQL` connection string (overrides individual params)
+    /// `PostgreSQL` service name from ~/.pg_service.conf or pg_service.conf
+    /// Example: --service=production (reads [production] section from service file)
+    #[arg(long, env = "PGSERVICE")]
+    pub service: Option<String>,
+
+    /// `PostgreSQL` connection string (overrides service and individual params)
     /// Example: "host=localhost port=5432 dbname=mydb user=postgres password=secret"
     /// Or URI: "postgresql://user:pass@host:port/dbname"
     #[arg(short = 'c', long = "connection", env = "PG_GLIMPSE_CONNECTION")]
@@ -60,26 +67,126 @@ pub struct ConnectionInfo {
     pub user: String,
 }
 
+/// Parse PostgreSQL service file and return parameters for the given service name
+fn parse_pg_service_file(service_name: &str) -> Option<HashMap<String, String>> {
+    // Try ~/.pg_service.conf first, then PGSYSCONFDIR/pg_service.conf
+    let home_path = dirs::home_dir()?.join(".pg_service.conf");
+    let paths = vec![home_path];
+
+    for path in paths {
+        if !path.exists() {
+            continue;
+        }
+
+        if let Ok(content) = fs::read_to_string(&path) {
+            let mut current_service: Option<String> = None;
+            let mut service_params = HashMap::new();
+
+            for line in content.lines() {
+                let line = line.trim();
+
+                // Skip empty lines and comments
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+
+                // Check for section header [service_name]
+                if line.starts_with('[') && line.ends_with(']') {
+                    let section = &line[1..line.len() - 1];
+                    current_service = Some(section.to_string());
+                    if current_service.as_deref() != Some(service_name) {
+                        service_params.clear();
+                    }
+                    continue;
+                }
+
+                // Parse key=value pairs
+                if current_service.as_deref() == Some(service_name) {
+                    if let Some((key, value)) = line.split_once('=') {
+                        service_params.insert(
+                            key.trim().to_string(),
+                            value.trim().to_string()
+                        );
+                    }
+                }
+            }
+
+            if !service_params.is_empty() {
+                return Some(service_params);
+            }
+        }
+    }
+
+    None
+}
+
 impl Cli {
     pub fn pg_config(&self) -> Result<tokio_postgres::Config, tokio_postgres::Error> {
-        self.connection_string.as_ref().map_or_else(
-            || {
-                let mut config = tokio_postgres::Config::new();
-                config.host(&self.host);
-                config.port(self.port);
-                config.dbname(&self.dbname);
-                config.user(&self.user);
-                if let Some(ref pw) = self.password {
-                    config.password(pw);
+        // If connection string is provided, use it (highest priority)
+        if let Some(ref conn_str) = self.connection_string {
+            return conn_str.parse();
+        }
+
+        // Start with service file params if service is specified
+        let service_params = self.service.as_ref()
+            .and_then(|name| parse_pg_service_file(name));
+
+        let mut config = tokio_postgres::Config::new();
+
+        // Apply service parameters first (lowest priority)
+        if let Some(ref params) = service_params {
+            if let Some(host) = params.get("host") {
+                config.host(host);
+            }
+            if let Some(port) = params.get("port") {
+                if let Ok(p) = port.parse::<u16>() {
+                    config.port(p);
                 }
-                Ok(config)
-            },
-            |conn_str| conn_str.parse(),
-        )
+            }
+            if let Some(dbname) = params.get("dbname") {
+                config.dbname(dbname);
+            }
+            if let Some(user) = params.get("user") {
+                config.user(user);
+            }
+            if let Some(password) = params.get("password") {
+                config.password(password);
+            }
+        }
+
+        // Override with CLI parameters (higher priority than service file)
+        // Only override if the CLI value is not the default
+        // For host, port, dbname, user: check if they're different from defaults
+        let is_default_host = self.host == "localhost";
+        let is_default_port = self.port == 5432;
+        let is_default_dbname = self.dbname == "postgres";
+        let is_default_user = self.user == "postgres";
+
+        // If no service file, or if CLI param is explicitly set (not default), use CLI value
+        if service_params.is_none() || !is_default_host {
+            config.host(&self.host);
+        }
+        if service_params.is_none() || !is_default_port {
+            config.port(self.port);
+        }
+        if service_params.is_none() || !is_default_dbname {
+            config.dbname(&self.dbname);
+        }
+        if service_params.is_none() || !is_default_user {
+            config.user(&self.user);
+        }
+
+        // Password from CLI always overrides if present
+        if let Some(ref pw) = self.password {
+            config.password(pw);
+        }
+
+        Ok(config)
     }
 
     /// Extract connection info for display, parsing from connection string if provided
     pub fn connection_info(&self) -> ConnectionInfo {
+        // Connection string has highest priority
         if let Some(ref conn_str) = self.connection_string {
             if let Ok(config) = conn_str.parse::<tokio_postgres::Config>() {
                 let host = config
@@ -106,11 +213,58 @@ impl Cli {
                 };
             }
         }
+
+        // Try service file next
+        let service_params = self.service.as_ref()
+            .and_then(|name| parse_pg_service_file(name));
+
+        let mut host = self.host.clone();
+        let mut port = self.port;
+        let mut dbname = self.dbname.clone();
+        let mut user = self.user.clone();
+
+        // Apply service parameters as defaults
+        if let Some(ref params) = service_params {
+            if let Some(h) = params.get("host") {
+                host = h.clone();
+            }
+            if let Some(p) = params.get("port") {
+                if let Ok(parsed_port) = p.parse::<u16>() {
+                    port = parsed_port;
+                }
+            }
+            if let Some(d) = params.get("dbname") {
+                dbname = d.clone();
+            }
+            if let Some(u) = params.get("user") {
+                user = u.clone();
+            }
+        }
+
+        // CLI params override service file if not default
+        let is_default_host = self.host == "localhost";
+        let is_default_port = self.port == 5432;
+        let is_default_dbname = self.dbname == "postgres";
+        let is_default_user = self.user == "postgres";
+
+        if service_params.is_none() || !is_default_host {
+            host = self.host.clone();
+        }
+        if service_params.is_none() || !is_default_port {
+            port = self.port;
+        }
+        if service_params.is_none() || !is_default_dbname {
+            dbname = self.dbname.clone();
+        }
+        if service_params.is_none() || !is_default_user {
+            user = self.user.clone();
+        }
+
         ConnectionInfo {
-            host: self.host.clone(),
-            port: self.port,
-            dbname: self.dbname.clone(),
-            user: self.user.clone(),
+            host,
+            port,
+            dbname,
+            user,
         }
     }
 }
@@ -401,6 +555,7 @@ mod tests {
         // If connection string can't be parsed, should fall back to individual params
         let cli = Cli {
             replay: None,
+            service: None,
             connection_string: Some("completely invalid {{{{".to_string()),
             host: "fallback".to_string(),
             port: 9999,
@@ -417,5 +572,40 @@ mod tests {
         assert_eq!(info.port, 9999);
         assert_eq!(info.dbname, "fallbackdb");
         assert_eq!(info.user, "fallbackuser");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Service file support
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn parse_service_arg() {
+        let cli = cli_from_args(&["--service", "production"]);
+        assert_eq!(cli.service, Some("production".to_string()));
+    }
+
+    #[test]
+    fn service_with_individual_params_override() {
+        // When using --service but also providing CLI params, CLI params should override
+        let cli = cli_from_args(&["--service", "myservice", "-H", "override-host"]);
+        assert_eq!(cli.service, Some("myservice".to_string()));
+        assert_eq!(cli.host, "override-host");
+    }
+
+    #[test]
+    fn connection_string_overrides_service() {
+        // Connection string should have highest priority
+        let cli = cli_from_args(&[
+            "--service",
+            "myservice",
+            "-c",
+            "host=connhost port=5555 dbname=conndb user=connuser",
+        ]);
+        let info = cli.connection_info();
+        // Connection string should win
+        assert_eq!(info.host, "connhost");
+        assert_eq!(info.port, 5555);
+        assert_eq!(info.dbname, "conndb");
+        assert_eq!(info.user, "connuser");
     }
 }
