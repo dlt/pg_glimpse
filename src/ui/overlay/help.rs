@@ -72,6 +72,8 @@ pub fn render_help(frame: &mut Frame, app: &App, area: Rect) {
         entry("Esc", "Back to queries (or quit)"),
         entry("↑ / k", "Select previous row"),
         entry("↓ / j", "Select next row"),
+        entry("PgUp / Ctrl+u", "Page up (10 items)"),
+        entry("PgDn / Ctrl+d", "Page down (10 items)"),
         entry("s", "Cycle sort column"),
     ]);
 

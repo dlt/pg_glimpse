@@ -50,6 +50,20 @@ impl<S: SortColumnTrait> TableViewState<S> {
         self.state.select(Some(0));
     }
 
+    /// Jump down by one page (default 10 items)
+    pub fn select_page_down(&mut self, max: usize, page_size: usize) {
+        let i = self.state.selected().unwrap_or(0);
+        let new_pos = (i + page_size).min(max.saturating_sub(1));
+        self.state.select(Some(new_pos));
+    }
+
+    /// Jump up by one page (default 10 items)
+    pub fn select_page_up(&mut self, page_size: usize) {
+        let i = self.state.selected().unwrap_or(0);
+        let new_pos = i.saturating_sub(page_size);
+        self.state.select(Some(new_pos));
+    }
+
     #[must_use]
     pub const fn selected(&self) -> Option<usize> {
         self.state.selected()
@@ -110,23 +124,37 @@ impl PanelStates {
     /// Returns `true` if Enter was pressed (caller should open inspect view).
     pub fn simple_nav(
         state: &mut TableState,
-        key_code: crossterm::event::KeyCode,
+        key: crossterm::event::KeyEvent,
         len: usize,
+        page_size: usize,
     ) -> bool {
-        use crossterm::event::KeyCode;
-        match key_code {
-            KeyCode::Up | KeyCode::Char('k') => {
+        use crossterm::event::{KeyCode, KeyModifiers};
+        match (key.code, key.modifiers) {
+            (KeyCode::Up | KeyCode::Char('k'), KeyModifiers::NONE) => {
                 let i = state.selected().unwrap_or(0);
                 state.select(Some(i.saturating_sub(1)));
                 false
             }
-            KeyCode::Down | KeyCode::Char('j') => {
+            (KeyCode::Down | KeyCode::Char('j'), KeyModifiers::NONE) => {
                 let max = len.saturating_sub(1);
                 let i = state.selected().unwrap_or(0);
                 state.select(Some((i + 1).min(max)));
                 false
             }
-            KeyCode::Enter => {
+            (KeyCode::PageUp | KeyCode::Char('u'), m) if m.contains(KeyModifiers::CONTROL) || matches!(key.code, KeyCode::PageUp) => {
+                let i = state.selected().unwrap_or(0);
+                let new_pos = i.saturating_sub(page_size);
+                state.select(Some(new_pos));
+                false
+            }
+            (KeyCode::PageDown | KeyCode::Char('d'), m) if m.contains(KeyModifiers::CONTROL) || matches!(key.code, KeyCode::PageDown) => {
+                let max = len.saturating_sub(1);
+                let i = state.selected().unwrap_or(0);
+                let new_pos = (i + page_size).min(max);
+                state.select(Some(new_pos));
+                false
+            }
+            (KeyCode::Enter, _) => {
                 if len > 0 {
                     if state.selected().is_none() {
                         state.select(Some(0));

@@ -37,6 +37,8 @@ expression: buffer_to_string(&terminal)
 │                    │    Esc         Back to queries (or quit)                                                       │                    │
 │                    │    ↑ / k       Select previous row                                                             │                    │
 │                    │    ↓ / j       Select next row                                                                 │                    │
+│                    │    PgUp / Ctrl+uPage up (10 items)                                                             │                    │
+│                    │    PgDn / Ctrl+dPage down (10 items)                                                           │                    │
 │                    │    s           Cycle sort column                                                               │                    │
 │                    │    /           Fuzzy filter                                                                    │                    │
 │                    │    Enter       Inspect selected row                                                            │                    │
@@ -44,8 +46,6 @@ expression: buffer_to_string(&terminal)
 │                    │  Query Actions ────────────────────────────────────────                                        │                    │
 │                    │    C           Cancel query (batch if filtered)                                                │                    │
 │                    │    K           Terminate backend (batch if filtered)                                           │                    │
-│                    │    y           Copy query to clipboard                                                         │                    │
-│                    │                                                                                                │                    │
 │                    ╰────────────────────────────────────────────────────────────────────────────────────────────────╯                    │
 │                                                                                                                                          │
 │                                                                                                                                          │

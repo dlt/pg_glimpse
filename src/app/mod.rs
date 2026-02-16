@@ -28,6 +28,9 @@ use sorting::{sort_by_key, sort_by_key_partial, Filterable};
 /// Max characters to show in clipboard preview messages
 const CLIPBOARD_PREVIEW_LEN: usize = 40;
 
+/// Number of items to jump when using Page Up/Down or Ctrl+u/Ctrl+d
+const PAGE_SIZE: usize = 10;
+
 pub struct App {
     // Core runtime
     pub running: bool,
@@ -486,23 +489,32 @@ impl App {
     }
 
     fn handle_queries_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Up | KeyCode::Char('k') => {
+        match (key.code, key.modifiers) {
+            (KeyCode::Up | KeyCode::Char('k'), KeyModifiers::NONE) => {
                 self.panels.queries.select_prev();
                 self.feedback.status_message = None;
             }
-            KeyCode::Down | KeyCode::Char('j') => {
+            (KeyCode::Down | KeyCode::Char('j'), KeyModifiers::NONE) => {
                 let max = self.sorted_query_indices().len();
                 self.panels.queries.select_next(max);
                 self.feedback.status_message = None;
             }
-            KeyCode::Enter | KeyCode::Char('i') => {
+            (KeyCode::PageUp | KeyCode::Char('u'), m) if m.contains(KeyModifiers::CONTROL) || matches!(key.code, KeyCode::PageUp) => {
+                self.panels.queries.select_page_up(PAGE_SIZE);
+                self.feedback.status_message = None;
+            }
+            (KeyCode::PageDown | KeyCode::Char('d'), m) if m.contains(KeyModifiers::CONTROL) || matches!(key.code, KeyCode::PageDown) => {
+                let max = self.sorted_query_indices().len();
+                self.panels.queries.select_page_down(max, PAGE_SIZE);
+                self.feedback.status_message = None;
+            }
+            (KeyCode::Enter | KeyCode::Char('i'), _) => {
                 if let Some(pid) = self.selected_query_pid() {
                     self.overlay_scroll = 0;
                     self.view_mode = ViewMode::Inspect(InspectTarget::Query(pid));
                 }
             }
-            KeyCode::Char('K') if self.replay.is_none() => {
+            (KeyCode::Char('K'), _) if self.replay.is_none() => {
                 if let Some(pid) = self.selected_query_pid() {
                     let filtered_pids = self.get_filtered_pids();
                     if self.filter.active && filtered_pids.len() > 1 {
@@ -517,7 +529,7 @@ impl App {
                     }
                 }
             }
-            KeyCode::Char('C') if self.replay.is_none() => {
+            (KeyCode::Char('C'), _) if self.replay.is_none() => {
                 if let Some(pid) = self.selected_query_pid() {
                     let filtered_pids = self.get_filtered_pids();
                     if self.filter.active && filtered_pids.len() > 1 {
@@ -532,7 +544,7 @@ impl App {
                     }
                 }
             }
-            KeyCode::Char('s') => {
+            (KeyCode::Char('s'), _) => {
                 self.panels.queries.cycle_sort();
                 self.panels.queries.select_first();
                 self.feedback.status_message = Some(format!(
@@ -550,21 +562,28 @@ impl App {
     }
 
     fn handle_indexes_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Up | KeyCode::Char('k') => {
+        match (key.code, key.modifiers) {
+            (KeyCode::Up | KeyCode::Char('k'), KeyModifiers::NONE) => {
                 self.panels.indexes.select_prev();
             }
-            KeyCode::Down | KeyCode::Char('j') => {
+            (KeyCode::Down | KeyCode::Char('j'), KeyModifiers::NONE) => {
                 let max = self.sorted_index_indices().len();
                 self.panels.indexes.select_next(max);
             }
-            KeyCode::Enter => {
+            (KeyCode::PageUp | KeyCode::Char('u'), m) if m.contains(KeyModifiers::CONTROL) || matches!(key.code, KeyCode::PageUp) => {
+                self.panels.indexes.select_page_up(PAGE_SIZE);
+            }
+            (KeyCode::PageDown | KeyCode::Char('d'), m) if m.contains(KeyModifiers::CONTROL) || matches!(key.code, KeyCode::PageDown) => {
+                let max = self.sorted_index_indices().len();
+                self.panels.indexes.select_page_down(max, PAGE_SIZE);
+            }
+            (KeyCode::Enter, _) => {
                 if let Some(key) = self.selected_index_key() {
                     self.overlay_scroll = 0;
                     self.view_mode = ViewMode::Inspect(InspectTarget::Index(key));
                 }
             }
-            KeyCode::Char('s') => {
+            (KeyCode::Char('s'), _) => {
                 self.panels.indexes.cycle_sort();
                 self.panels.indexes.select_first();
                 // Default ascending for Name/Scans, descending for others
@@ -573,7 +592,7 @@ impl App {
                     IndexSortColumn::Scans | IndexSortColumn::Name
                 );
             }
-            KeyCode::Char('b') if self.replay.is_none() => {
+            (KeyCode::Char('b'), _) if self.replay.is_none() => {
                 self.feedback.pending_action = Some(AppAction::RefreshBloat);
                 self.feedback.status_message = Some("Refreshing bloat estimates...".to_string());
                 self.feedback.bloat_loading = true;
@@ -583,21 +602,28 @@ impl App {
     }
 
     fn handle_statements_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Up | KeyCode::Char('k') => {
+        match (key.code, key.modifiers) {
+            (KeyCode::Up | KeyCode::Char('k'), KeyModifiers::NONE) => {
                 self.panels.statements.select_prev();
             }
-            KeyCode::Down | KeyCode::Char('j') => {
+            (KeyCode::Down | KeyCode::Char('j'), KeyModifiers::NONE) => {
                 let max = self.sorted_stmt_indices().len();
                 self.panels.statements.select_next(max);
             }
-            KeyCode::Enter => {
+            (KeyCode::PageUp | KeyCode::Char('u'), m) if m.contains(KeyModifiers::CONTROL) || matches!(key.code, KeyCode::PageUp) => {
+                self.panels.statements.select_page_up(PAGE_SIZE);
+            }
+            (KeyCode::PageDown | KeyCode::Char('d'), m) if m.contains(KeyModifiers::CONTROL) || matches!(key.code, KeyCode::PageDown) => {
+                let max = self.sorted_stmt_indices().len();
+                self.panels.statements.select_page_down(max, PAGE_SIZE);
+            }
+            (KeyCode::Enter, _) => {
                 if let Some(queryid) = self.selected_statement_queryid() {
                     self.overlay_scroll = 0;
                     self.view_mode = ViewMode::Inspect(InspectTarget::Statement(queryid));
                 }
             }
-            KeyCode::Char('s') => {
+            (KeyCode::Char('s'), _) => {
                 self.panels.statements.cycle_sort();
                 self.panels.statements.select_first();
                 self.feedback.status_message = Some(format!(
@@ -610,7 +636,7 @@ impl App {
                     }
                 ));
             }
-            KeyCode::Char('X') if self.replay.is_none() => {
+            (KeyCode::Char('X'), _) if self.replay.is_none() => {
                 self.view_mode = ViewMode::Confirm(ConfirmAction::ResetStatStatements);
             }
             _ => {}
@@ -618,21 +644,28 @@ impl App {
     }
 
     fn handle_table_stats_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Up | KeyCode::Char('k') => {
+        match (key.code, key.modifiers) {
+            (KeyCode::Up | KeyCode::Char('k'), KeyModifiers::NONE) => {
                 self.panels.table_stats.select_prev();
             }
-            KeyCode::Down | KeyCode::Char('j') => {
+            (KeyCode::Down | KeyCode::Char('j'), KeyModifiers::NONE) => {
                 let max = self.sorted_table_stat_indices().len();
                 self.panels.table_stats.select_next(max);
             }
-            KeyCode::Enter => {
+            (KeyCode::PageUp | KeyCode::Char('u'), m) if m.contains(KeyModifiers::CONTROL) || matches!(key.code, KeyCode::PageUp) => {
+                self.panels.table_stats.select_page_up(PAGE_SIZE);
+            }
+            (KeyCode::PageDown | KeyCode::Char('d'), m) if m.contains(KeyModifiers::CONTROL) || matches!(key.code, KeyCode::PageDown) => {
+                let max = self.sorted_table_stat_indices().len();
+                self.panels.table_stats.select_page_down(max, PAGE_SIZE);
+            }
+            (KeyCode::Enter, _) => {
                 if let Some(key) = self.selected_table_key() {
                     self.overlay_scroll = 0;
                     self.view_mode = ViewMode::Inspect(InspectTarget::Table(key));
                 }
             }
-            KeyCode::Char('s') => {
+            (KeyCode::Char('s'), _) => {
                 self.panels.table_stats.cycle_sort();
                 self.panels.table_stats.select_first();
                 self.feedback.status_message = Some(format!(
@@ -645,7 +678,7 @@ impl App {
                     }
                 ));
             }
-            KeyCode::Char('b') if self.replay.is_none() => {
+            (KeyCode::Char('b'), _) if self.replay.is_none() => {
                 self.feedback.pending_action = Some(AppAction::RefreshBloat);
                 self.feedback.status_message = Some("Refreshing bloat estimates...".to_string());
                 self.feedback.bloat_loading = true;
@@ -656,7 +689,7 @@ impl App {
 
     fn handle_replication_key(&mut self, key: KeyEvent) {
         let len = self.snapshot.as_ref().map_or(0, |s| s.replication.len());
-        if PanelStates::simple_nav(&mut self.panels.replication, key.code, len) {
+        if PanelStates::simple_nav(&mut self.panels.replication, key, len, PAGE_SIZE) {
             if let Some(pid) = self.selected_replication_pid() {
                 self.overlay_scroll = 0;
                 self.view_mode = ViewMode::Inspect(InspectTarget::Replication(pid));
@@ -666,7 +699,7 @@ impl App {
 
     fn handle_blocking_key(&mut self, key: KeyEvent) {
         let len = self.snapshot.as_ref().map_or(0, |s| s.blocking_info.len());
-        if PanelStates::simple_nav(&mut self.panels.blocking, key.code, len) {
+        if PanelStates::simple_nav(&mut self.panels.blocking, key, len, PAGE_SIZE) {
             if let Some(pid) = self.selected_blocking_pid() {
                 self.overlay_scroll = 0;
                 self.view_mode = ViewMode::Inspect(InspectTarget::Blocking(pid));
@@ -679,7 +712,7 @@ impl App {
             .snapshot
             .as_ref()
             .map_or(0, |s| s.vacuum_progress.len());
-        if PanelStates::simple_nav(&mut self.panels.vacuum, key.code, len) {
+        if PanelStates::simple_nav(&mut self.panels.vacuum, key, len, PAGE_SIZE) {
             if let Some(pid) = self.selected_vacuum_pid() {
                 self.overlay_scroll = 0;
                 self.view_mode = ViewMode::Inspect(InspectTarget::Vacuum(pid));
@@ -689,7 +722,7 @@ impl App {
 
     fn handle_wraparound_key(&mut self, key: KeyEvent) {
         let len = self.snapshot.as_ref().map_or(0, |s| s.wraparound.len());
-        if PanelStates::simple_nav(&mut self.panels.wraparound, key.code, len) {
+        if PanelStates::simple_nav(&mut self.panels.wraparound, key, len, PAGE_SIZE) {
             if let Some(datname) = self.selected_wraparound_datname() {
                 self.overlay_scroll = 0;
                 self.view_mode = ViewMode::Inspect(InspectTarget::Wraparound(datname));
@@ -699,7 +732,7 @@ impl App {
 
     fn handle_settings_key(&mut self, key: KeyEvent) {
         let len = self.sorted_settings_indices().len();
-        if PanelStates::simple_nav(&mut self.panels.settings, key.code, len) {
+        if PanelStates::simple_nav(&mut self.panels.settings, key, len, PAGE_SIZE) {
             if let Some(name) = self.selected_setting_name() {
                 self.overlay_scroll = 0;
                 self.view_mode = ViewMode::Inspect(InspectTarget::Settings(name));
@@ -709,7 +742,7 @@ impl App {
 
     fn handle_extensions_key(&mut self, key: KeyEvent) {
         let len = self.sorted_extensions_indices().len();
-        if PanelStates::simple_nav(&mut self.panels.extensions, key.code, len) {
+        if PanelStates::simple_nav(&mut self.panels.extensions, key, len, PAGE_SIZE) {
             if let Some(name) = self.selected_extension_name() {
                 self.overlay_scroll = 0;
                 self.view_mode = ViewMode::Inspect(InspectTarget::Extensions(name));
