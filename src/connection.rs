@@ -198,7 +198,6 @@ pub async fn try_connect(
 mod tests {
     use super::*;
     use std::fs;
-    use std::io::Write;
     use std::path::PathBuf;
     use tempfile::TempDir;
 
