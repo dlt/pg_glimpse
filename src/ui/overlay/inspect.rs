@@ -1063,7 +1063,7 @@ pub fn render_settings_inspect(frame: &mut Frame, app: &App, area: Rect, name: &
     lines.push(section_header("Description"));
     lines.push(Line::from(vec![
         Span::styled("  ", Style::default()),
-        Span::styled(&s.short_desc, Style::default().fg(Theme::fg())),
+        Span::styled(s.short_desc.as_deref().unwrap_or(""), Style::default().fg(Theme::fg())),
     ]));
     lines.push(Line::from(""));
 

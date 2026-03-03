@@ -44,7 +44,7 @@ impl Filterable for TableStat {
 
 impl Filterable for PgSetting {
     fn filter_string(&self) -> String {
-        format!("{} {} {}", self.name, self.category, self.short_desc)
+        format!("{} {} {}", self.name, self.category, self.short_desc.as_deref().unwrap_or(""))
     }
 }
 

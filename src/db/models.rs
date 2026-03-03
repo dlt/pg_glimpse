@@ -31,7 +31,7 @@ pub struct PgSetting {
     pub setting: String,
     pub unit: Option<String>,
     pub category: String,
-    pub short_desc: String,
+    pub short_desc: Option<String>,
     pub context: String,        // postmaster, sighup, superuser, user
     pub source: String,         // default, configuration file, etc.
     pub pending_restart: bool,  // PG 9.5+
@@ -466,7 +466,7 @@ mod tests {
                 setting: "200".to_string(),
                 unit: None,
                 category: "Connections".to_string(),
-                short_desc: "Max connections".to_string(),
+                short_desc: Some("Max connections".to_string()),
                 context: "postmaster".to_string(),
                 source: "configuration file".to_string(),
                 pending_restart: false,
