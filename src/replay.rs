@@ -241,7 +241,7 @@ fn render_loading_screen(
 
 /// Run the application in replay mode.
 pub async fn run_replay(path: &Path, config: AppConfig) -> Result<()> {
-    use crossterm::event::{poll, read, Event, KeyCode};
+    use crossterm::event::{poll, read, Event, KeyCode, KeyEventKind};
 
     let filename = path
         .file_name()
@@ -275,7 +275,7 @@ pub async fn run_replay(path: &Path, config: AppConfig) -> Result<()> {
                 // Check for ESC key to cancel
                 if poll(Duration::from_millis(0)).unwrap_or(false) {
                     if let Ok(Event::Key(key)) = read() {
-                        if matches!(key.code, KeyCode::Esc) {
+                        if key.kind == KeyEventKind::Press && matches!(key.code, KeyCode::Esc) {
                             cancelled = true;
                             return false; // Cancel loading
                         }

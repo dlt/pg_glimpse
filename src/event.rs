@@ -1,4 +1,4 @@
-use crossterm::event::{self, Event as CEvent, KeyEvent};
+use crossterm::event::{self, Event as CEvent, KeyEvent, KeyEventKind};
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -16,8 +16,10 @@ impl EventHandler {
         std::thread::spawn(move || loop {
             if event::poll(poll_rate).unwrap_or(false) {
                 if let Ok(CEvent::Key(key)) = event::read() {
-                    if tx.send(AppEvent::Key(key)).is_err() {
-                        break;
+                    if key.kind == KeyEventKind::Press || key.kind == KeyEventKind::Repeat {
+                        if tx.send(AppEvent::Key(key)).is_err() {
+                            break;
+                        }
                     }
                 }
             }
